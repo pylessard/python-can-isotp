@@ -1,5 +1,11 @@
 # python-can-isotp
 
+** **Atention**  **
+
+This project is not yet usable.
+
+The ISO-TP address structure in the Linux kernel is different from other CAN sockets. Python does not supports this address format as of today (latest release : V3.6.2). A [pull request](https://github.com/python/cpython/pull/2956) is presently pending for the upcoming Python 3.7 that will solve this limitation, if merged.
+
 
 ## What it is ##
 A Python wrapper helping the use of [can-isotp Loadable Kernel Module](https://github.com/hartkopp/can-isotp) extending SocketCAN under Linux.
@@ -18,9 +24,6 @@ As mentioned by the authors of SocketCAN in their documentation, this approach h
 The best way do ISO-TP communication is within the kernel space, just like [hartkopp/can-isotp](https://github.com/hartkopp/can-isotp) module does by using a socket interface following the mentality of SocketCAN. The well known duality between complexity and flexibility makes the usage of sockets onerous and non-intuitiveto the uninitiated. This is where this project becom handy, it wraps the socket object so that a programmer can configure and use it quickly, in an intuitive way.
 
 Also, it will tells you if you do something wrong, like setting a socket options after binding the socket to the addresse. The native implementation will silently ignore the options, which can causes some headaches!
-
-## Can I use it? ##
-**Not yet!**.  The ISO-TP address structure in the Linux kernel is different from other CAN sockets. Python does not supports this address format as of today (latest release : V3.6.2). A [pull request](https://github.com/python/cpython/pull/2956) is presently pending for the upcoming Python 3.7 that will solve this limitation, if merged.
 
 ## Troubleshooting ##
  - **My socket module does not include the `CAN_ISOTP` constant**
