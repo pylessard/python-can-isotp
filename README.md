@@ -1,6 +1,6 @@
 # python-can-isotp
 
-** **Atention**  **
+** **Notice**  **
 
 This project is not yet usable.
 
