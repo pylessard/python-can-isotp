@@ -21,7 +21,7 @@ class socket:
         self.rxid = None
         self.txid = None
         self.bound = False
-        closed = False
+        self.closed = False
         self._socket = socket_module.socket(socket_module.AF_CAN, socket_module.SOCK_DGRAM,socket_module.CAN_ISOTP)
 
     def send(self, *args, **kwargs):
