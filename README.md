@@ -65,7 +65,7 @@ s.set_fc_opts(stmin=5, bs=10)
 #s.set_ll_opts(...)
 
 s.bind("vcan0" rxid=0x123 txid=0x456)  # We love named parameters!
-s2.bind("vcan0", rxid=0x456, txid=0x123) #rxid, txid
+s2.bind("vcan0", rxid=0x456, txid=0x123)
 s2.send(b"Hello, this is a long payload sent in small chunks of 8 bytes.")
 print(s.recv()) 
 ```
