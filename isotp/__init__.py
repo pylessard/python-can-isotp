@@ -1,24 +1,83 @@
-import socket
+import socket as socket_module
 import struct
 import os
 
-if not hasattr(socket, 'CAN_ISOTP'):
+if not hasattr(socket_module, 'CAN_ISOTP'):
     if os.name == 'nt':
         raise NotImplementedError("This module cannot be used on Windows")
     else:
         raise NotImplementedError("Your version of Python does not offer support for CAN ISO-TP protocol. Support have been added since Python 3.7 on Linux build > 2.6.15.")
 
-def check_is_socket(s):
-    if not isinstance(s, socket.socket):
+def assert_is_socket(s):
+    if not isinstance(s, socket_module.socket):
         raise ValueError("Given value is not a socket.")
 
+class socket:
+    
+    def __init__(self):
+        self.interface = None
+        self.rxid = None
+        self.txid = None
+        self.bound = False
+        closed = False
+        self._socket = socket_module.socket(socket_module.AF_CAN, socket_module.SOCK_DGRAM,socket_module.CAN_ISOTP)
+
+    def send(self, *args, **kwargs):
+        return self._socket.send(*args, **kwargs)
+
+    def recv(self, n=4095):
+        return self._socket.recv(*args, **kwargs)
+
+    def set_ll_opts(self, n):
+        if self.bound:
+            raise RuntimeError("Options must be set before calling bind()")
+        return opts.linklayer.write(self._socket, *args, **kwargs)
+
+    def set_opts(self, *args, **kwargs):
+        if self.bound:
+            raise RuntimeError("Options must be set before calling bind()")
+        return opts.general.write(self._socket, *args, **kwargs)
+
+    def set_fc_opts(self, *args, **kwargs):
+        if self.bound:
+            raise RuntimeError("Options must be set before calling bind()")
+        return opts.flowcontrol.write(self._socket, *args, **kwargs)
+
+    def bind(self, interface, rxid, txid):
+        self.interface=interface
+        self.rxid=rxid
+        self.txid=txid
+        self._socket.bind((interface, rxid, txid))
+        self.bound=True
+
+    def close(self, *args, **kwargs):
+        v = self._socket.close(*args, **kwargs)
+        self.bound = False
+        self.closed = True
+        return v
+
+    def __delete__(self):
+        if isinstance(_socket, socket_module.socket):
+            self._socket.close()
+            self._socket = None
+
+    def __repr__(self):
+        if self.bound:
+            return "<ISO-TP Socket: %s, Rx:0x%x - Tx:0x%x>" % (self.interface, self.rxid, self.txid)
+        else:
+            status = "Closed" if self.closed else "Unbound"
+            return "<%s ISO-TP Socket at 0x%s>" % (status, hex(id(self)))
+
+
 class opts:
-    SOL_CAN_ISOTP       = socket.SOL_CAN_BASE + socket.CAN_ISOTP
+    SOL_CAN_BASE        = socket_module.SOL_CAN_BASE if hasattr(socket_module, 'SOL_CAN_BASE') else 100
+    SOL_CAN_ISOTP       =  SOL_CAN_BASE + socket_module.CAN_ISOTP
     CAN_ISOTP_OPTS      = 1
     CAN_ISOTP_RECV_FC   = 2
     CAN_ISOTP_TX_STMIN  = 3
     CAN_ISOTP_RX_STMIN  = 4
     CAN_ISOTP_LL_OPTS   = 5
+
 
     class flags:
         LISTEN_MODE     = 0x001
@@ -32,37 +91,103 @@ class opts:
         FORCE_RXSTMIN   = 0x100
         RX_EXT_ADDR     = 0x200
 
-    class recv_fc:
+
+    class general:
+        
+        optflag = None
+        frame_txtime = None
+        ext_address = None
+        txpad = None
+        rxpad = None
+        rx_ext_address = None
+
+        struct_size = 4+4+1+1+1+1
+
+        @classmethod
+        def read(cls, s):
+            assert_is_socket(s)
+            o = cls()
+            opt = s.getsockopt(opts.SOL_CAN_ISOTP, opts.CAN_ISOTP_OPTS,cls.struct_size)
+
+            (o.optflag, o.frame_txtime, o.ext_address, o.txpad, o.rxpad, o.rx_ext_address) = struct.unpack("=LLBBBB", opt)
+            return o
+
+
+        @classmethod
+        def write(cls, s, optflag=None, frame_txtime=None, ext_address=None, txpad=None, rxpad=None, rx_ext_address=None,   ):
+            assert_is_socket(s)
+            o = cls.read(s);
+
+            if optflag != None:
+                if not isinstance(optflag, int) or optflag<0 or optflag>0xFFFFFFFF:
+                    raise ValueError("optflag must be a valid 32 unsigned integer")
+                o.optflag = optflag
+
+            if frame_txtime != None:
+                if not isinstance(frame_txtime, int) or frame_txtime<0 or frame_txtime>0xFFFFFFFF:
+                    raise ValueError("frame_txtime must be a valid 32 unsigned integer")
+                o.frame_txtime = frame_txtime
+
+            if ext_address != None:
+                if not isinstance(ext_address, int) or ext_address<0 or ext_address>0xFF:
+                    raise ValueError("ext_address must be a an integer between 0 and FF")
+                o.ext_address = ext_address
+
+            if txpad != None:
+                if not isinstance(txpad, int) or txpad<0 or txpad>0xFF:
+                    raise ValueError("txpad must be a an integer between 0 and FF")
+                o.txpad = txpad
+
+            if rxpad != None:
+                if not isinstance(rxpad, int) or rxpad<0 or rxpad>0xFF:
+                    raise ValueError("rxpad must be a an integer between 0 and FF")
+                o.rxpad = rxpad
+
+            if rx_ext_address != None:
+                if not isinstance(rx_ext_address, int) or rx_ext_address<0 or rx_ext_address>0xFF:
+                    raise ValueError("rx_ext_address must be a an integer between 0 and FF")
+                o.rx_ext_address = rx_ext_address
+
+            opt = struct.pack("=LLBBBB", o.optflag, o.frame_txtime, o.ext_address, o.txpad, o.rxpad, o.rx_ext_address)
+            s.setsockopt(opts.SOL_CAN_ISOTP, opts.CAN_ISOTP_OPTS, opt)
+            return o
+
+        def __repr__(self):
+            return "<OPTS_GENERAL: optflag=0x%x, frame_txtime=0x%x, ext_address=0x%x, txpad=0x%x, rxpad=0x%x, rx_ext_address=0x%x>" % (self.optflag, self.frame_txtime, self.ext_address, self.txpad, self.rxpad, self.rx_ext_address)
+
+    class flowcontrol:
         stmin = None;
         bs = None;
         wftmax = None;
 
+        struct_size = 3
+        
         @classmethod
         def read(cls, s):
-            check_is_socket(s)
+            assert_is_socket(s)
             o = cls()
-            opt = s.getsockopt(opts.SOL_CAN_ISOTP, opts.CAN_ISOTP_RECV_FC,3)
+            opt = s.getsockopt(opts.SOL_CAN_ISOTP, opts.CAN_ISOTP_RECV_FC,cls.struct_size)
 
             (o.bs, o.stmin, o.wftmax) = struct.unpack("=BBB", opt)
             return o
 
         @classmethod
         def write(cls, s, bs=None, stmin=None, wftmax=None):
-            check_is_socket(s)
+            assert_is_socket(s)
             o = cls.read(s);
             if bs != None:
                 if not isinstance(bs, int) or bs<0 or bs>0xFF:
-                    raise ValueError("bs must be a valid interger between 0 and 255")
+                    raise ValueError("bs must be a valid interger between 0 and FF")
                 o.bs = bs
 
             if stmin != None:
                 if not isinstance(stmin, int) or stmin<0 or stmin>0xFF:
-                    raise ValueError("stmin must be a valid interger between 0 and 255")
+                    raise ValueError("stmin must be a valid interger between 0 and FF")
                 o.stmin = stmin
 
             if wftmax != None:
                 if not isinstance(wftmax, int) or wftmax<0 or wftmax>0xFF:
-                    raise ValueError("wftmax must be a valid interger between 0 and 255")
+                    raise ValueError("wftmax must be a valid interger between 0 and FF")
                 o.wftmax = wftmax
 
             opt = struct.pack("=BBB", o.bs, o.stmin, o.wftmax)
@@ -70,4 +195,46 @@ class opts:
             return o
 
         def __repr__(self):
-            return "<OPTS_RECV_FC: bs=%d, stmin=%d, wftmax=%d>" % (self.bs, self.stmin, self.wftmax)
+            return "<OPTS_RECV_FC: bs=0x%x, stmin=0x%x, wftmax=0x%x>" % (self.bs, self.stmin, self.wftmax)
+
+    class linklayer:
+        mtu = None;
+        tx_dl = None;
+        tx_flags = None;
+
+        struct_size = 3
+        
+        @classmethod
+        def read(cls, s):
+            assert_is_socket(s)
+            o = cls()
+            opt = s.getsockopt(opts.SOL_CAN_ISOTP, opts.CAN_ISOTP_LL_OPTS,cls.struct_size)
+
+            (o.mtu, o.tx_dl, o.tx_flags) = struct.unpack("=BBB", opt)
+            return o
+
+        @classmethod
+        def write(cls, s, mtu=None, tx_dl=None, tx_flags=None):
+            assert_is_socket(s)
+            o = cls.read(s);
+            if mtu != None:
+                if not isinstance(mtu, int) or mtu<0 or mtu>0xFF:
+                    raise ValueError("mtu must be a valid interger between 0 and FF")
+                o.mtu = mtu
+
+            if tx_dl != None:
+                if not isinstance(tx_dl, int) or tx_dl<0 or tx_dl>0xFF:
+                    raise ValueError("tx_dl must be a valid interger between 0 and FF")
+                o.tx_dl = tx_dl
+
+            if tx_flags != None:
+                if not isinstance(tx_flags, int) or tx_flags<0 or tx_flags>0xFF:
+                    raise ValueError("tx_flags must be a valid interger between 0 and FF")
+                o.tx_flags = tx_flags
+
+            opt = struct.pack("=BBB", o.mtu, o.tx_dl, o.tx_flags)
+            s.setsockopt(opts.SOL_CAN_ISOTP, opts.CAN_ISOTP_LL_OPTS, opt)
+            return o
+
+        def __repr__(self):
+            return "<OPTS_LL: mtu=0x%x, tx_dl=0x%x, tx_flags=0x%x>" % (self.mtu, self.tx_dl, self.tx_flags)
