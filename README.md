@@ -1,8 +1,6 @@
 # python-can-isotp
 
-** **Notice**  **
-
-This project is not yet usable.
+** **This project is not yet usable.** **
 
 The ISO-TP address structure in the Linux kernel is different from other CAN sockets. Python does not supports this address format as of today (latest release : V3.6.2). A [pull request](https://github.com/python/cpython/pull/2956) is presently pending for the upcoming Python 3.7 that will solve this limitation, if merged.
 
