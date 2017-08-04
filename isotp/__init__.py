@@ -12,6 +12,8 @@ def assert_is_socket(s):
     if not isinstance(s, socket_module.socket):
         raise ValueError("Given value is not a socket.")
 
+mtu=4095
+
 class socket:
     
     def __init__(self):
@@ -25,8 +27,8 @@ class socket:
     def send(self, *args, **kwargs):
         return self._socket.send(*args, **kwargs)
 
-    def recv(self, n=4095):
-        return self._socket.recv(*args, **kwargs)
+    def recv(self, n=mtu):
+        return self._socket.recv(n)
 
     def set_ll_opts(self, n):
         if self.bound:
