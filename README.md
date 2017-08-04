@@ -17,6 +17,8 @@ As mentioned by the authors of SocketCAN in their documentation, this approach h
 
 The best way do ISO-TP communication is within the kernel space, just like [hartkopp/can-isotp](https://github.com/hartkopp/can-isotp) module does by using a socket interface following the mentality of SocketCAN. The well known duality between complexity and flexibility makes the usage of sockets onerous and non-intuitiveto the uninitiated. This is where this project becom handy, it wraps the socket object so that a programmer can configure and use it quickly, in an intuitive way.
 
+Also, it will tells you if you do something wrong, like setting a socket options after binding the socket to the addresse. The native implementation will silently ignore the options, which can causes some headaches!
+
 ## Can I use it? ##
 **Not yet!**.  The ISO-TP address structure in the Linux kernel is different from other CAN sockets. Python does not supports this address format as of today (latest release : V3.6.2). A [pull request](https://github.com/python/cpython/pull/2956) is presently pending for the upcoming Python 3.7 that will solve this limitation, if merged.
 
@@ -68,4 +70,27 @@ s.bind("vcan0" rxid=0x123 txid=0x456)  # We love named parameters!
 s2.bind("vcan0", rxid=0x456, txid=0x123)
 s2.send(b"Hello, this is a long payload sent in small chunks of 8 bytes.")
 print(s.recv()) 
+```
+
+## Don't like playing with a simili-socket ? ##
+
+You don't want to reinvent the wheel by using a fake socket object, but still would like to simplify your work?
+Say no more, you can use some helpers availables in the `isotp` module.
+
+``` python
+import isotp
+import socket
+s = socket.socket(socket.AF_CAN, socket.SOCK_DGRAM, socket.CAN_ISOTP) # native socket.
+isotp.opts.flowcontrol.write(s, stmin=5)
+isotp.opts.general.write(optflags = isotp.opts.flags.CAN_ISOTP_TX_PADDING |  isotp.opts.flags.CAN_ISOTP_RX_PADDING)
+s.bind(("vcan0", 0x123, 0x456))
+```
+
+Or you can access the native socket within the wrapper
+
+``` python
+import isotp
+s = isotp.socket()
+s.bind("vcan0", rxid=0x123, txid=0x456)
+print(s._socket.getsockname())
 ```
