@@ -16,13 +16,14 @@ mtu=4095
 
 class socket:
     
-    def __init__(self):
+    def __init__(self, timeout=0.1):
         self.interface = None
         self.rxid = None
         self.txid = None
         self.bound = False
         self.closed = False
         self._socket = socket_module.socket(socket_module.AF_CAN, socket_module.SOCK_DGRAM,socket_module.CAN_ISOTP)
+        self._socket.settimeout(timeout)
 
     def send(self, *args, **kwargs):
         return self._socket.send(*args, **kwargs)
