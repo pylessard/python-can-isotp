@@ -15,7 +15,6 @@ def assert_is_socket(s):
 mtu=4095
 
 class socket:
-    
     def __init__(self, timeout=0.1):
         self.interface = None
         self.rxid = None
@@ -23,13 +22,23 @@ class socket:
         self.bound = False
         self.closed = False
         self._socket = socket_module.socket(socket_module.AF_CAN, socket_module.SOCK_DGRAM,socket_module.CAN_ISOTP)
-        self._socket.settimeout(timeout)
+        if timeout is not None and timeout>0:
+            self._socket.settimeout(timeout)
 
     def send(self, *args, **kwargs):
+        if not self.bound:
+            raise RuntimeError("bind() must be called before using the socket")
         return self._socket.send(*args, **kwargs)
 
     def recv(self, n=mtu):
-        return self._socket.recv(n)
+        if not self.bound:
+            raise RuntimeError("bind() must be called before using the socket")
+        try:
+            return self._socket.recv(n)
+        except socket_module.timeout:
+            return None
+        except:
+            raise
 
     def set_ll_opts(self, n):
         if self.bound:
