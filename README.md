@@ -14,7 +14,7 @@ It provides a friendly and pythonic interface to interact with SocketCAN using t
 Other Python libraries enabling the use of ISO-TP protocol makes an implementation of the standard in Python, in the user space.
 As mentioned by the authors of SocketCAN in their documentation, this approach has many downsides, mainly when comes to respecting the protocol timings.
 
-The best way do ISO-TP communication is within the kernel space, just like [hartkopp/can-isotp](https://github.com/hartkopp/can-isotp) module does by using a socket interface following the mentality of SocketCAN. The well known duality between complexity and flexibility makes the usage of sockets onerous and non-intuitiveto the uninitiated. This is where this project becom handy, it wraps the socket object so that a programmer can configure and use it quickly, in an intuitive way.
+The best way do ISO-TP communication is within the kernel space, just like [hartkopp/can-isotp](https://github.com/hartkopp/can-isotp) module does by using a socket interface following the mentality of SocketCAN. The well known duality between complexity and flexibility makes the usage of sockets onerous and non-intuitive to the uninitiated. This is where this project becomes handy, it wraps the socket object so that a programmer can configure and use it quickly, in an intuitive way.
 
 Also, it will tells you if you do something wrong, like setting a socket options after binding the socket to the addresse. The native implementation will silently ignore the options, which can causes some headaches!
 
