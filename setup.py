@@ -17,7 +17,7 @@ setup(
   author_email = 'py.lessard@gmail.com',
   license='MIT',
   url = 'https://github.com/pylessard/python-can-isotp',
-  download_url = 'https://github.com/pylessard/python-can-isotp/archive/v0.1.tar.gz',
+  download_url = 'https://github.com/pylessard/python-can-isotp/archive/v0.2.tar.gz',
   keywords = ['isotp', 'can', 'iso-15765', '15765', 'iso15765'], 
   python_requires='>=3.7',
   classifiers = [
