@@ -62,6 +62,9 @@ class socket:
         self._socket.bind((interface, rxid, txid))
         self.bound=True
 
+    def fileno(self):
+        return self._socket.fileno()
+
     def close(self, *args, **kwargs):
         v = self._socket.close(*args, **kwargs)
         self.bound = False
