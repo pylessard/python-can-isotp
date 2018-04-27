@@ -62,6 +62,9 @@ class socket:
         self._socket.bind((interface, rxid, txid))
         self.bound=True
 
+    def fileno(self):
+        return self._socket.fileno()
+
     def close(self, *args, **kwargs):
         v = self._socket.close(*args, **kwargs)
         self.bound = False
@@ -149,11 +152,13 @@ class opts:
                 if not isinstance(txpad, int) or txpad<0 or txpad>0xFF:
                     raise ValueError("txpad must be a an integer between 0 and FF")
                 o.txpad = txpad
+                o.optflag |= opts.flags.TX_PADDING
 
             if rxpad != None:
                 if not isinstance(rxpad, int) or rxpad<0 or rxpad>0xFF:
                     raise ValueError("rxpad must be a an integer between 0 and FF")
                 o.rxpad = rxpad
+                o.optflag |= opts.flags.RX_PADDING
 
             if rx_ext_address != None:
                 if not isinstance(rx_ext_address, int) or rx_ext_address<0 or rx_ext_address>0xFF:
