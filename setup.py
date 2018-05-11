@@ -10,7 +10,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 setup(
   name = 'can-isotp',
   packages = ['isotp'],
-  version = '0.2',
+  version = '0.3',
   description = 'Wrapper for Python 3.7+ simplifying the usage of Oliver Hartkopp\'s Linux kernel module enabling ISO-15765 sockets',
   long_description=long_description,
   author = 'Pier-Yves Lessard',
