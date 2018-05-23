@@ -108,16 +108,17 @@ class opts:
 
 
     class general:
-        
-        optflag = None
-        frame_txtime = None
-        ext_address = None
-        txpad = None
-        rxpad = None
-        rx_ext_address = None
-
         struct_size = 4+4+1+1+1+1
 
+        def __init__(self):
+            self.optflag = None
+            self.frame_txtime = None
+            self.ext_address = None
+            self.txpad = None
+            self.rxpad = None
+            self.rx_ext_address = None
+
+        
         @classmethod
         def read(cls, s):
             assert_is_socket(s)
@@ -170,15 +171,23 @@ class opts:
             return o
 
         def __repr__(self):
-            return "<OPTS_GENERAL: optflag=0x%x, frame_txtime=0x%x, ext_address=0x%x, txpad=0x%x, rxpad=0x%x, rx_ext_address=0x%x>" % (self.optflag, self.frame_txtime, self.ext_address, self.txpad, self.rxpad, self.rx_ext_address)
+            optflag_str = '[undefined]' if self.optflag is None else '0x%x' % (self.optflag)
+            frame_txtime_str = '[undefined]' if self.frame_txtime is None else '0x%x' % (self.frame_txtime)
+            ext_address_str = '[undefined]' if self.ext_address is None else '0x%x' % (self.ext_address)
+            txpad_str = '[undefined]' if self.txpad is None else '0x%x' % (self.txpad)
+            rxpad_str = '[undefined]' if self.rxpad is None else '0x%x' % (self.rxpad)
+            rx_ext_address_str = '[undefined]' if self.rx_ext_address is None else '0x%x' % (self.rx_ext_address)
+
+            return "<OPTS_GENERAL: optflag=%s, frame_txtime=%s, ext_address=%s, txpad=%s, rxpad=%s, rx_ext_address=%s>" % (optflag_str, frame_txtime_str, ext_address_str, txpad_str, rxpad_str, rx_ext_address_str)
 
     class flowcontrol:
-        stmin = None;
-        bs = None;
-        wftmax = None;
-
         struct_size = 3
         
+        def __init__(self):
+            self.stmin = None;
+            self.bs = None;
+            self.wftmax = None;
+
         @classmethod
         def read(cls, s):
             assert_is_socket(s)
@@ -212,15 +221,19 @@ class opts:
             return o
 
         def __repr__(self):
-            return "<OPTS_RECV_FC: bs=0x%x, stmin=0x%x, wftmax=0x%x>" % (self.bs, self.stmin, self.wftmax)
+            bs_str = '[undefined]' if self.bs is None else '0x%x' % (self.bs)
+            stmin_str = '[undefined]' if self.stmin is None else '0x%x' % (self.stmin)
+            wftmax_str = '[undefined]' if self.wftmax is None else '0x%x' % (self.wftmax)
+            return "<OPTS_RECV_FC: bs=%s, stmin=%s, wftmax=%s>" % (bs_str, stmin_str, wftmax_str)
 
     class linklayer:
-        mtu = None;
-        tx_dl = None;
-        tx_flags = None;
-
         struct_size = 3
         
+        def __init__(self):
+            self.mtu = None;
+            self.tx_dl = None;
+            self.tx_flags = None;
+
         @classmethod
         def read(cls, s):
             assert_is_socket(s)
@@ -254,4 +267,7 @@ class opts:
             return o
 
         def __repr__(self):
-            return "<OPTS_LL: mtu=0x%x, tx_dl=0x%x, tx_flags=0x%x>" % (self.mtu, self.tx_dl, self.tx_flags)
+            mtu_str = '[undefined]' if self.mtu is None else '0x%x' % (self.mtu)
+            tx_dl_str = '[undefined]' if self.tx_dl is None else '0x%x' % (self.tx_dl)
+            tx_flags_str = '[undefined]' if self.tx_flags is None else '0x%x' % (self.tx_flags)
+            return "<OPTS_LL: mtu=%s, tx_dl=%s, tx_flags=%s>" % (mtu_str, tx_dl_str, tx_flags_str)
