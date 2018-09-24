@@ -57,9 +57,15 @@ class socket:
 
     def bind(self, interface, rxid, txid):
         self.interface=interface
-        self.rxid=rxid
-        self.txid=txid
-        self._socket.bind((interface, rxid, txid))
+        if rxid > 0x7FF:                                        #use extended adressing for ids > 11 bit
+              self.rxid = rxid | socket_module.CAN_EFF_FLAG
+        else:
+            self.rxid=rxid
+        if txid > 0x7FF:
+            self.txid = txid | socket_module.CAN_EFF_FLAG
+        else:
+            self.txid=txid
+        self._socket.bind((interface, self.rxid, self.txid))
         self.bound=True
 
     def fileno(self):
