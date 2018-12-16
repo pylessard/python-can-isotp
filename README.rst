@@ -30,7 +30,7 @@ Troubleshooting
 
  - **My socket module does not include the `CAN_ISOTP` constant**
  
-That means that your Python version does not include support for ISOTP protocol. It should be included starting from Python 3.7, under Linux build only.
+That means that your Python version does not include support for ISOTP protocol. It should be included starting from Python 3.7, under Linux build only. See `Python issue <https://bugs.python.org/issue30987>`_ and `Pull request <https://github.com/python/cpython/pull/2956>`_
 
  - **When I create the socket, I get `OSError [errno 19] : Protocol not supported`.**
  
