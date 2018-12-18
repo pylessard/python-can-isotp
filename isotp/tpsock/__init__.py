@@ -39,7 +39,7 @@ class socket:
         except:
             raise
 
-    def set_ll_opts(self, n):
+    def set_ll_opts(self, *args, **kwargs):
         if self.bound:
             raise RuntimeError("Options must be set before calling bind()")
         return opts.linklayer.write(self._socket, *args, **kwargs)
@@ -54,16 +54,18 @@ class socket:
             raise RuntimeError("Options must be set before calling bind()")
         return opts.flowcontrol.write(self._socket, *args, **kwargs)
 
-    def bind(self, interface, rxid, txid):
+    def bind(self, interface, rxid, txid, extended_id=None):
         self.interface=interface
-        if rxid > 0x7FF:                                        #use extended adressing for ids > 11 bit
-              self.rxid = rxid | socket_module.CAN_EFF_FLAG
+        if extended_id == True or extended_id is None and rxid > 0x7FF:
+            self.rxid = rxid | socket_module.CAN_EFF_FLAG
         else:
-            self.rxid=rxid
-        if txid > 0x7FF:
+            self.rxid = rxid & ~socket_module.CAN_EFF_FLAG
+
+        if extended_id == True or extended_id is None and txid > 0x7FF:
             self.txid = txid | socket_module.CAN_EFF_FLAG
         else:
-            self.txid=txid
+            self.txid = txid & ~socket_module.CAN_EFF_FLAG
+
         self._socket.bind((interface, self.rxid, self.txid))
         self.bound=True
 

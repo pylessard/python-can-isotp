@@ -4,7 +4,7 @@ import os
 import binascii
 import time
 import unittest
-from .ThreadableTest import ThreadableTest
+from test.ThreadableTest import ThreadableTest
 from functools import partial
 import logging
 
@@ -300,18 +300,20 @@ class TestStack(unittest.TestCase):
 
 	# ============= Testing starts here ============
 
+	# Make sure we can receive a single frame
 	def test_receive_single_sf(self):
 		self.simulate_rx(data = [0x05, 0x11, 0x22, 0x33, 0x44, 0x55])
 		self.stack.process()
 		self.assertEqual(self.rx_isotp_frame(), bytearray([0x11, 0x22, 0x33, 0x44, 0x55]))
 
+	# Make sure we can receive multiple single frame
 	def test_receive_multiple_sf(self):
 		self.stack.process()
 		self.stack.process()
 
 		self.simulate_rx(data = [0x05, 0x11, 0x22, 0x33, 0x44, 0x55])
 		self.stack.process()
-		self.assertEqual(self.rx_isotp_frame(), bytearray([0x11, 0x22, 0x33, 0x44, 0x55]))
+		self.assertEqual(self.rx_isotp_frame(), bytearray([0x11, 0x22, 0x33, 0x44, 0x55])) 	
 
 		self.assertIsNone(self.rx_isotp_frame())
 		self.stack.process()
@@ -1159,7 +1161,6 @@ class TestStackAgainstSocket(ThreadableTest):
 		diff = time.time() - t1
 		self.assertGreater(diff, expected_time)
 
-	@unittest.skip('This test always fails because of lost messages. Issue seems deeper than this stack. Seems to be coming from the interface or isotp kernel module.')
 	def test_receive_long_stmin(self):
 		self.socket.send(b'a'*150)
 		self.wait_reception_complete(timeout=5)
