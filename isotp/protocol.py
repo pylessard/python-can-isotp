@@ -3,8 +3,148 @@ import logging
 from copy import copy
 import binascii
 import time
+import functools
 
-class stack:
+
+class CanMessage:
+	__slots__ = 'arbitration_id', 'dlc', 'data','is_extended_id'
+
+	def __init__(self, arbitration_id=None, dlc=None, data=None, extended_id=False):
+		self.arbitration_id = arbitration_id
+		self.dlc = dlc
+		self.data = data
+		self.is_extended_id = extended_id
+
+class PDU:
+	__slots__ = 'type', 'length', 'data', 'blocksize', 'stmin', 'stmin_sec', 'seqnum', 'flow_status'
+
+	class Type:
+		SINGLE_FRAME = 0
+		FIRST_FRAME = 1
+		CONSECUTIVE_FRAME = 2
+		FLOW_CONTROL = 3
+
+	class FlowStatus:
+		ContinueToSend = 0
+		Wait = 1
+		Overflow = 2
+
+	def __init__(self, msg = None):
+		"""
+		Converts a CAN Message into a meaningful PDU such as SingleFrame, FirstFrame, ConsecutiveFrame, FlowControl
+
+		:param msg: The CAN message
+		:type msg: `isotp.protocol.CanMessage`
+		"""
+		self.type = None
+		self.length = None
+		self.data = None
+		self.blocksize = None
+		self.stmin = None
+		self.stmin_sec = None
+		self.seqnum = None
+		self.flow_status = None
+
+		if msg is None:
+			return
+
+		if len(msg.data)>0:
+			hnb =  (msg.data[0] >> 4) & 0xF
+			if hnb > 3:
+				raise ValueError('Received message with unknown frame type %d' % hnb)
+			self.type = int(hnb)
+		else:
+			raise ValueError('Empty CAN frame')
+
+		if self.type == self.Type.SINGLE_FRAME:
+			self.length = int(msg.data[0]) & 0xF
+			if len(msg.data) < self.length + 1:
+				raise ValueError('Single Frame length is bigger than CAN frame length')
+
+			if self.length == 0 or self.length > 7:
+				raise ValueError("Received Single Frame with invalid length of %d" % self.length)
+			self.data = msg.data[1:self.length+1]
+
+		elif self.type == self.Type.FIRST_FRAME:
+			if len(msg.data) < 2:
+				raise ValueError('First frame must be at least 2 bytes long')
+
+			self.length = ((int(msg.data[0]) & 0xF) << 8) | int(msg.data[1])
+			if len(msg.data) < 8:
+				if len(msg.data) < self.length + 2:
+					raise ValueError('First frame specifies a length that is inconsistent with underlying CAN message DLC')
+
+			self.data = msg.data[2:min(2+self.length, 8)]
+				
+		elif self.type == self.Type.CONSECUTIVE_FRAME:
+			self.seqnum = int(msg.data[0]) & 0xF
+			self.data = msg.data[1:]
+
+		elif self.type == self.Type.FLOW_CONTROL:
+			if len(msg.data) < 3:
+				raise ValueError('Flow Control frame must be at least 3 bytes')
+
+			self.flow_status = int(msg.data[0]) & 0xF
+			if self.flow_status >= 3:
+				raise ValueError('Unknown flow status')
+
+			self.blocksize = int(msg.data[1])
+			stmin_temp = int(msg.data[2])
+
+			if stmin_temp >= 0 and stmin_temp <= 0x7F:
+				self.stmin_sec = stmin_temp / 1000
+			elif stmin_temp >= 0xf1 and stmin_temp <= 0xF9:
+				self.stmin_sec = (stmin_temp - 0xF0) / 10000
+
+			if self.stmin_sec is None:
+				raise ValueError('Invalid StMin received in Flow Control')
+			else:
+				self.stmin = stmin_temp
+	@classmethod
+	def craft_flow_control_data(cls, flow_status, blocksize, stmin):
+		return bytearray([ (0x30 | (flow_status) & 0xF), blocksize&0xFF, stmin & 0xFF])
+
+	def name(self):
+		if self.type is None:
+			return "[None]"
+
+		if self.type == self.Type.SINGLE_FRAME:
+			return "SINGLE_FRAME"
+		elif self.type == self.Type.FIRST_FRAME:
+			return "FIRST_FRAME"
+		elif self.type == self.Type.CONSECUTIVE_FRAME:
+			return "CONSECUTIVE_FRAME"
+		elif self.type == self.Type.FLOW_CONTROL:
+			return "FLOW_CONTROL"
+		else:
+			return "Reserved"
+
+class IsoTpError(Exception):
+	def __init__(self, *args, **kwargs):
+		Exception.__init__(self, *args, **kwargs)
+
+class FlowControlTimeoutError(IsoTpError):
+	pass
+class ConsecutiveFrameTimeoutError(IsoTpError):
+	pass
+class InvalidCanDataError(IsoTpError):
+	pass
+class UnexpectedFlowControlError(IsoTpError):
+	pass
+class UnexpectedConsecutiveFrameError(IsoTpError):
+	pass
+class ReceptionInterruptedWithSingleFrameError(IsoTpError):
+	pass
+class ReceptionInterruptedWithFirstFrameError(IsoTpError):
+	pass
+class WrongSequenceNumberError(IsoTpError):
+	pass
+class UnsuportedWaitFrameError(IsoTpError):
+	pass
+class MaximumWaitFrameReachedError(IsoTpError):
+	pass
+
+class TransportLayer:
 
 	class Params:
 		__slots__ = 'stmin', 'blocksize', 'squash_stmin_requirement', 'rx_flowcontrol_timeout', 'rx_consecutive_frame_timeout', 'tx_padding', 'wftmax'
@@ -95,15 +235,6 @@ class stack:
 		def is_stopped(self):
 			return self.start_time == None
 
-	class CanMessage:
-		__slots__ = 'arbitration_id', 'dlc', 'data','is_extended_id'
-
-		def __init__(self, arbitration_id=None, dlc=None, data=None, extended_id=False):
-			self.arbitration_id = arbitration_id
-			self.dlc = dlc
-			self.data = data
-			self.is_extended_id = extended_id
-
 	class RxState:
 		IDLE = 0
 		WAIT_CF = 1
@@ -113,144 +244,15 @@ class stack:
 		WAIT_FC = 1
 		TRANSMIT_CF = 2
 
-	class PDU:
-		__slots__ = 'type', 'length', 'data', 'blocksize', 'stmin', 'stmin_sec', 'seqnum', 'flow_status'
-
-		class Type:
-			SINGLE_FRAME = 0
-			FIRST_FRAME = 1
-			CONSECUTIVE_FRAME = 2
-			FLOW_CONTROL = 3
-
-		class FlowStatus:
-			ContinueToSend = 0
-			Wait = 1
-			Overflow = 2
-
-		def __init__(self, msg = None):
-			"""
-			Converts a CAN Message into a meaningful PDU such as SingleFrame, FirstFrame, ConsecutiveFrame, FlowControl
-
-			:param msg: The CAN message
-			:type msg: `stack.CanMessage`
-			"""
-			self.type = None
-			self.length = None
-			self.data = None
-			self.blocksize = None
-			self.stmin = None
-			self.stmin_sec = None
-			self.seqnum = None
-			self.flow_status = None
-
-			if msg is None:
-				return
-
-			if len(msg.data)>0:
-				hnb =  (msg.data[0] >> 4) & 0xF
-				if hnb > 3:
-					raise ValueError('Received message with unknown frame type %d' % hnb)
-				self.type = int(hnb)
-			else:
-				raise ValueError('Empty CAN frame')
-
-			if self.type == self.Type.SINGLE_FRAME:
-				self.length = int(msg.data[0]) & 0xF
-				if len(msg.data) < self.length + 1:
-					raise ValueError('Single Frame length is bigger than CAN frame length')
-
-				if self.length == 0 or self.length > 7:
-					raise ValueError("Received Single Frame with invalid length of %d" % self.length)
-				self.data = msg.data[1:self.length+1]
-
-			elif self.type == self.Type.FIRST_FRAME:
-				if len(msg.data) < 2:
-					raise ValueError('First frame must be at least 2 bytes long')
-
-				self.length = ((int(msg.data[0]) & 0xF) << 8) | int(msg.data[1])
-				if len(msg.data) < 8:
-					if len(msg.data) < self.length + 2:
-						raise ValueError('First frame specifies a length that is inconsistent with underlying CAN message DLC')
-
-				self.data = msg.data[2:min(2+self.length, 8)]
-					
-			elif self.type == self.Type.CONSECUTIVE_FRAME:
-				self.seqnum = int(msg.data[0]) & 0xF
-				self.data = msg.data[1:]
-
-			elif self.type == self.Type.FLOW_CONTROL:
-				if len(msg.data) < 3:
-					raise ValueError('Flow Control frame must be at least 3 bytes')
-
-				self.flow_status = int(msg.data[0]) & 0xF
-				if self.flow_status >= 3:
-					raise ValueError('Unknown flow status')
-
-				self.blocksize = int(msg.data[1])
-				stmin_temp = int(msg.data[2])
-
-				if stmin_temp >= 0 and stmin_temp <= 0x7F:
-					self.stmin_sec = stmin_temp / 1000
-				elif stmin_temp >= 0xf1 and stmin_temp <= 0xF9:
-					self.stmin_sec = (stmin_temp - 0xF0) / 10000
-
-				if self.stmin_sec is None:
-					raise ValueError('Invalid StMin received in Flow Control')
-				else:
-					self.stmin = stmin_temp
-		@classmethod
-		def craft_flow_control_data(cls, flow_status, blocksize, stmin):
-			return bytearray([ (0x30 | (flow_status) & 0xF), blocksize&0xFF, stmin & 0xFF])
-
-		def name(self):
-			if self.type is None:
-				return "[None]"
-
-			if self.type == self.Type.SINGLE_FRAME:
-				return "SINGLE_FRAME"
-			elif self.type == self.Type.FIRST_FRAME:
-				return "FIRST_FRAME"
-			elif self.type == self.Type.CONSECUTIVE_FRAME:
-				return "CONSECUTIVE_FRAME"
-			elif self.type == self.Type.FLOW_CONTROL:
-				return "FLOW_CONTROL"
-			else:
-				return "Reserved"
-
-	class IsoTpError(Exception):
-		def __init__(self, *args, **kwargs):
-			Exception.__init__(self, *args, **kwargs)
-
-	class FlowControlTimeoutError(IsoTpError):
-		pass
-	class ConsecutiveFrameTimeoutError(IsoTpError):
-		pass
-	class InvalidCanDataError(IsoTpError):
-		pass
-	class UnexpectedFlowControlError(IsoTpError):
-		pass
-	class UnexpectedConsecutiveFrameError(IsoTpError):
-		pass
-	class ReceptionInterruptedWithSingleFrameError(IsoTpError):
-		pass
-	class ReceptionInterruptedWithFirstFrameError(IsoTpError):
-		pass
-	class WrongSequenceNumberError(IsoTpError):
-		pass
-	class UnsuportedWaitFrameError(IsoTpError):
-		pass
-	class MaximumWaitFrameReachedError(IsoTpError):
-		pass
-
 	def __init__(self, rxfn, txfn, txid, rxid, extended_id = False,  error_handler=None, params=None):
 		"""
 		The IsoTP transport layer implementation
 
-		:param rxfn: Function to be called by the stack to read the CAN layer. Must return a `stack.CanMessage` or None if no message has been received.
-		:type rxfn: `Callable`
+		:param rxfn: Function to be called by the transport layer to read the CAN layer. Must return a ``isotp.protocol.CanMessage`` or None if no message has been received.
+		:type rxfn: Callable
 
-		:param txfn: Function to be called by the stack to send a message on the CAN layer. This function should receive a `stack.CanMessage`
-		:type txfn: `Callable`
+		:param txfn: Function to be called by the transport layer to send a message on the CAN layer. This function should receive a ``isotp.protocol.CanMessage``
+		:type txfn: Callable
 
 		:param txid: The CAN ID to use for transmission. Applies to normal addressing mode
 		:type txid: int
@@ -261,10 +263,10 @@ class stack:
 		:param extended_id: Specifies if the given rxid/txid are extended CAN ID
 		:type extended_id: bool
 
-		:param error_handler: A function to be called when an error has been detected. An `stack.IsoTpError` (inheriting Exception class) will be given as sole parameter.
-		:type error_handler: `Callable`
+		:param error_handler: A function to be called when an error has been detected. An ``isotp.protocol.IsoTpError`` (inheriting Exception class) will be given as sole parameter
+		:type error_handler: Callable
 
-		:param params: List of parameters for the stack.
+		:param params: List of parameters for the transport layer
 		:type params: dict
 
 		"""
@@ -286,20 +288,20 @@ class stack:
 		if self.txid > 0x7F4 and self.txid < 0x7F6 or self.rxid > 0x7F4 and self.rxid < 0x7F6 or self.txid > 0x7FA and self.txid < 0x7FB or self.rxid > 0x7FA and self.rxid < 0x7FB:
 			self.logger.warning('Used txid/rxid overlaps the range of ID reserved by ISO-15765 (0x7F4-0x7F6 and 0x7FA-0x7FB)')
 
-		self.tx_queue = queue.Queue()	# Stack Input queue for IsoTP frame
-		self.rx_queue = queue.Queue()	# Stack Output queue for IsoTP frame
+		self.tx_queue = queue.Queue()			# Layer Input queue for IsoTP frame
+		self.rx_queue = queue.Queue()			# Layer Output queue for IsoTP frame
 
-		self.rx_state = self.RxState.IDLE	# State of the reception FSM
-		self.tx_state = self.TxState.IDLE	# State of the transmission FSM
+		self.rx_state = self.RxState.IDLE		# State of the reception FSM
+		self.tx_state = self.TxState.IDLE		# State of the transmission FSM
 
 		self.rx_block_counter = 0
-		self.last_seqnum = None		# Consecutive frame Sequence number of previous message	
-		self.rx_frame_length = 0	# Length of IsoTP frame being received at the moment
-		self.tx_frame_length = 0	# Length of the data that we are sending
-		self.last_flow_control_frame = None	# When a FlowControl is received. Put here
-		self.tx_block_counter = 0			# Keeps track of how many block we've sent
-		self.tx_seqnum = 0					# Keeps track of the actual sequence number whil sending
-		self.wft_counter = 0 				# Keeps track of how many wait frame we've received
+		self.last_seqnum = None					# Consecutive frame Sequence number of previous message	
+		self.rx_frame_length = 0				# Length of IsoTP frame being received at the moment
+		self.tx_frame_length = 0				# Length of the data that we are sending
+		self.last_flow_control_frame = None		# When a FlowControl is received. Put here
+		self.tx_block_counter = 0				# Keeps track of how many block we've sent
+		self.tx_seqnum = 0						# Keeps track of the actual sequence number whil sending
+		self.wft_counter = 0 					# Keeps track of how many wait frame we've received
 
 		self.pending_flow_control_tx = False	# Flag indicating that we need to transmist a flow control message. Set by Rx Process, Cleared by Tx Process
 		self.empty_rx_buffer()
@@ -335,7 +337,7 @@ class stack:
 
 		self.tx_queue.put(frame)
 
-	# Receive an IsoTP frame. Output of the stack
+	# Receive an IsoTP frame. Output of the layer
 	def recv(self):
 		"""
 		Dequeue an IsoTP frame from the reception queue if available.
@@ -385,23 +387,23 @@ class stack:
 
 		# Decoding of message into PDU
 		try:
-			frame = self.PDU(msg)
+			frame = PDU(msg)
 		except Exception as e:
-			self.trigger_error(self.InvalidCanDataError("Received invalid CAN frame. %s" % (str(e))))
+			self.trigger_error(InvalidCanDataError("Received invalid CAN frame. %s" % (str(e))))
 			self.stop_receiving()
 			return
 
 		# Check timeout first
 		if self.timer_rx_cf.is_timed_out():
-			self.trigger_error(self.ConsecutiveFrameTimeoutError("Reception of CONSECUTIVE_FRAME timed out."))
+			self.trigger_error(ConsecutiveFrameTimeoutError("Reception of CONSECUTIVE_FRAME timed out."))
 			self.stop_receiving()
 
 		# Process Flow Control message
-		if frame.type == self.PDU.Type.FLOW_CONTROL:
+		if frame.type == PDU.Type.FLOW_CONTROL:
 			self.last_flow_control_frame = frame 	 # Given to process_tx method. Queue of 1 message depth
 
 			if self.rx_state == self.RxState.WAIT_CF:
-				if frame.flow_status == self.PDU.FlowStatus.Wait or frame.flow_status == self.PDU.FlowStatus.ContinueToSend:
+				if frame.flow_status == PDU.FlowStatus.Wait or frame.flow_status == PDU.FlowStatus.ContinueToSend:
 					self.start_rx_cf_timer()
 			return # Nothing else to be done with FlowControl. Return and wait for next message
 
@@ -410,28 +412,28 @@ class stack:
 			self.rx_frame_length = 0
 			self.timer_rx_cf.stop()
 
-			if frame.type == self.PDU.Type.SINGLE_FRAME:
+			if frame.type == PDU.Type.SINGLE_FRAME:
 				if frame.data is not None:
 					self.rx_queue.put(copy(frame.data))
 
-			elif frame.type == self.PDU.Type.FIRST_FRAME:
+			elif frame.type == PDU.Type.FIRST_FRAME:
 				self.start_reception_after_first_frame(frame)
-			elif frame.type == self.PDU.Type.CONSECUTIVE_FRAME:
-				self.trigger_error(self.UnexpectedConsecutiveFrameError('Received a ConsecutiveFrame while reception was idle. Ignoring'))
+			elif frame.type == PDU.Type.CONSECUTIVE_FRAME:
+				self.trigger_error(UnexpectedConsecutiveFrameError('Received a ConsecutiveFrame while reception was idle. Ignoring'))
 				
 
 		elif self.rx_state == self.RxState.WAIT_CF:
-			if frame.type == self.PDU.Type.SINGLE_FRAME:
+			if frame.type == PDU.Type.SINGLE_FRAME:
 				if frame.data is not None:
 					self.rx_queue.put(copy(frame.data))
 					self.rx_state = self.RxState.IDLE
-					self.trigger_error(self.ReceptionInterruptedWithSingleFrameError('Reception of IsoTP frame interrupted with a new SingleFrame'))
+					self.trigger_error(ReceptionInterruptedWithSingleFrameError('Reception of IsoTP frame interrupted with a new SingleFrame'))
 
-			elif frame.type == self.PDU.Type.FIRST_FRAME:
+			elif frame.type == PDU.Type.FIRST_FRAME:
 				self.start_reception_after_first_frame(frame)
-				self.trigger_error(self.ReceptionInterruptedWithFirstFrameError('Reception of IsoTP frame interrupted with a new FirstFrame'))
+				self.trigger_error(ReceptionInterruptedWithFirstFrameError('Reception of IsoTP frame interrupted with a new FirstFrame'))
 
-			elif frame.type == self.PDU.Type.CONSECUTIVE_FRAME:
+			elif frame.type == PDU.Type.CONSECUTIVE_FRAME:
 				self.start_rx_cf_timer() 	# Received a CF message. Restart counter. Timeout handled above.
 
 				expected_seqnum = (self.last_seqnum +1) & 0xF
@@ -449,7 +451,7 @@ class stack:
 							self.timer_rx_cf.stop() 		 # Deactivate that timer while we wait for flow control
 				else:
 					self.stop_receiving()
-					self.trigger_error(self.WrongSequenceNumberError('Received a ConsecutiveFrame with wrong SequenceNumber. Expecting 0x%X, Received 0x%X' % (expected_seqnum, frame.seqnum)))
+					self.trigger_error(WrongSequenceNumberError('Received a ConsecutiveFrame with wrong SequenceNumber. Expecting 0x%X, Received 0x%X' % (expected_seqnum, frame.seqnum)))
 
 	def process_tx(self):
 		output_msg = None 	 # Value outputed.  If None, no subsequent call to process_tx will be done.
@@ -457,25 +459,25 @@ class stack:
 		# Sends flow control if process_rx requested it
 		if self.pending_flow_control_tx:
 			self.pending_flow_control_tx = False
-			return self.make_flow_control(flow_status=self.PDU.FlowStatus.ContinueToSend);	# Overflow is not possible. No need to wait.
+			return self.make_flow_control(flow_status=PDU.FlowStatus.ContinueToSend);	# Overflow is not possible. No need to wait.
 
 		# Handle flow control reception
 		flow_control_frame = self.last_flow_control_frame	# Reads the last message received and clears it. (Dequeue message)
 		self.last_flow_control_frame = None
 
 		if flow_control_frame is not None:
-			if flow_control_frame.flow_status == self.PDU.FlowStatus.Overflow: 	# Needs to stop sending. 
+			if flow_control_frame.flow_status == PDU.FlowStatus.Overflow: 	# Needs to stop sending. 
 				self.stop_sending()
 				return
 
 			if self.tx_state == self.TxState.IDLE:
-				self.trigger_error(self.UnexpectedFlowControlError('Received a FlowControl message while transmission was Idle. Ignoring'))
+				self.trigger_error(UnexpectedFlowControlError('Received a FlowControl message while transmission was Idle. Ignoring'))
 			else:
-				if flow_control_frame.flow_status == self.PDU.FlowStatus.Wait:
+				if flow_control_frame.flow_status == PDU.FlowStatus.Wait:
 					if self.params.wftmax == 0:
-						self.trigger_error(self.UnsuportedWaitFrameError('Received a FlowControl requesting to wait, but fwtmax is set to 0'))
+						self.trigger_error(UnsuportedWaitFrameError('Received a FlowControl requesting to wait, but fwtmax is set to 0'))
 					elif self.wft_counter >= self.params.wftmax:
-						self.trigger_error(self.MaximumWaitFrameReachedError('Received %d wait frame which is the maximum set in params.wftmax' % (self.wft_counter)))
+						self.trigger_error(MaximumWaitFrameReachedError('Received %d wait frame which is the maximum set in params.wftmax' % (self.wft_counter)))
 						self.stop_sending()
 					else:
 						self.wft_counter += 1
@@ -483,7 +485,7 @@ class stack:
 							self.tx_state = self.TxState.WAIT_FC
 							self.start_rx_fc_timer()
 				
-				elif flow_control_frame.flow_status == self.PDU.FlowStatus.ContinueToSend and not self.timer_rx_fc.is_timed_out():
+				elif flow_control_frame.flow_status == PDU.FlowStatus.ContinueToSend and not self.timer_rx_fc.is_timed_out():
 					self.wft_counter = 0
 					self.timer_rx_fc.stop()
 					self.timer_tx_stmin.set_timeout(flow_control_frame.stmin_sec)
@@ -499,7 +501,7 @@ class stack:
 
 		# ======= Timeouts ======
 		if self.timer_rx_fc.is_timed_out():
-			self.trigger_error(self.FlowControlTimeoutError('Reception of FlowControl timed out. Stopping transmission'))
+			self.trigger_error(FlowControlTimeoutError('Reception of FlowControl timed out. Stopping transmission'))
 			self.stop_sending()
 
 
@@ -580,7 +582,7 @@ class stack:
 
 	def make_tx_msg(self, data):
 		self.pad_message_data(data)
-		return self.CanMessage(arbitration_id = self.txid, dlc=len(data), data=data, extended_id=self.extended_id)
+		return CanMessage(arbitration_id = self.txid, dlc=len(data), data=data, extended_id=self.extended_id)
 
 	def make_flow_control(self, flow_status=PDU.FlowStatus.ContinueToSend, blocksize=None, stmin=None):
 		if blocksize is None:
@@ -588,7 +590,7 @@ class stack:
 
 		if stmin is None:
 			stmin = self.params.stmin
-		data = self.PDU.craft_flow_control_data(flow_status, blocksize, stmin)
+		data = PDU.craft_flow_control_data(flow_status, blocksize, stmin)
 
 		return self.make_tx_msg(data)
 
@@ -625,14 +627,14 @@ class stack:
 
 	def trigger_error(self, error):
 		if self.error_handler is not None:
-			if hasattr(self.error_handler, '__call__') and isinstance(error, self.IsoTpError):
+			if hasattr(self.error_handler, '__call__') and isinstance(error, IsoTpError):
 				self.error_handler(error)
 			else:
 				self.logger.warning('Given error handler is not a callable object.')
 
 		self.logger.warning(str(error))
 
-	# Clears everything within the stack.
+	# Clears everything within the layer.
 	def reset(self):
 		while not self.tx_queue.empty():
 			self.tx_queue.get()
@@ -655,3 +657,23 @@ class stack:
 			return timings[key]
 		else:
 			return 0.001
+
+class CanStack(TransportLayer):
+	def tx_canbus(self, msg):
+		self.bus.send(can.Message(arbitration_id=msg.arbitration_id, data = msg.data, extended_id=msg.is_extended_id))
+
+	def rx_canbus(self):
+		msg = self.bus.recv(0)
+		if msg is not None:
+			return CanMessage(arbitration_id=msg.arbitration_id, data=msg.data, extended_id=msg.is_extended_id)
+
+	def __init__(self, bus, *args, **kwargs):
+		global can
+		import can
+		self.set_bus(bus)
+		TransportLayer.__init__(self, rxfn=self.rx_canbus, txfn=self.tx_canbus, *args, **kwargs)
+
+	def set_bus(self, bus):
+		if not isinstance(bus, can.BusABC):
+			raise ValueError('bus must be a python-can BusABC object')
+		self.bus=bus

@@ -57,14 +57,14 @@ class socket:
     def bind(self, interface, rxid, txid, extended_id=None):
         self.interface=interface
         if extended_id == True or extended_id is None and rxid > 0x7FF:
-            self.rxid = rxid | socket_module.CAN_EFF_FLAG
+            self.rxid = (rxid & socket_module.CAN_EFF_MASK) | socket_module.CAN_EFF_FLAG
         else:
-            self.rxid = rxid & ~socket_module.CAN_EFF_FLAG
+            self.rxid = rxid & socket_module.CAN_SFF_MASK
 
         if extended_id == True or extended_id is None and txid > 0x7FF:
-            self.txid = txid | socket_module.CAN_EFF_FLAG
+            self.txid = (txid & socket_module.CAN_EFF_MASK) | socket_module.CAN_EFF_FLAG
         else:
-            self.txid = txid & ~socket_module.CAN_EFF_FLAG
+            self.txid = txid & socket_module.CAN_SFF_MASK
 
         self._socket.bind((interface, self.rxid, self.txid))
         self.bound=True

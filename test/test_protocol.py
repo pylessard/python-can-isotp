@@ -24,12 +24,12 @@ except Exception as e:
 	_ISOTP_SOCKET_POSSIBLE = False
 
 
-Message = isotp.stack.CanMessage
+Message = isotp.protocol.CanMessage
 
 class testTimer(unittest.TestCase):
 	def test_timer(self):
 		timeout = 0.2
-		t = isotp.stack.Timer(timeout=timeout)
+		t = isotp.TransportLayer.Timer(timeout=timeout)
 		self.assertFalse(t.is_timed_out())
 		self.assertEqual(t.elapsed(), 0)
 		t.start()
@@ -46,7 +46,7 @@ class testTimer(unittest.TestCase):
 class TestPDUDecoding(unittest.TestCase):
 
 	def make_pdu(self, data):
-		return isotp.stack.PDU(Message(data=bytearray(data)))
+		return isotp.protocol.PDU(Message(data=bytearray(data)))
 
 	def test_decode_single_frame(self):
 		with self.assertRaises(ValueError):
@@ -63,7 +63,7 @@ class TestPDUDecoding(unittest.TestCase):
 			self.make_pdu([0x01])
 
 		frame = self.make_pdu([0x01, 0xAA])
-		self.assertEqual(frame.type, isotp.stack.PDU.Type.SINGLE_FRAME)
+		self.assertEqual(frame.type, isotp.protocol.PDU.Type.SINGLE_FRAME)
 		self.assertEqual(frame.data, bytearray([0xAA]))
 		self.assertEqual(frame.length, len(frame.data))
 
@@ -71,17 +71,17 @@ class TestPDUDecoding(unittest.TestCase):
 			self.make_pdu([0x02, 0x11])
 
 		frame = self.make_pdu([0x02, 0x11, 0x22])
-		self.assertEqual(frame.type, isotp.stack.PDU.Type.SINGLE_FRAME)
+		self.assertEqual(frame.type, isotp.protocol.PDU.Type.SINGLE_FRAME)
 		self.assertEqual(frame.data, bytearray([0x11, 0x22]))
 		self.assertEqual(frame.length, len(frame.data))
 
 		frame = self.make_pdu([0x02, 0x11, 0x22, 0x33, 0x44])
-		self.assertEqual(frame.type, isotp.stack.PDU.Type.SINGLE_FRAME)
+		self.assertEqual(frame.type, isotp.protocol.PDU.Type.SINGLE_FRAME)
 		self.assertEqual(frame.data, bytearray([0x11, 0x22]))
 		self.assertEqual(frame.length, len(frame.data))
 
 		frame = self.make_pdu([0x07, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77])
-		self.assertEqual(frame.type, isotp.stack.PDU.Type.SINGLE_FRAME)
+		self.assertEqual(frame.type, isotp.protocol.PDU.Type.SINGLE_FRAME)
 		self.assertEqual(frame.data, bytearray([0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77]))
 		self.assertEqual(frame.length, len(frame.data))
 
@@ -106,17 +106,17 @@ class TestPDUDecoding(unittest.TestCase):
 			self.make_pdu([0x10, 0x02, 0x11])
 
 		frame = self.make_pdu([0x10, 0x02, 0x11, 0x22])
-		self.assertEqual(frame.type, isotp.stack.PDU.Type.FIRST_FRAME)
+		self.assertEqual(frame.type, isotp.protocol.PDU.Type.FIRST_FRAME)
 		self.assertEqual(frame.data, bytearray([0x11, 0x22]))
 		self.assertEqual(frame.length, 2)
 
 		frame = self.make_pdu([0x10, 0x02, 0x11, 0x22, 0x33])
-		self.assertEqual(frame.type, isotp.stack.PDU.Type.FIRST_FRAME)
+		self.assertEqual(frame.type, isotp.protocol.PDU.Type.FIRST_FRAME)
 		self.assertEqual(frame.data, bytearray([0x11, 0x22]))
 		self.assertEqual(frame.length, 2)
 
 		frame = self.make_pdu([0x10, 0x06, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66])
-		self.assertEqual(frame.type, isotp.stack.PDU.Type.FIRST_FRAME)
+		self.assertEqual(frame.type, isotp.protocol.PDU.Type.FIRST_FRAME)
 		self.assertEqual(frame.data, bytearray([0x11, 0x22, 0x33, 0x44, 0x55, 0x66]))
 		self.assertEqual(frame.length, 6)
 
@@ -124,12 +124,12 @@ class TestPDUDecoding(unittest.TestCase):
 			frame = self.make_pdu([0x10, 0x0A, 0x11, 0x22, 0x33, 0x44, 0x55])
 
 		frame = self.make_pdu([0x10, 0x0A, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66])
-		self.assertEqual(frame.type, isotp.stack.PDU.Type.FIRST_FRAME)
+		self.assertEqual(frame.type, isotp.protocol.PDU.Type.FIRST_FRAME)
 		self.assertEqual(frame.data, bytearray([0x11, 0x22, 0x33, 0x44, 0x55, 0x66]))
 		self.assertEqual(frame.length, 0xA)
 
 		frame = self.make_pdu([0x1A, 0xBC, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66])
-		self.assertEqual(frame.type, isotp.stack.PDU.Type.FIRST_FRAME)
+		self.assertEqual(frame.type, isotp.protocol.PDU.Type.FIRST_FRAME)
 		self.assertEqual(frame.data, bytearray([0x11, 0x22, 0x33, 0x44, 0x55, 0x66]))
 		self.assertEqual(frame.length, 0xABC)
 
@@ -139,17 +139,17 @@ class TestPDUDecoding(unittest.TestCase):
 			self.make_pdu([])
 
 		frame = self.make_pdu([0x20])
-		self.assertEqual(frame.type, isotp.stack.PDU.Type.CONSECUTIVE_FRAME)
+		self.assertEqual(frame.type, isotp.protocol.PDU.Type.CONSECUTIVE_FRAME)
 		self.assertEqual(frame.data, bytearray([]))
 		self.assertEqual(frame.seqnum, 0)
 
 		frame = self.make_pdu([0x20, 0x11])
-		self.assertEqual(frame.type, isotp.stack.PDU.Type.CONSECUTIVE_FRAME)
+		self.assertEqual(frame.type, isotp.protocol.PDU.Type.CONSECUTIVE_FRAME)
 		self.assertEqual(frame.data, bytearray([0x11]))
 		self.assertEqual(frame.seqnum, 0)
 
 		frame = self.make_pdu([0x2A, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77])
-		self.assertEqual(frame.type, isotp.stack.PDU.Type.CONSECUTIVE_FRAME)
+		self.assertEqual(frame.type, isotp.protocol.PDU.Type.CONSECUTIVE_FRAME)
 		self.assertEqual(frame.data, bytearray([0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77]))
 		self.assertEqual(frame.seqnum, 0xA)
 
@@ -165,22 +165,22 @@ class TestPDUDecoding(unittest.TestCase):
 			self.make_pdu([0x30, 0x00])
 
 		frame = self.make_pdu([0x30, 0x00, 0x00])
-		self.assertEqual(frame.type, isotp.stack.PDU.Type.FLOW_CONTROL)
-		self.assertEqual(frame.flow_status, isotp.stack.PDU.FlowStatus.ContinueToSend)
+		self.assertEqual(frame.type, isotp.protocol.PDU.Type.FLOW_CONTROL)
+		self.assertEqual(frame.flow_status, isotp.protocol.PDU.FlowStatus.ContinueToSend)
 		self.assertEqual(frame.blocksize, 0)
 		self.assertEqual(frame.stmin, 0)
 		self.assertEqual(frame.stmin_sec, 0)
 
 		frame = self.make_pdu([0x31, 0x00, 0x00])
-		self.assertEqual(frame.type, isotp.stack.PDU.Type.FLOW_CONTROL)
-		self.assertEqual(frame.flow_status, isotp.stack.PDU.FlowStatus.Wait)
+		self.assertEqual(frame.type, isotp.protocol.PDU.Type.FLOW_CONTROL)
+		self.assertEqual(frame.flow_status, isotp.protocol.PDU.FlowStatus.Wait)
 		self.assertEqual(frame.blocksize, 0)
 		self.assertEqual(frame.stmin, 0)
 		self.assertEqual(frame.stmin_sec, 0)
 
 		frame = self.make_pdu([0x32, 0x00, 0x00])
-		self.assertEqual(frame.type, isotp.stack.PDU.Type.FLOW_CONTROL)
-		self.assertEqual(frame.flow_status, isotp.stack.PDU.FlowStatus.Overflow)
+		self.assertEqual(frame.type, isotp.protocol.PDU.Type.FLOW_CONTROL)
+		self.assertEqual(frame.flow_status, isotp.protocol.PDU.FlowStatus.Overflow)
 		self.assertEqual(frame.blocksize, 0)
 		self.assertEqual(frame.stmin, 0)
 		self.assertEqual(frame.stmin_sec, 0)
@@ -190,24 +190,24 @@ class TestPDUDecoding(unittest.TestCase):
 				frame = self.make_pdu([0x30 + i, 0x00, 0x00])
 
 		frame = self.make_pdu([0x30, 0xFF, 0x00])
-		self.assertEqual(frame.type, isotp.stack.PDU.Type.FLOW_CONTROL)
-		self.assertEqual(frame.flow_status, isotp.stack.PDU.FlowStatus.ContinueToSend)
+		self.assertEqual(frame.type, isotp.protocol.PDU.Type.FLOW_CONTROL)
+		self.assertEqual(frame.flow_status, isotp.protocol.PDU.FlowStatus.ContinueToSend)
 		self.assertEqual(frame.blocksize, 0xFF)
 		self.assertEqual(frame.stmin, 0)
 		self.assertEqual(frame.stmin_sec, 0)
 
 		for i in range(0,0x7F):		# Millisecs
 			frame = self.make_pdu([0x30, 0x00, i])
-			self.assertEqual(frame.type, isotp.stack.PDU.Type.FLOW_CONTROL)
-			self.assertEqual(frame.flow_status, isotp.stack.PDU.FlowStatus.ContinueToSend)
+			self.assertEqual(frame.type, isotp.protocol.PDU.Type.FLOW_CONTROL)
+			self.assertEqual(frame.flow_status, isotp.protocol.PDU.FlowStatus.ContinueToSend)
 			self.assertEqual(frame.blocksize, 0)
 			self.assertEqual(frame.stmin, i)
 			self.assertEqual(frame.stmin_sec, i/1000)
 
 		for i in range(0xF1, 0xF9):	# Microsecs
 			frame = self.make_pdu([0x30, 0x00, i])
-			self.assertEqual(frame.type, isotp.stack.PDU.Type.FLOW_CONTROL)
-			self.assertEqual(frame.flow_status, isotp.stack.PDU.FlowStatus.ContinueToSend)
+			self.assertEqual(frame.type, isotp.protocol.PDU.Type.FLOW_CONTROL)
+			self.assertEqual(frame.flow_status, isotp.protocol.PDU.FlowStatus.ContinueToSend)
 			self.assertEqual(frame.blocksize, 0)
 			self.assertEqual(frame.stmin, i)
 			self.assertEqual(frame.stmin_sec, (i - 0xF0)/10000)
@@ -243,7 +243,7 @@ class TestStack(unittest.TestCase):
 			'rx_consecutive_frame_timeout' : 1000,
 			'wftmax' : 0
 		}
-		self.stack = isotp.stack(txfn=self.stack_txfn, rxfn=self.stack_rxfn, txid=self.TXID, rxid=self.RXID, error_handler = self.error_handler, params = params)
+		self.stack = isotp.TransportLayer(txfn=self.stack_txfn, rxfn=self.stack_rxfn, txid=self.TXID, rxid=self.RXID, error_handler = self.error_handler, params = params)
 		self.error_triggered = {}
 
 	def stack_txfn(self, msg):
@@ -425,7 +425,7 @@ class TestStack(unittest.TestCase):
 		self.stack.process()
 		self.assertIsNone(self.rx_isotp_frame())
 		self.assertIsNone(self.get_tx_can_msg()) # Do not send flow control
-		self.assert_error_triggered(isotp.stack.WrongSequenceNumberError)
+		self.assert_error_triggered(isotp.protocol.WrongSequenceNumberError)
 
 	def test_receive_timeout_consecutive_frame_after_first_frame(self):
 		self.stack.params.set('rx_consecutive_frame_timeout', 200)
@@ -438,8 +438,8 @@ class TestStack(unittest.TestCase):
 		self.simulate_rx(data = [0x21] + payload[6:10])
 		self.stack.process()
 		self.assertIsNone(self.rx_isotp_frame())	# No message received indeed
-		self.assert_error_triggered(isotp.stack.ConsecutiveFrameTimeoutError)
-		self.assert_error_triggered(isotp.stack.UnexpectedConsecutiveFrameError)
+		self.assert_error_triggered(isotp.protocol.ConsecutiveFrameTimeoutError)
+		self.assert_error_triggered(isotp.protocol.UnexpectedConsecutiveFrameError)
 
 	def test_receive_recover_timeout_consecutive_frame(self):
 		self.stack.params.set('rx_consecutive_frame_timeout', 200)
@@ -458,8 +458,8 @@ class TestStack(unittest.TestCase):
 		self.simulate_rx(data = [0x21] + payload2[6:10])	
 		self.stack.process()
 		self.assertEqual(self.rx_isotp_frame(), bytearray(payload2))	# Correctly received
-		self.assert_error_triggered(isotp.stack.ConsecutiveFrameTimeoutError)
-		self.assert_error_triggered(isotp.stack.UnexpectedConsecutiveFrameError)
+		self.assert_error_triggered(isotp.protocol.ConsecutiveFrameTimeoutError)
+		self.assert_error_triggered(isotp.protocol.UnexpectedConsecutiveFrameError)
 
 	def test_receive_multiframe_interrupting_another(self):
 		self.stack.params.set('rx_consecutive_frame_timeout', 200)
@@ -474,7 +474,7 @@ class TestStack(unittest.TestCase):
 		self.stack.process()
 		self.assertEqual(self.rx_isotp_frame(), bytearray(payload2))
 		self.assertIsNone(self.rx_isotp_frame())
-		self.assert_error_triggered(isotp.stack.ReceptionInterruptedWithFirstFrameError)
+		self.assert_error_triggered(isotp.protocol.ReceptionInterruptedWithFirstFrameError)
 
 	def test_receive_single_frame_interrupt_multiframe_then_recover(self):
 		self.stack.params.set('rx_consecutive_frame_timeout', 200)
@@ -497,7 +497,7 @@ class TestStack(unittest.TestCase):
 		self.assertEqual(self.rx_isotp_frame(), bytearray(sf_payload))
 		self.assertEqual(self.rx_isotp_frame(), bytearray(payload2))
 		self.assertIsNone(self.rx_isotp_frame())
-		self.assert_error_triggered(isotp.stack.ReceptionInterruptedWithSingleFrameError)
+		self.assert_error_triggered(isotp.protocol.ReceptionInterruptedWithSingleFrameError)
 
 	def test_receive_4095_multiframe(self):
 		payload_size = 4095
@@ -547,7 +547,7 @@ class TestStack(unittest.TestCase):
 		for i in range(4, 0x10):
 			self.simulate_rx(data = [i << 4, 0x00, 0x00])
 			self.stack.process()
-			self.assert_error_triggered(isotp.stack.InvalidCanDataError)
+			self.assert_error_triggered(isotp.protocol.InvalidCanDataError)
 			self.clear_errors()
 
 
@@ -702,7 +702,7 @@ class TestStack(unittest.TestCase):
 		self.stack.process()
 		msg = self.get_tx_can_msg()
 		self.assertIsNone(msg)
-		self.assert_error_triggered(isotp.stack.FlowControlTimeoutError)
+		self.assert_error_triggered(isotp.protocol.FlowControlTimeoutError)
 
 	def test_send_multiframe_flow_control_timeout_recover(self):
 		self.stack.params.set('rx_flowcontrol_timeout', 200)
@@ -725,13 +725,13 @@ class TestStack(unittest.TestCase):
 		self.stack.process()
 		msg = self.get_tx_can_msg()
 		self.assertEqual(msg.data, bytearray([0x21] + payload[6:10]))
-		self.assert_error_triggered(isotp.stack.FlowControlTimeoutError)
+		self.assert_error_triggered(isotp.protocol.FlowControlTimeoutError)
 
 	def test_send_unexpected_flow_control(self):
 		self.simulate_rx_flowcontrol(flow_status=0, stmin=100, blocksize=8)
 		self.stack.process()
 		self.assertIsNone(self.get_tx_can_msg())
-		self.assert_error_triggered(isotp.stack.UnexpectedFlowControlError)
+		self.assert_error_triggered(isotp.protocol.UnexpectedFlowControlError)
 
 	def test_send_respect_wait_frame(self):
 		self.stack.params.set('wftmax', 15)
@@ -779,7 +779,7 @@ class TestStack(unittest.TestCase):
 		self.stack.process()
 		self.assertIsNone(self.get_tx_can_msg())
 		
-		self.assert_error_triggered(isotp.stack.FlowControlTimeoutError)
+		self.assert_error_triggered(isotp.protocol.FlowControlTimeoutError)
 
 	def test_send_wait_frame_after_first_frame_wftmax_0(self):
 		self.stack.params.set('wftmax', 0)
@@ -791,7 +791,7 @@ class TestStack(unittest.TestCase):
 		time.sleep(0.01)
 		self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=8)
 		self.stack.process()
-		self.assert_error_triggered(isotp.stack.UnsuportedWaitFrameError)
+		self.assert_error_triggered(isotp.protocol.UnsuportedWaitFrameError)
 
 	def test_send_wait_frame_after_consecutive_frame_wftmax_0(self):
 		self.stack.params.set('wftmax', 0)
@@ -805,7 +805,7 @@ class TestStack(unittest.TestCase):
 		self.stack.process()
 		self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=1)
 		self.stack.process()
-		self.assert_error_triggered(isotp.stack.UnsuportedWaitFrameError)
+		self.assert_error_triggered(isotp.protocol.UnsuportedWaitFrameError)
 
 	def test_send_wait_frame_after_first_frame_reach_max(self):
 		self.stack.params.set('wftmax', 5)
@@ -821,8 +821,8 @@ class TestStack(unittest.TestCase):
 		self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=1)
 		self.stack.process()
 		self.assertIsNone(self.get_tx_can_msg())
-		self.assert_error_triggered(isotp.stack.MaximumWaitFrameReachedError)
-		self.assert_error_triggered(isotp.stack.UnexpectedFlowControlError)
+		self.assert_error_triggered(isotp.protocol.MaximumWaitFrameReachedError)
+		self.assert_error_triggered(isotp.protocol.UnexpectedFlowControlError)
 
 	def test_send_wait_frame_after_conscutive_frame_reach_max(self):
 		self.stack.params.set('wftmax', 5)
@@ -841,8 +841,8 @@ class TestStack(unittest.TestCase):
 		self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=1)
 		self.stack.process()
 		self.assertIsNone(self.get_tx_can_msg())
-		self.assert_error_triggered(isotp.stack.MaximumWaitFrameReachedError)
-		self.assert_error_triggered(isotp.stack.UnexpectedFlowControlError)
+		self.assert_error_triggered(isotp.protocol.MaximumWaitFrameReachedError)
+		self.assert_error_triggered(isotp.protocol.UnexpectedFlowControlError)
 
 	def test_send_4095_multiframe_zero_stmin(self):
 		self.perform_multiframe_test_no_stmin(4095, 5)
@@ -977,7 +977,7 @@ class TestStack(unittest.TestCase):
 
 # =============== Parameters ===========
 	def create_stack(self, params):
-		return isotp.stack(txfn=self.stack_txfn, rxfn=self.stack_rxfn, txid=self.TXID, rxid=self.RXID, params = params)
+		return isotp.TransportLayer(txfn=self.stack_txfn, rxfn=self.stack_rxfn, txid=self.TXID, rxid=self.RXID, params = params)
 
 	def test_params_bad_values(self):
 		params = {
@@ -1062,14 +1062,6 @@ class TestStackAgainstSocket(ThreadableTest):
 		self.reception_complete = False
 		self.socket_ready=False
 
-	def send(self, bus, msg):
-		bus.send(can.Message(arbitration_id=msg.arbitration_id, data = msg.data, extended_id=msg.is_extended_id))
-
-	def recv(self, bus):
-		msg = bus.recv(0)
-		if msg is not None:
-			return self.stack.CanMessage(arbitration_id=msg.arbitration_id, data=msg.data, extended_id=msg.is_extended_id)		
-
 	def make_tp_sock(self, stmin=0, bs=8, wftmax=0):
 		socket = isotp.socket()
 		socket.set_fc_opts(stmin=stmin, bs=bs, wftmax=wftmax)
@@ -1081,7 +1073,7 @@ class TestStackAgainstSocket(ThreadableTest):
 
 	def clientSetUp(self):
 		self.bus = can.interface.Bus(_interface_name, bustype='socketcan')
-		self.stack = isotp.stack(txid=self.stack_txid, rxid=self.stack_rxid, txfn=partial(self.send, self.bus), rxfn=partial(self.recv, self.bus))
+		self.stack = isotp.CanStack(bus=self.bus, txid=self.stack_txid, rxid=self.stack_rxid)
 
 	def tearDown(self):
 		self.socket.close()
@@ -1173,3 +1165,22 @@ class TestStackAgainstSocket(ThreadableTest):
 		self.assertEqual(frame, b'a'*150)
 		diff = time.time() - t1
 		self.assertGreater(diff, expected_time)
+
+	def test_receive(self):
+		self.socket.send(b'a'*100)
+		self.wait_reception_complete()
+
+	def _test_receive(self):
+		frame = self.process_stack_receive()
+		self.assertEqual(frame, b'a'*100)
+
+	def test_transmit(self):
+		self.wait_transmission_complete(1)
+		frame = self.socket.recv()
+		self.assertEqual(frame, b'b'*100)
+
+	def _test_transmit(self):
+		self.stack.reset()
+		self.stack = isotp.CanStack(txid=0x123456, rxid=0x654321, extended_id=True)
+		self.stack.send(b'b'*100)
+		self.process_stack_send()

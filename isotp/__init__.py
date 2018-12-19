@@ -1,2 +1,3 @@
 from isotp.tpsock import socket
-from isotp.stack import stack
+from isotp.protocol import TransportLayer
+from isotp.protocol import CanStack
