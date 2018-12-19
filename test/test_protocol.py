@@ -1165,22 +1165,3 @@ class TestStackAgainstSocket(ThreadableTest):
 		self.assertEqual(frame, b'a'*150)
 		diff = time.time() - t1
 		self.assertGreater(diff, expected_time)
-
-	def test_receive(self):
-		self.socket.send(b'a'*100)
-		self.wait_reception_complete()
-
-	def _test_receive(self):
-		frame = self.process_stack_receive()
-		self.assertEqual(frame, b'a'*100)
-
-	def test_transmit(self):
-		self.wait_transmission_complete(1)
-		frame = self.socket.recv()
-		self.assertEqual(frame, b'b'*100)
-
-	def _test_transmit(self):
-		self.stack.reset()
-		self.stack = isotp.CanStack(txid=0x123456, rxid=0x654321, extended_id=True)
-		self.stack.send(b'b'*100)
-		self.process_stack_send()
