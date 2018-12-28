@@ -4,7 +4,7 @@ from copy import copy
 import binascii
 import time
 import functools
-
+import isotp.address
 
 class CanMessage:
 	__slots__ = 'arbitration_id', 'dlc', 'data','is_extended_id'
@@ -144,167 +144,10 @@ class UnsuportedWaitFrameError(IsoTpError):
 class MaximumWaitFrameReachedError(IsoTpError):
 	pass
 
-class AddressingMode:
-	Normal_11bits = 0
-	Normal_29bits = 1
-	NormalFixed_29bits = 2
-	Extended_11bits = 3
-	Extended_29bits = 4
-	Mixed_11bits = 5
-	Mixed_29bits = 6
-
-class TargetAddressType:
-	Physical = 0		# 1 to 1 communication
-	Functional = 1		# 1 to n communication
-
-class Address:
-	def __init__(self, addressing_mode = None, txid=None, rxid=None, target_address=None, source_address=None, address_extension=None):
-		self.addressing_mode	= addressing_mode
-		self.target_address		= target_address
-		self.source_address		= source_address
-		self.address_extension	= address_extension
-		self.txid				= txid
-		self.rxid				= rxid
-
-		self.validate()
-
-		# From here, input is good. Do some precomputing for speed optimization withou bothering about types or values
-		self.is_29bits 						= True if self.addressing_mode in [ AddressingMode.Normal_29bits, AddressingMode.NormalFixed_29bits, AddressingMode.Extended_29bits, AddressingMode.Mixed_29bits] else False
-		self.tx_arbitration_id_physical  	= self._get_tx_arbitraton_id(TargetAddressType.Physical)
-		self.tx_arbitration_id_functional  	= self._get_tx_arbitraton_id(TargetAddressType.Functional)
-
-		self.tx_payload_prefix = bytearray()
-		self.rx_prefix_size = 0
-
-		if self.addressing_mode in [AddressingMode.Extended_11bits, AddressingMode.Extended_29bits]:
-			self.tx_payload_prefix.extend(bytearray([self.target_address]))
-			self.rx_prefix_size = 1
-		elif self.addressing_mode in [AddressingMode.Mixed_11bits, AddressingMode.Mixed_29bits]:
-			self.tx_payload_prefix.extend(bytearray([self.address_extension]))
-			self.rx_prefix_size = 1
-
-		self.rxmask = None
-		if self.addressing_mode == AddressingMode.NormalFixed_29bits:
-			self.rxmask = 0x18DA0000	# This should ignore variant between Physical and Functional addressing
-		elif self.addressing_mode == AddressingMode.Mixed_29bits:
-			self.rxmask = 0x18CD0000	# This should ignore variant between Physical and Functional addressing
-
-		if self.addressing_mode in [AddressingMode.Normal_11bits, AddressingMode.Normal_29bits]:
-			self.is_for_me = self._is_for_me_normal
-		elif self.addressing_mode in [AddressingMode.Extended_11bits, AddressingMode.Extended_29bits]:
-			self.is_for_me = self._is_for_me_extended
-		elif self.addressing_mode == AddressingMode.NormalFixed_29bits:
-			self.is_for_me = self._is_for_me_normalfixed
-		elif self.addressing_mode == AddressingMode.Mixed_11bits:
-			self.is_for_me = self._is_for_me_mixed_11bits
-		elif self.addressing_mode == AddressingMode.Mixed_29bits:
-			self.is_for_me = self._is_for_me_mixed_29bits
-		else:
-			raise RuntimeError('This exception should never be raised.')
-
-	def validate(self):
-		if self.addressing_mode not in [AddressingMode.Normal_11bits,AddressingMode.Normal_29bits,AddressingMode.NormalFixed_29bits,AddressingMode.Extended_11bits,AddressingMode.Extended_29bits,AddressingMode.Mixed_11bits,AddressingMode.Mixed_29bits]:
-			raise ValueError('Addressing mode is not valid')
-
-		if self.addressing_mode in [AddressingMode.Normal_11bits, AddressingMode.Normal_29bits]:
-			if self.rxid is None or self.txid is None:
-				raise ValueError('txid and rxid must be specified for Normal addressing mode (11 bits ID)')
-			if self.rxid == self.txid:
-				raise ValueError('txid and rxid must be different for Normal addressing mode')
-		
-		elif self.addressing_mode == AddressingMode.NormalFixed_29bits:
-			if self.target_address is None or self.source_address is None:
-				raise ValueError('target_address and source_address must be specified for Normal Fixed addressing (29 bits ID)')
-		
-		elif self.addressing_mode in [AddressingMode.Extended_11bits, AddressingMode.Extended_29bits]:
-			if self.target_address is None or self.rxid is None or self.txid is None:
-				raise ValueError('target_address, rxid and txid must be specified for Extended addressing mode ')
-			if self.rxid == self.txid:
-				raise ValueError('txid and rxid must be different')
-
-		elif self.addressing_mode == AddressingMode.Mixed_11bits:
-			if self.rxid is None or self.txid is None or self.address_extension is None:
-				raise ValueError('rxid, txid and address_extension must be specified for Mixed addressing mode')
-
-		elif self.addressing_mode == AddressingMode.Mixed_29bits:
-			if self.target_address is None or self.source_address is None or self.address_extension is None:
-				raise ValueError('target_address, source_address and address_extension must be specified for Mixed addressing mode')
-
-		if self.target_address is not None:
-			if not isinstance(self.target_address, int):
-				raise ValueError('target_address must be an integer')
-			if self.target_address < 0 or self.target_address > 0xFF:
-				raise ValueError('target_address must be an integer between 0x00 and 0xFF')
-
-		if self.source_address is not None:
-			if not isinstance(self.source_address, int):
-				raise ValueError('source_address must be an integer')
-			if self.source_address < 0 or self.source_address > 0xFF:
-				raise ValueError('source_address must be an integer between 0x00 and 0xFF')
-
-		if self.address_extension is not None:
-			if not isinstance(self.address_extension, int):
-				raise ValueError('source_address must be an integer')
-			if self.address_extension < 0 or self.address_extension > 0xFF:
-				raise ValueError('address_extension must be an integer between 0x00 and 0xFF')
-
-	def get_tx_arbitraton_id(self, pdu_type, address_type=TargetAddressType.Physical):
-		if address_type == TargetAddressType.Functional:
-			if pdu_type == PDU.Type.SINGLE_FRAME:
-				return self.tx_arbitration_id_functional
-			else:
-				raise RuntimeError('Only SingleFrame are allowed when TaType is Functional. This error should never happen.')
-		else:
-			return self.tx_arbitration_id_physical
-
-	def _get_tx_arbitraton_id(self, address_type):
-		if self.addressing_mode == AddressingMode.Normal_11bits:
-			return self.txid
-		elif self.addressing_mode == AddressingMode.Normal_29bits:
-			return self.txid
-		elif self.addressing_mode == AddressingMode.NormalFixed_29bits:
-			bits23_16 = 0xDA0000 if address_type==TargetAddressType.Physical else 0xDB0000
-			return 0x18000000 | bits23_16 | (self.target_address << 8) | self.source_address
-		elif self.addressing_mode == AddressingMode.Extended_11bits:
-			return self.txid
-		elif self.addressing_mode == AddressingMode.Extended_29bits:
-			return self.txid
-		elif self.addressing_mode == AddressingMode.Mixed_11bits:
-			return self.txid
-		elif self.addressing_mode == AddressingMode.Mixed_29bits:
-			bits23_16 = 0xCE0000 if address_type==TargetAddressType.Physical else 0xCD0000
-			return 0x18000000 | bits23_16 | (self.target_address << 8) | self.source_address
-
-	def _is_for_me_normal(self, msg):
-		if self.is_29bits == msg.is_extended_id:
-			return msg.arbitration_id == self.rxid
-		return False
-
-	def _is_for_me_extended(self, msg):
-		if self.is_29bits == msg.is_extended_id:
-			if msg.data is not None and len(msg.data) > 0:
-				return msg.arbitration_id == self.rxid and int(msg.data[0]) == self.source_address 
-		return False
-
-	def _is_for_me_normalfixed(self, msg):
-		if self.is_29bits == msg.is_extended_id:
-			return ((msg.arbitration_id >> 16) & 0xFF) in [218,219] and (msg.arbitration_id & 0xFF00) >> 8 == self.source_address and msg.arbitration_id & 0xFF == self.target_address
-		return False
-
-	def _is_for_me_mixed_11bits(self, msg):
-		if self.is_29bits == msg.is_extended_id:
-			if msg.data is not None and len(msg.data) > 0:
-				return msg.arbitration_id == self.rxid and int(msg.data[0]) == self.address_extension
-		return False
-
-	def _is_for_me_mixed_29bits(self, msg):
-		if self.is_29bits == msg.is_extended_id:
-			if msg.data is not None and len(msg.data) > 0:
-				return ((msg.arbitration_id >> 16) & 0xFF) in [205,206] and (msg.arbitration_id & 0xFF00) >> 8 == self.source_address and msg.arbitration_id & 0xFF == self.target_address and int(msg.data[0]) == self.address_extension
-		return False
-
 
 class TransportLayer:
+
+	LOGGER_NAME = 'isotp'
 
 	class Params:
 		__slots__ = 'stmin', 'blocksize', 'squash_stmin_requirement', 'rx_flowcontrol_timeout', 'rx_consecutive_frame_timeout', 'tx_padding', 'wftmax'
@@ -414,14 +257,8 @@ class TransportLayer:
 		:param txfn: Function to be called by the transport layer to send a message on the CAN layer. This function should receive a ``isotp.protocol.CanMessage``
 		:type txfn: Callable
 
-		:param txid: The CAN ID to use for transmission. Applies to normal addressing mode
-		:type txid: int
-
-		:param rxid: The CAN ID to use for reception. Applies to normal addressing mode
-		:type rxid: int
-
-		:param extended_id: Specifies if the given rxid/txid are extended CAN ID
-		:type extended_id: bool
+		:param address: The address information of CAN messages. Includes the addressing mode, txid/rxid, source/target address and address extension. See `:class:isotp.Address<isotp.Address>` for more details.
+		:type address: isotp.Address
 
 		:param error_handler: A function to be called when an error has been detected. An ``isotp.protocol.IsoTpError`` (inheriting Exception class) will be given as sole parameter
 		:type error_handler: Callable
@@ -431,6 +268,7 @@ class TransportLayer:
 
 		"""
 		self.params = self.Params()
+		self.logger = logging.getLogger(self.LOGGER_NAME)
 
 		if params is not None:
 			for k in params:
@@ -441,16 +279,7 @@ class TransportLayer:
 		self.rxfn = rxfn 	# Function to call to receive a CAN message
 		self.txfn = txfn	# Function to call to transmimt a CAN message
 
-		if not isinstance(address, Address):
-			raise ValueError('address must be a valid Address instance')
-
-		self.address = address
-
-		if self.address.txid is not None and (self.address.txid > 0x7F4 and self.address.txid < 0x7F6 or self.address.txid > 0x7FA and self.address.txid < 0x7FB) :
-			self.logger.warning('Used txid overlaps the range of ID reserved by ISO-15765 (0x7F4-0x7F6 and 0x7FA-0x7FB)')
-
-		if self.address.rxid is not None and (self.address.rxid > 0x7F4 and self.address.rxid < 0x7F6 or self.address.rxid > 0x7FA and self.address.rxid < 0x7FB) :
-			self.logger.warning('Used rxid overlaps the range of ID reserved by ISO-15765 (0x7F4-0x7F6 and 0x7FA-0x7FB)')
+		self.set_address(address)
 
 		self.tx_queue = queue.Queue()			# Layer Input queue for IsoTP frame
 		self.rx_queue = queue.Queue()			# Layer Output queue for IsoTP frame
@@ -477,18 +306,17 @@ class TransportLayer:
 
 		self.error_handler = error_handler
 
-		self.logger = logging.getLogger(self.__class__.__name__)
 
 	
-	def send(self, data, target_address_type=TargetAddressType.Physical):
+	def send(self, data, target_address_type=isotp.address.TargetAddressType.Physical):
 		"""
 		Enqueue an IsoTP frame to be sent over CAN network
 
 		:param data: The data to be sent
 		:type data: bytearray
 
-		:param data: Optional parameter that can be Physical (0) for 1-to-1 communication or Functional (1) for 1-to-n. See :class:`isotp.protocol.Address.TargetAddressType<isotp.protocol.Address.TargetAddressType>`
-		:type data: int
+		:param target_address_type: Optional parameter that can be Physical (0) for 1-to-1 communication or Functional (1) for 1-to-n. See :class:`isotp.TargetAddressType<isotp.TargetAddressType>`
+		:type target_address_type: int
 
 		:raises ValueError: Input parameter is not a bytearray or not convertible to bytearray
 		:raises RuntimeError: Transmit queue is full
@@ -502,7 +330,7 @@ class TransportLayer:
 		if self.tx_queue.full():
 			raise RuntimeError('Transmit queue is full')
 
-		if target_address_type == TargetAddressType.Functional:
+		if target_address_type == isotp.address.TargetAddressType.Functional:
 			if len(data) > 7-len(self.address.tx_payload_prefix):
 				raise ValueError('Cannot send multipacket frame with Functional TargetAddressType')
 
@@ -695,12 +523,12 @@ class TransportLayer:
 
 						if len(self.tx_buffer) <= 7-len(self.address.tx_payload_prefix):	# Single frame
 							msg_data 		= self.address.tx_payload_prefix + bytearray([0x0 | len(self.tx_buffer)]) + self.tx_buffer
-							arbitration_id 	= self.address.get_tx_arbitraton_id(PDU.Type.SINGLE_FRAME, popped_object['target_address_type'])
+							arbitration_id 	= self.address.get_tx_arbitraton_id(popped_object['target_address_type'])
 							output_msg		= self.make_tx_msg(arbitration_id, msg_data)
 						else:							# Multi frame
 							self.tx_frame_length = len(self.tx_buffer)
 							msg_data 		= self.address.tx_payload_prefix + bytearray([0x10|((self.tx_frame_length >> 8) & 0xF), self.tx_frame_length&0xFF]) + self.tx_buffer[:6-len(self.address.tx_payload_prefix)]
-							arbitration_id 	= self.address.get_tx_arbitraton_id(PDU.Type.FIRST_FRAME)
+							arbitration_id 	= self.address.get_tx_arbitraton_id()
 							output_msg 		= self.make_tx_msg(arbitration_id, msg_data)
 							self.tx_buffer 	= self.tx_buffer[6-len(self.address.tx_payload_prefix):]
 							self.tx_state 	= self.TxState.WAIT_FC
@@ -713,7 +541,7 @@ class TransportLayer:
 		elif self.tx_state == self.TxState.TRANSMIT_CF:
 			if self.timer_tx_stmin.is_timed_out() or self.params.squash_stmin_requirement:
 				msg_data = self.address.tx_payload_prefix + bytearray([0x20 | self.tx_seqnum]) + self.tx_buffer[:7-len(self.address.tx_payload_prefix)]
-				arbitration_id 	= self.address.get_tx_arbitraton_id(PDU.Type.CONSECUTIVE_FRAME)
+				arbitration_id 	= self.address.get_tx_arbitraton_id()
 				output_msg = self.make_tx_msg(arbitration_id, msg_data)
 				self.tx_buffer = self.tx_buffer[7-len(self.address.tx_payload_prefix):]
 				self.tx_seqnum = (self.tx_seqnum + 1 ) & 0xF
@@ -726,6 +554,19 @@ class TransportLayer:
 
 		return output_msg
 	
+	def set_address(self, address):
+		if not isinstance(address, isotp.address.Address):
+			raise ValueError('address must be a valid Address instance')
+
+		self.address = address
+
+		if self.address.txid is not None and (self.address.txid > 0x7F4 and self.address.txid < 0x7F6 or self.address.txid > 0x7FA and self.address.txid < 0x7FB) :
+			self.logger.warning('Used txid overlaps the range of ID reserved by ISO-15765 (0x7F4-0x7F6 and 0x7FA-0x7FB)')
+
+		if self.address.rxid is not None and (self.address.rxid > 0x7F4 and self.address.rxid < 0x7F6 or self.address.rxid > 0x7FA and self.address.rxid < 0x7FB) :
+			self.logger.warning('Used rxid overlaps the range of ID reserved by ISO-15765 (0x7F4-0x7F6 and 0x7FA-0x7FB)')
+			
+
 	def pad_message_data(self, msg_data):
 		if len(msg_data) < 8 and self.params.tx_padding is not None:
 			msg_data.extend(bytearray([self.params.tx_padding & 0xFF] * (8-len(msg_data))))
@@ -766,7 +607,7 @@ class TransportLayer:
 			stmin = self.params.stmin
 		data = PDU.craft_flow_control_data(flow_status, blocksize, stmin)
 
-		return self.make_tx_msg(self.address.get_tx_arbitraton_id(PDU.Type.FLOW_CONTROL), self.address.tx_payload_prefix + data)
+		return self.make_tx_msg(self.address.get_tx_arbitraton_id(), self.address.tx_payload_prefix + data)
 
 	def request_wait_flow_control(self):
 		self.must_wait_for_flow_control = True
