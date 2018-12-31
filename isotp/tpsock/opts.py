@@ -1,8 +1,10 @@
 import socket as socket_module
 import struct
-
+from . import socket
 from . import check_support
 check_support()
+
+flags = socket.flags
 
 def assert_is_socket(s):
     if not isinstance(s, socket_module.socket):
@@ -15,19 +17,6 @@ CAN_ISOTP_RECV_FC   = 2
 CAN_ISOTP_TX_STMIN  = 3
 CAN_ISOTP_RX_STMIN  = 4
 CAN_ISOTP_LL_OPTS   = 5
-
-
-class flags:
-    LISTEN_MODE     = 0x001
-    EXTEND_ADDR     = 0x002
-    TX_PADDING      = 0x004
-    RX_PADDING      = 0x008
-    CHK_PAD_LEN     = 0x010
-    CHK_PAD_DATA    = 0x020
-    HALF_DUPLEX     = 0x040
-    FORCE_TXSTMIN   = 0x080
-    FORCE_RXSTMIN   = 0x100
-    RX_EXT_ADDR     = 0x200
 
 
 class general:

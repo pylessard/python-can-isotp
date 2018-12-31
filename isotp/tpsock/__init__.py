@@ -19,6 +19,20 @@ class socket:
     :type timeout: int
 
     """
+
+    class flags:
+        LISTEN_MODE     = 0x001
+        EXTEND_ADDR     = 0x002
+        TX_PADDING      = 0x004
+        RX_PADDING      = 0x008
+        CHK_PAD_LEN     = 0x010
+        CHK_PAD_DATA    = 0x020
+        HALF_DUPLEX     = 0x040
+        FORCE_TXSTMIN   = 0x080
+        FORCE_RXSTMIN   = 0x100
+        RX_EXT_ADDR     = 0x200
+
+
     def __init__(self, timeout=0.1):
         check_support()
         from . import opts
@@ -114,7 +128,7 @@ class socket:
 
         if self.address.requires_extension_byte():
             o = self.get_opts()
-            o.optflag |= opts.flags.EXTEND_ADDR | opts.flags.RX_EXT_ADDR
+            o.optflag |= self.flags.EXTEND_ADDR | self.flags.RX_EXT_ADDR
             self.set_opts(optflag = o.optflag, ext_address = self.address.get_tx_extension_byte(), rx_ext_address=self.address.get_rx_extension_byte())
             
         self._socket.bind((interface, rxid, txid))

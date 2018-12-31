@@ -98,8 +98,8 @@ class TestSocket(unittest.TestCase):
         opts = s.get_opts()
         self.assertEqual(txid, 0x123456 | socket.CAN_EFF_FLAG)
         self.assertEqual(rxid, 0x789ABC | socket.CAN_EFF_FLAG)
-        self.assertEqual(opts.optflag & isotp.tpsock.opts.flags.EXTEND_ADDR, 0)
-        self.assertEqual(opts.optflag & isotp.tpsock.opts.flags.RX_EXT_ADDR, 0)
+        self.assertEqual(opts.optflag & isotp.socket.flags.EXTEND_ADDR, 0)
+        self.assertEqual(opts.optflag & isotp.socket.flags.RX_EXT_ADDR, 0)
         
 
     def test_addressing_normal_fixed_29bits(self):
@@ -110,8 +110,8 @@ class TestSocket(unittest.TestCase):
         opts = s.get_opts()
         self.assertEqual(txid, 0x18DA55AA | socket.CAN_EFF_FLAG)
         self.assertEqual(rxid, 0x18DAAA55 | socket.CAN_EFF_FLAG)
-        self.assertEqual(opts.optflag & isotp.tpsock.opts.flags.EXTEND_ADDR, 0)
-        self.assertEqual(opts.optflag & isotp.tpsock.opts.flags.RX_EXT_ADDR, 0)
+        self.assertEqual(opts.optflag & isotp.socket.flags.EXTEND_ADDR, 0)
+        self.assertEqual(opts.optflag & isotp.socket.flags.RX_EXT_ADDR, 0)
 
     def test_addressing_extended_11bits(self):
         addr = isotp.Address(isotp.AddressingMode.Extended_11bits, txid=0x123, rxid=0x456, source_address=0xAA, target_address=0x55)
@@ -121,8 +121,8 @@ class TestSocket(unittest.TestCase):
         opts = s.get_opts()
         self.assertEqual(txid, 0x123)
         self.assertEqual(rxid, 0x456)
-        self.assertNotEqual(opts.optflag & isotp.tpsock.opts.flags.EXTEND_ADDR, 0)
-        self.assertNotEqual(opts.optflag & isotp.tpsock.opts.flags.RX_EXT_ADDR, 0)
+        self.assertNotEqual(opts.optflag & isotp.socket.flags.EXTEND_ADDR, 0)
+        self.assertNotEqual(opts.optflag & isotp.socket.flags.RX_EXT_ADDR, 0)
         self.assertEqual(opts.ext_address , 0x55)
         self.assertEqual(opts.rx_ext_address, 0xAA)
 
@@ -134,8 +134,8 @@ class TestSocket(unittest.TestCase):
         opts = s.get_opts()
         self.assertEqual(txid, 0x123456 | socket.CAN_EFF_FLAG)
         self.assertEqual(rxid, 0x789abc | socket.CAN_EFF_FLAG)
-        self.assertNotEqual(opts.optflag & isotp.tpsock.opts.flags.EXTEND_ADDR, 0)
-        self.assertNotEqual(opts.optflag & isotp.tpsock.opts.flags.RX_EXT_ADDR, 0)
+        self.assertNotEqual(opts.optflag & isotp.socket.flags.EXTEND_ADDR, 0)
+        self.assertNotEqual(opts.optflag & isotp.socket.flags.RX_EXT_ADDR, 0)
         self.assertEqual(opts.ext_address , 0x55)
         self.assertEqual(opts.rx_ext_address, 0xAA)
 
@@ -147,8 +147,8 @@ class TestSocket(unittest.TestCase):
         opts = s.get_opts()
         self.assertEqual(txid, 0x123)
         self.assertEqual(rxid, 0x456)
-        self.assertNotEqual(opts.optflag & isotp.tpsock.opts.flags.EXTEND_ADDR, 0)
-        self.assertNotEqual(opts.optflag & isotp.tpsock.opts.flags.RX_EXT_ADDR, 0)
+        self.assertNotEqual(opts.optflag & isotp.socket.flags.EXTEND_ADDR, 0)
+        self.assertNotEqual(opts.optflag & isotp.socket.flags.RX_EXT_ADDR, 0)
         self.assertEqual(opts.ext_address , 0x99)
         self.assertEqual(opts.rx_ext_address, 0x99)
 
@@ -160,7 +160,7 @@ class TestSocket(unittest.TestCase):
         opts = s.get_opts()
         self.assertEqual(txid, 0x18CE55AA | socket.CAN_EFF_FLAG)
         self.assertEqual(rxid, 0x18CEAA55 | socket.CAN_EFF_FLAG)
-        self.assertNotEqual(opts.optflag & isotp.tpsock.opts.flags.EXTEND_ADDR, 0)
-        self.assertNotEqual(opts.optflag & isotp.tpsock.opts.flags.RX_EXT_ADDR, 0)
+        self.assertNotEqual(opts.optflag & isotp.socket.flags.EXTEND_ADDR, 0)
+        self.assertNotEqual(opts.optflag & isotp.socket.flags.RX_EXT_ADDR, 0)
         self.assertEqual(opts.ext_address , 0x99)
         self.assertEqual(opts.rx_ext_address, 0x99)
