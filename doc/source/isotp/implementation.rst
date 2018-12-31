@@ -23,6 +23,8 @@ Parameters
 
 The transport layer ``params`` parameter must be a dictionnary with the following keys.
 
+.. _param_stmin:
+
 .. attribute:: stmin
    :annotation: (int)
 
@@ -31,6 +33,8 @@ The transport layer ``params`` parameter must be a dictionnary with the followin
    The single-byte Separation Time to include in the flow control message that the layer will send when receiving data. 
    Refer to ISO-15765-2 for specific values. From 1 to 127, represents milliseconds. From 0xF1 to 0xF9, represents hundreds of millisec (100us, 200us, ..., 900us). 0 Means no timing requirements
 
+.. _param_blocksize:
+
 .. attribute:: blocksize
    :annotation: (int)
 
@@ -38,7 +42,9 @@ The transport layer ``params`` parameter must be a dictionnary with the followin
 
    The single-byte Block Size to include in the flow control message that the layer will send when receiving data.
    Represents to number of consecutive frame that a sender should send before expecting the layer to send a flow control message. 0 Means infinetely large block size (implying no flow control message)
-     
+
+.. _param_squash_stmin_requirement:
+
 .. attribute:: squash_stmin_requirement
    :annotation: (bool)
 
@@ -46,21 +52,27 @@ The transport layer ``params`` parameter must be a dictionnary with the followin
 
    Indicates if the layer should override the receiver separation time (stmin) when sending and try sending as fast as possible instead.
    This can be useful when the layer is running on an operating system giving low priority to your application; such as Windows that has a thread resolution of 16ms.
-     
+
+.. _param_rx_flowcontrol_timeout:
+
 .. attribute:: rx_flowcontrol_timeout
    
    **default: 1000**
 
-   The number of milliseconds to wait for a **flow control frame** before stopping reception and triggering a :class:`FlowControlTimeoutError<isotp.FlowControlTimeoutError>`.
+   The number of milliseconds to wait for a flow control frame before stopping reception and triggering a :class:`FlowControlTimeoutError<isotp.FlowControlTimeoutError>`.
    Defined as **N_BS** bys ISO-15765-2
+
+.. _param_rx_consecutive_frame_timeout:
 
 .. attribute:: rx_consecutive_frame_timeout
    :annotation: (int)
 
    **default: 1000**
 
-   The number of milliseconds to wait for a **consecutive frame** before stopping reception and triggering a :class:`ConsecutiveFrameTimeoutError<isotp.ConsecutiveFrameTimeoutError>`.
+   The number of milliseconds to wait for a consecutive frame before stopping reception and triggering a :class:`ConsecutiveFrameTimeoutError<isotp.ConsecutiveFrameTimeoutError>`.
    Defined as **N_CS** bys ISO-15765-2
+
+.. _param_tx_padding:
 
 .. attribute:: tx_padding
    :annotation: (int or None)
@@ -68,6 +80,8 @@ The transport layer ``params`` parameter must be a dictionnary with the followin
    **default: 0**
 
    When not ``None`` represents the byte used for padding messages sent. No padding applied when ``None``
+
+.. _param_wftmax:
 
 .. attribute:: wftmax
    :annotation: (int)
@@ -77,7 +91,7 @@ The transport layer ``params`` parameter must be a dictionnary with the followin
    The single-byte Wait Frame Max to include in the flow control message that the layer will send when receiving data. 
    When this limits is reached, reception will stop and an the :class:`MaximumWaitFrameReachedError<isotp.MaximumWaitFrameReachedError>`
 
-   A value of 0 means no limits
+   A value of 0 that wait frames are not supported and none shall be sent.
 
 -----
 
@@ -94,4 +108,30 @@ The :class:`isotp.TransportLayer<isotp.TransportLayer>` object has the following
 .. automethod:: isotp.TransportLayer.reset
 .. automethod:: isotp.TransportLayer.process
 .. automethod:: isotp.TransportLayer.sleep_time
+
+-----
+
+Errors
+------
+
+When calling ``TransportLayer.process``, no exception should raise. Still, errors are possible and are given to an error handler provided by the user. 
+An error handler should ba a callable function that expects an Exception as first parameter.
+
+.. function:: my_error_handler(error)
+
+         :param error: The error
+         :type error: :class:`isotp.IsoTpError<isotp.IsoTpError>`
+
+All errors inherit :class:`isotp.IsoTpError<isotp.IsoTpError>`
+
+.. autoclass:: isotp.FlowControlTimeoutError
+.. autoclass:: isotp.ConsecutiveFrameTimeoutError
+.. autoclass:: isotp.InvalidCanDataError
+.. autoclass:: isotp.UnexpectedFlowControlError
+.. autoclass:: isotp.UnexpectedConsecutiveFrameError
+.. autoclass:: isotp.ReceptionInterruptedWithSingleFrameError
+.. autoclass:: isotp.ReceptionInterruptedWithFirstFrameError
+.. autoclass:: isotp.WrongSequenceNumberError
+.. autoclass:: isotp.UnsuportedWaitFrameError
+.. autoclass:: isotp.MaximumWaitFrameReachedError
 
