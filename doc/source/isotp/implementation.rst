@@ -95,5 +95,3 @@ The :class:`isotp.TransportLayer<isotp.TransportLayer>` object has the following
 .. automethod:: isotp.TransportLayer.process
 .. automethod:: isotp.TransportLayer.sleep_time
 
------
-
