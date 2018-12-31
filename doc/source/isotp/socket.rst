@@ -52,7 +52,7 @@ Without this project
    print(s.recv(4095))
 
 With this project
------------------
+#################
 
 .. code-block:: python
 
