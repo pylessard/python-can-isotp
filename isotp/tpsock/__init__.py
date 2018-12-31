@@ -12,15 +12,14 @@ def check_support():
             raise NotImplementedError("Your version of Python does not offer support for CAN ISO-TP protocol. Support have been added since Python 3.7 on Linux build > 2.6.15.")
 
 class socket:
+    """
+    A IsoTP socket wrapper for easy configuration
 
+    :param timeout: The underlying socket timeout set with ``settimeout``. Make the reception thread sleep
+    :type timeout: int
+
+    """
     def __init__(self, timeout=0.1):
-        """
-        A IsoTP socket wrapper for easy configuration
-
-        :param timeout: The underlying socket timeout set with ``settimeout``. Make the reception thread sleep
-        :type timeout: int
-
-        """
         check_support()
         from . import opts
         self.interface = None
@@ -71,6 +70,16 @@ class socket:
         return opts.flowcontrol.read(self._socket, *args, **kwargs)
 
     def bind(self, interface, *args, **kwargs):
+        """
+        Binds the socket to an address. 
+        If no address is provided, all additional parameters will be used to create an adresse. This is mainly to allow a syntax such as ``sock.bind('vcan0', rxid=0x123, txid=0x456)`` for backward compatibility.
+
+        :param interface: The network interface to use
+        :type interface: string
+
+        :param address: The address to bind to. 
+        :type: :class:`isotp.Address<isotp.Address>`
+        """
         self.interface=interface
 
         # == This is for syntax flexibility and also backward compatibility

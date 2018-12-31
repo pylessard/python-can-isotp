@@ -168,7 +168,7 @@ class TestTransportLayer(TransportLayerBaseTest):
 		self.stack.process()
 		self.assertIsNone(self.rx_isotp_frame())
 		self.assertIsNone(self.get_tx_can_msg()) # Do not send flow control
-		self.assert_error_triggered(isotp.protocol.WrongSequenceNumberError)
+		self.assert_error_triggered(isotp.WrongSequenceNumberError)
 
 	def test_receive_timeout_consecutive_frame_after_first_frame(self):
 		self.stack.params.set('rx_consecutive_frame_timeout', 200)
@@ -181,8 +181,8 @@ class TestTransportLayer(TransportLayerBaseTest):
 		self.simulate_rx(data = [0x21] + payload[6:10])
 		self.stack.process()
 		self.assertIsNone(self.rx_isotp_frame())	# No message received indeed
-		self.assert_error_triggered(isotp.protocol.ConsecutiveFrameTimeoutError)
-		self.assert_error_triggered(isotp.protocol.UnexpectedConsecutiveFrameError)
+		self.assert_error_triggered(isotp.ConsecutiveFrameTimeoutError)
+		self.assert_error_triggered(isotp.UnexpectedConsecutiveFrameError)
 
 	def test_receive_recover_timeout_consecutive_frame(self):
 		self.stack.params.set('rx_consecutive_frame_timeout', 200)
@@ -201,8 +201,8 @@ class TestTransportLayer(TransportLayerBaseTest):
 		self.simulate_rx(data = [0x21] + payload2[6:10])	
 		self.stack.process()
 		self.assertEqual(self.rx_isotp_frame(), bytearray(payload2))	# Correctly received
-		self.assert_error_triggered(isotp.protocol.ConsecutiveFrameTimeoutError)
-		self.assert_error_triggered(isotp.protocol.UnexpectedConsecutiveFrameError)
+		self.assert_error_triggered(isotp.ConsecutiveFrameTimeoutError)
+		self.assert_error_triggered(isotp.UnexpectedConsecutiveFrameError)
 
 	def test_receive_multiframe_interrupting_another(self):
 		self.stack.params.set('rx_consecutive_frame_timeout', 200)
@@ -217,7 +217,7 @@ class TestTransportLayer(TransportLayerBaseTest):
 		self.stack.process()
 		self.assertEqual(self.rx_isotp_frame(), bytearray(payload2))
 		self.assertIsNone(self.rx_isotp_frame())
-		self.assert_error_triggered(isotp.protocol.ReceptionInterruptedWithFirstFrameError)
+		self.assert_error_triggered(isotp.ReceptionInterruptedWithFirstFrameError)
 
 	def test_receive_single_frame_interrupt_multiframe_then_recover(self):
 		self.stack.params.set('rx_consecutive_frame_timeout', 200)
@@ -240,7 +240,7 @@ class TestTransportLayer(TransportLayerBaseTest):
 		self.assertEqual(self.rx_isotp_frame(), bytearray(sf_payload))
 		self.assertEqual(self.rx_isotp_frame(), bytearray(payload2))
 		self.assertIsNone(self.rx_isotp_frame())
-		self.assert_error_triggered(isotp.protocol.ReceptionInterruptedWithSingleFrameError)
+		self.assert_error_triggered(isotp.ReceptionInterruptedWithSingleFrameError)
 
 	def test_receive_4095_multiframe(self):
 		payload_size = 4095
@@ -290,7 +290,7 @@ class TestTransportLayer(TransportLayerBaseTest):
 		for i in range(4, 0x10):
 			self.simulate_rx(data = [i << 4, 0x00, 0x00])
 			self.stack.process()
-			self.assert_error_triggered(isotp.protocol.InvalidCanDataError)
+			self.assert_error_triggered(isotp.InvalidCanDataError)
 			self.clear_errors()
 
 
@@ -445,7 +445,7 @@ class TestTransportLayer(TransportLayerBaseTest):
 		self.stack.process()
 		msg = self.get_tx_can_msg()
 		self.assertIsNone(msg)
-		self.assert_error_triggered(isotp.protocol.FlowControlTimeoutError)
+		self.assert_error_triggered(isotp.FlowControlTimeoutError)
 
 	def test_send_multiframe_flow_control_timeout_recover(self):
 		self.stack.params.set('rx_flowcontrol_timeout', 200)
@@ -468,13 +468,13 @@ class TestTransportLayer(TransportLayerBaseTest):
 		self.stack.process()
 		msg = self.get_tx_can_msg()
 		self.assertEqual(msg.data, bytearray([0x21] + payload[6:10]))
-		self.assert_error_triggered(isotp.protocol.FlowControlTimeoutError)
+		self.assert_error_triggered(isotp.FlowControlTimeoutError)
 
 	def test_send_unexpected_flow_control(self):
 		self.simulate_rx_flowcontrol(flow_status=0, stmin=100, blocksize=8)
 		self.stack.process()
 		self.assertIsNone(self.get_tx_can_msg())
-		self.assert_error_triggered(isotp.protocol.UnexpectedFlowControlError)
+		self.assert_error_triggered(isotp.UnexpectedFlowControlError)
 
 	def test_send_respect_wait_frame(self):
 		self.stack.params.set('wftmax', 15)
@@ -522,7 +522,7 @@ class TestTransportLayer(TransportLayerBaseTest):
 		self.stack.process()
 		self.assertIsNone(self.get_tx_can_msg())
 		
-		self.assert_error_triggered(isotp.protocol.FlowControlTimeoutError)
+		self.assert_error_triggered(isotp.FlowControlTimeoutError)
 
 	def test_send_wait_frame_after_first_frame_wftmax_0(self):
 		self.stack.params.set('wftmax', 0)
@@ -534,7 +534,7 @@ class TestTransportLayer(TransportLayerBaseTest):
 		time.sleep(0.01)
 		self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=8)
 		self.stack.process()
-		self.assert_error_triggered(isotp.protocol.UnsuportedWaitFrameError)
+		self.assert_error_triggered(isotp.UnsuportedWaitFrameError)
 
 	def test_send_wait_frame_after_consecutive_frame_wftmax_0(self):
 		self.stack.params.set('wftmax', 0)
@@ -548,7 +548,7 @@ class TestTransportLayer(TransportLayerBaseTest):
 		self.stack.process()
 		self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=1)
 		self.stack.process()
-		self.assert_error_triggered(isotp.protocol.UnsuportedWaitFrameError)
+		self.assert_error_triggered(isotp.UnsuportedWaitFrameError)
 
 	def test_send_wait_frame_after_first_frame_reach_max(self):
 		self.stack.params.set('wftmax', 5)
@@ -564,8 +564,8 @@ class TestTransportLayer(TransportLayerBaseTest):
 		self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=1)
 		self.stack.process()
 		self.assertIsNone(self.get_tx_can_msg())
-		self.assert_error_triggered(isotp.protocol.MaximumWaitFrameReachedError)
-		self.assert_error_triggered(isotp.protocol.UnexpectedFlowControlError)
+		self.assert_error_triggered(isotp.MaximumWaitFrameReachedError)
+		self.assert_error_triggered(isotp.UnexpectedFlowControlError)
 
 	def test_send_wait_frame_after_conscutive_frame_reach_max(self):
 		self.stack.params.set('wftmax', 5)
@@ -584,8 +584,8 @@ class TestTransportLayer(TransportLayerBaseTest):
 		self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=1)
 		self.stack.process()
 		self.assertIsNone(self.get_tx_can_msg())
-		self.assert_error_triggered(isotp.protocol.MaximumWaitFrameReachedError)
-		self.assert_error_triggered(isotp.protocol.UnexpectedFlowControlError)
+		self.assert_error_triggered(isotp.MaximumWaitFrameReachedError)
+		self.assert_error_triggered(isotp.UnexpectedFlowControlError)
 
 	def test_send_4095_multiframe_zero_stmin(self):
 		self.perform_multiframe_test_no_stmin(4095, 5)

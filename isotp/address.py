@@ -31,31 +31,34 @@ class TargetAddressType:
     Functional = 1      # 1 to n communication
 
 class Address:
+    """
+    Represents the addressing information (N_AI) of the IsoTP layer. Will define what messages will be received and how to craft transmitted message to reach a specific party.
+
+    Parameters must be given according to the addressing mode. When not needed, a parameter may be left unset or set to ``None``.
+
+    Both the :class:`TransportLayer<isotp.TransportLayer>` and the :class:`isotp.socket<isotp.socket>` expects this address object
+
+    :param addressing_mode: The addressing mode. Valid values are defined by the :class:`AddressingMode<isotp.AddressingMode>` class
+    :type addressing_mode: int
+
+    :param txid: The CAN ID for transmission. Used for these addressing mode: ``Normal_11bits``, ``Normal_29bits``, ``Extended_11bits``, ``Extended_29bits``, ``Mixed_11bits``
+    :type txid: int or None
+
+    :param rxid: The CAN ID for reception. Used for these addressing mode: ``Normal_11bits``, ``Normal_29bits``, ``Extended_11bits``, ``Extended_29bits``, ``Mixed_11bits``
+    :type rxid: int or None
+
+    :param target_address: Target address (N_TA) used in ``NormalFixed_29bits`` and ``Mixed_29bits`` addressing mode.
+    :type target_address: int or None
+
+    :param source_address: Source address (N_SA) used in ``NormalFixed_29bits`` and ``Mixed_29bits`` addressing mode.
+    :type source_address: int or None
+
+    :param address_extension: Address extension (N_AE) used in ``Mixed_11bits``, ``Mixed_29bits`` addressing mode
+    :type address_extension: int or None
+    """
+
     def __init__(self, addressing_mode = AddressingMode.Normal_11bits, txid=None, rxid=None, target_address=None, source_address=None, address_extension=None):
-        """
-        Represents the addressing information (N_AI) of the IsoTP layer. Defines the rules that tells if a message is intended for us and also for mat the tranmission message
-        to address the message to a specific party.
 
-        Parameters must be given according to the addressing mode. When not needed, a parameter may be left unset or set to ``None``.
-
-        :param addressing_mode: The addressing mode. Valid values are defined by the :class:`AddressingMode<isotp.AddressingMode>` class
-        :type addressing_mode: int
-
-        :param txid: The CAN ID for transmission. Used for these addressing mode: ``Normal_11bits``, ``Normal_29bits``, ``Extended_11bits``, ``Extended_29bits``, ``Mixed_11bits``
-        :type txid: int or None
-
-        :param rxid: The CAN ID for reception. Used for these addressing mode: ``Normal_11bits``, ``Normal_29bits``, ``Extended_11bits``, ``Extended_29bits``, ``Mixed_11bits``
-        :type rxid: int or None
-
-        :param target_address: Target address (N_TA) used in ``NormalFixed_29bits`` and ``Mixed_29bits`` addressing mode.
-        :type target_address: int or None
-
-        :param source_address: Source address (N_SA) used in ``NormalFixed_29bits`` and ``Mixed_29bits`` addressing mode.
-        :type source_address: int or None
-
-        :param address_extension: Address extension (N_AE) used in ``Mixed_11bits``, ``Mixed_29bits`` addressing mode
-        :type address_extension: int or None
-        """
         self.addressing_mode    = addressing_mode
         self.target_address     = target_address
         self.source_address     = source_address
