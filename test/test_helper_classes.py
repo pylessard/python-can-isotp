@@ -26,8 +26,8 @@ class testTimer(unittest.TestCase):
 # Here we check that we decode properly ecah type of frame
 class TestPDUDecoding(unittest.TestCase):
 
-    def make_pdu(self, data):
-        return isotp.protocol.PDU(Message(data=bytearray(data)))
+    def make_pdu(self, data, start_of_data=0, datalen=8):
+        return isotp.protocol.PDU(Message(data=bytearray(data)),start_of_data=start_of_data, datalen=datalen)
 
     def test_decode_single_frame(self):
         with self.assertRaises(ValueError):
@@ -69,6 +69,15 @@ class TestPDUDecoding(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.make_pdu([0x08,  0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88])
 
+        with self.assertRaises(ValueError):
+            self.make_pdu([0x05,  0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88], datalen=5)
+
+        with self.assertRaises(ValueError):
+            self.make_pdu([0x01,  0x07, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77], start_of_data = 1, datalen=8)
+
+        with self.assertRaises(ValueError):
+            self.make_pdu([0x01,  0x06, 0x22, 0x33, 0x44, 0x55, 0x66], start_of_data = 1, datalen=7)
+
 
     def test_decode_first_frame(self):
         with self.assertRaises(ValueError): # Empty payload
@@ -104,6 +113,12 @@ class TestPDUDecoding(unittest.TestCase):
         with self.assertRaises(ValueError): # Missing data byte
             frame = self.make_pdu([0x10, 0x0A, 0x11, 0x22, 0x33, 0x44, 0x55])
 
+        with self.assertRaises(ValueError): # Missing data byte
+            frame = self.make_pdu([0x01, 0x10, 0x0A, 0x11, 0x22, 0x33, 0x44], start_of_data=1)
+
+        with self.assertRaises(ValueError): # Missing data byte
+            frame = self.make_pdu([0x01, 0x10, 0x0A, 0x11, 0x22, 0x33, 0x44, 0x55], start_of_data=1, datalen=12)
+
         frame = self.make_pdu([0x10, 0x0A, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66])
         self.assertEqual(frame.type, isotp.protocol.PDU.Type.FIRST_FRAME)
         self.assertEqual(frame.data, bytearray([0x11, 0x22, 0x33, 0x44, 0x55, 0x66]))
@@ -112,6 +127,11 @@ class TestPDUDecoding(unittest.TestCase):
         frame = self.make_pdu([0x1A, 0xBC, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66])
         self.assertEqual(frame.type, isotp.protocol.PDU.Type.FIRST_FRAME)
         self.assertEqual(frame.data, bytearray([0x11, 0x22, 0x33, 0x44, 0x55, 0x66]))
+        self.assertEqual(frame.length, 0xABC)
+
+        frame = self.make_pdu([0x00, 0x00, 0x1A, 0xBC, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99], start_of_data=2, datalen=12)
+        self.assertEqual(frame.type, isotp.protocol.PDU.Type.FIRST_FRAME)
+        self.assertEqual(frame.data, bytearray([0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]))
         self.assertEqual(frame.length, 0xABC)
 
     
@@ -132,6 +152,11 @@ class TestPDUDecoding(unittest.TestCase):
         frame = self.make_pdu([0x2A, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77])
         self.assertEqual(frame.type, isotp.protocol.PDU.Type.CONSECUTIVE_FRAME)
         self.assertEqual(frame.data, bytearray([0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77]))
+        self.assertEqual(frame.seqnum, 0xA)
+
+        frame = self.make_pdu([0x00, 0x2A, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77], start_of_data=1, datalen=6)
+        self.assertEqual(frame.type, isotp.protocol.PDU.Type.CONSECUTIVE_FRAME)
+        self.assertEqual(frame.data, bytearray([0x11, 0x22, 0x33, 0x44]))
         self.assertEqual(frame.seqnum, 0xA)
 
 
@@ -165,6 +190,13 @@ class TestPDUDecoding(unittest.TestCase):
         self.assertEqual(frame.blocksize, 0)
         self.assertEqual(frame.stmin, 0)
         self.assertEqual(frame.stmin_sec, 0)
+
+        frame = self.make_pdu([0xFF, 0xFF, 0x32, 0x01, 0x01], start_of_data=2)
+        self.assertEqual(frame.type, isotp.protocol.PDU.Type.FLOW_CONTROL)
+        self.assertEqual(frame.flow_status, isotp.protocol.PDU.FlowStatus.Overflow)
+        self.assertEqual(frame.blocksize, 1)
+        self.assertEqual(frame.stmin, 1)
+        self.assertEqual(frame.stmin_sec, 1/1000)
 
         for i in range(3, 0xF): # Reserved Flow status
             with self.assertRaises(ValueError):

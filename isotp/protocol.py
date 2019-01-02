@@ -51,7 +51,7 @@ class PDU:
 		Wait = 1
 		Overflow = 2
 
-	def __init__(self, msg = None, start_of_data=0):
+	def __init__(self, msg = None, start_of_data=0, datalen=8):
 		
 		self.type = None
 		self.length = None
@@ -78,7 +78,7 @@ class PDU:
 			if len(msg.data) < self.length + 1:
 				raise ValueError('Single Frame length is bigger than CAN frame length')
 
-			if self.length == 0 or self.length > 7-start_of_data:
+			if self.length == 0 or self.length > datalen-1-start_of_data:
 				raise ValueError("Received Single Frame with invalid length of %d" % self.length)
 			self.data = msg.data[1+start_of_data:][:self.length]
 
@@ -87,15 +87,15 @@ class PDU:
 				raise ValueError('First frame must be at least %d bytes long' % (2+start_of_data))
 
 			self.length = ((int(msg.data[start_of_data]) & 0xF) << 8) | int(msg.data[start_of_data+1])
-			if len(msg.data) < 8:
+			if len(msg.data) < datalen:
 				if len(msg.data) < self.length + 2 + start_of_data:
 					raise ValueError('First frame specifies a length that is inconsistent with underlying CAN message DLC')
 
-			self.data = msg.data[2+start_of_data:][:min(self.length, 6-start_of_data)]
+			self.data = msg.data[2+start_of_data:][:min(self.length, datalen-2-start_of_data)]
 				
 		elif self.type == self.Type.CONSECUTIVE_FRAME:
 			self.seqnum = int(msg.data[start_of_data]) & 0xF
-			self.data = msg.data[start_of_data+1:]
+			self.data = msg.data[start_of_data+1:datalen]
 
 		elif self.type == self.Type.FLOW_CONTROL:
 			if len(msg.data) < 3+start_of_data:
@@ -160,7 +160,7 @@ class TransportLayer:
 	LOGGER_NAME = 'isotp'
 
 	class Params:
-		__slots__ = 'stmin', 'blocksize', 'squash_stmin_requirement', 'rx_flowcontrol_timeout', 'rx_consecutive_frame_timeout', 'tx_padding', 'wftmax'
+		__slots__ = 'stmin', 'blocksize', 'squash_stmin_requirement', 'rx_flowcontrol_timeout', 'rx_consecutive_frame_timeout', 'tx_padding', 'wftmax', 'll_data_length'
 
 		def __init__(self):
 			self.stmin 							=  0
@@ -170,6 +170,7 @@ class TransportLayer:
 			self.rx_consecutive_frame_timeout 	=  1000
 			self.tx_padding 					=  None
 			self.wftmax						    = 0
+			self.ll_data_length					= 8
 
 		def set(self, key, val):
 			setattr(self, key, val)
@@ -215,7 +216,13 @@ class TransportLayer:
 				raise ValueError('wftmax must be an integer')
 
 			if self.wftmax < 0 :
-				raise ValueError('wftmax must be and integerequal or greater than 0')
+				raise ValueError('wftmax must be and integer equal or greater than 0')
+
+			if not isinstance(self.ll_data_length, int):
+				raise ValueError('ll_data_length must be an integer')
+
+			if self.ll_data_length < 4:
+				raise ValueError('ll_data_length must be at least 4 bytes')
 
 	class Timer:
 		def __init__(self, timeout):
@@ -376,7 +383,7 @@ class TransportLayer:
 
 		# Decoding of message into PDU
 		try:
-			pdu = PDU(msg, self.address.rx_prefix_size)
+			pdu = PDU(msg, start_of_data=self.address.rx_prefix_size, datalen=self.params.ll_data_length)
 		except Exception as e:
 			self.trigger_error(isotp.errors.InvalidCanDataError("Received invalid CAN frame. %s" % (str(e))))
 			self.stop_receiving()
@@ -511,17 +518,17 @@ class TransportLayer:
 					else:
 						self.tx_buffer = bytearray(popped_object['data'])
 
-
-						if len(self.tx_buffer) <= 7-len(self.address.tx_payload_prefix):	# Single frame
+						if len(self.tx_buffer) <= self.params.ll_data_length-1-len(self.address.tx_payload_prefix):	# Single frame
 							msg_data 		= self.address.tx_payload_prefix + bytearray([0x0 | len(self.tx_buffer)]) + self.tx_buffer
 							arbitration_id 	= self.address.get_tx_arbitraton_id(popped_object['target_address_type'])
 							output_msg		= self.make_tx_msg(arbitration_id, msg_data)
 						else:							# Multi frame
+							data_length = self.params.ll_data_length-2-len(self.address.tx_payload_prefix)
 							self.tx_frame_length = len(self.tx_buffer)
-							msg_data 		= self.address.tx_payload_prefix + bytearray([0x10|((self.tx_frame_length >> 8) & 0xF), self.tx_frame_length&0xFF]) + self.tx_buffer[:6-len(self.address.tx_payload_prefix)]
+							msg_data 		= self.address.tx_payload_prefix + bytearray([0x10|((self.tx_frame_length >> 8) & 0xF), self.tx_frame_length&0xFF]) + self.tx_buffer[:data_length]
 							arbitration_id 	= self.address.get_tx_arbitraton_id()
 							output_msg 		= self.make_tx_msg(arbitration_id, msg_data)
-							self.tx_buffer 	= self.tx_buffer[6-len(self.address.tx_payload_prefix):]
+							self.tx_buffer 	= self.tx_buffer[data_length:]
 							self.tx_state 	= self.TxState.WAIT_FC
 							self.tx_seqnum 	= 1
 							self.start_rx_fc_timer()
@@ -531,10 +538,11 @@ class TransportLayer:
 
 		elif self.tx_state == self.TxState.TRANSMIT_CF:
 			if self.timer_tx_stmin.is_timed_out() or self.params.squash_stmin_requirement:
-				msg_data = self.address.tx_payload_prefix + bytearray([0x20 | self.tx_seqnum]) + self.tx_buffer[:7-len(self.address.tx_payload_prefix)]
+				data_length = self.params.ll_data_length-1-len(self.address.tx_payload_prefix)
+				msg_data = self.address.tx_payload_prefix + bytearray([0x20 | self.tx_seqnum]) + self.tx_buffer[:data_length]
 				arbitration_id 	= self.address.get_tx_arbitraton_id()
 				output_msg = self.make_tx_msg(arbitration_id, msg_data)
-				self.tx_buffer = self.tx_buffer[7-len(self.address.tx_payload_prefix):]
+				self.tx_buffer = self.tx_buffer[data_length:]
 				self.tx_seqnum = (self.tx_seqnum + 1 ) & 0xF
 				self.timer_tx_stmin.start()
 				self.tx_block_counter+=1
@@ -562,8 +570,8 @@ class TransportLayer:
 			self.logger.warning('Used rxid overlaps the range of ID reserved by ISO-15765 (0x7F4-0x7F6 and 0x7FA-0x7FB)')
 			
 	def pad_message_data(self, msg_data):
-		if len(msg_data) < 8 and self.params.tx_padding is not None:
-			msg_data.extend(bytearray([self.params.tx_padding & 0xFF] * (8-len(msg_data))))
+		if len(msg_data) < self.params.ll_data_length and self.params.tx_padding is not None:
+			msg_data.extend(bytearray([self.params.tx_padding & 0xFF] * (self.params.ll_data_length-len(msg_data))))
 		
 	def empty_rx_buffer(self):
 		self.rx_buffer = bytearray()

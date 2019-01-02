@@ -43,6 +43,16 @@ The transport layer ``params`` parameter must be a dictionary with the following
    The single-byte Block Size to include in the flow control message that the layer will send when receiving data.
    Represents to number of consecutive frame that a sender should send before expecting the layer to send a flow control message. 0 Means infinitely large block size (implying no flow control message)
 
+.. _param_ll_data_length:
+
+.. attribute:: ll_data_length
+   :annotation: (int)
+
+   **default: 8**
+
+   The number of bytes that the Link Layer (CAN layer) can transport. For CAN 2.0, this value should stay 8, for other type of link layer (such as CAN FD) any integer greater or equal to 4 can be provided.
+   This parameter will affect the size of the CAN messages.
+
 .. _param_squash_stmin_requirement:
 
 .. attribute:: squash_stmin_requirement

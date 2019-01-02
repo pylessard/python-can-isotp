@@ -122,7 +122,7 @@ To configure a socket, few methods are available
    
    Sets the link layer options. Default values are set to work with CAN 2.0. Link layer may be configure to work in CAN FD.
 
-   :param mtu: The internal CAN frame structure size. Possible values are defined in :class:`isotp.socket.mtu<isotp.socket.mtu>`
+   :param mtu: The internal CAN frame structure size. Possible values are defined in :class:`isotp.socket.LinkLayerProtocol<isotp.socket.LinkLayerProtocol>`
    :type mtu: int
 
    :param tx_dl: The CAN message payload length. For CAN 2.0, this value should be 8. For CAN FD, possible values are 8,12,16,20,24,32,48,64
@@ -138,7 +138,7 @@ To configure a socket, few methods are available
    :undoc-members:
    :member-order: bysource
 
-.. autoclass:: isotp.socket.mtu
+.. autoclass:: isotp.socket.LinkLayerProtocol
    :members:
    :undoc-members:
    :member-order: bysource

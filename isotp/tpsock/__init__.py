@@ -43,7 +43,7 @@ class flags:
     RX_EXT_ADDR     = 0x200
     """ When sets, a different extended address can be used for reception than for transmission."""
 
-class mtu:
+class LinkLayerProtocol:
     CAN = 16
     """ Internal structure size of a CAN 2.0 frame"""
 
@@ -62,7 +62,7 @@ class socket:
     # We want that syntax isotp.socket.flags and isotp.socket.mtu
     # This is a workaround for sphinx autodoc that fails to load docstring for nested-class members
     flags = flags   
-    mtu = mtu
+    LinkLayerProtocol = LinkLayerProtocol
 
     def __init__(self, timeout=0.1):
         check_support()

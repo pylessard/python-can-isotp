@@ -144,17 +144,17 @@ class TestTransportLayer(TransportLayerBaseTest):
 		self.stack.process()
 		self.assert_sent_flow_control(stmin=5, blocksize=3)
 		self.assertIsNone(self.rx_isotp_frame())
-		self.simulate_rx(data = [0x21] + payload[6:14])
+		self.simulate_rx(data = [0x21] + payload[6:13])
 		self.stack.process()
 		self.assertIsNone(self.rx_isotp_frame())
-		self.simulate_rx(data = [0x22] + payload[14:21])
+		self.simulate_rx(data = [0x22] + payload[13:20])
 		self.stack.process()
 		self.assertIsNone(self.rx_isotp_frame())
-		self.simulate_rx(data = [0x23] + payload[21:28])
+		self.simulate_rx(data = [0x23] + payload[20:27])
 		self.stack.process()
 		self.assert_sent_flow_control(stmin=5, blocksize=3)
 		self.assertIsNone(self.rx_isotp_frame())
-		self.simulate_rx(data = [0x24] + payload[28:30])
+		self.simulate_rx(data = [0x24] + payload[27:30])
 		self.stack.process()		
 		data = self.rx_isotp_frame()
 		self.assertEqual(data, bytearray(payload))
@@ -293,6 +293,43 @@ class TestTransportLayer(TransportLayerBaseTest):
 			self.assert_error_triggered(isotp.InvalidCanDataError)
 			self.clear_errors()
 
+	def test_receive_data_length_12_bytes(self):
+		self.stack.params.set('ll_data_length', 12)
+		payload_size = 30
+		payload = self.make_payload(payload_size)
+		self.simulate_rx(data = [0x10, payload_size] + payload[0:10])
+		self.stack.process()
+		self.simulate_rx(data = [0x21] + payload[10:21])
+		self.simulate_rx(data = [0x22] + payload[21:30])
+		self.stack.process()
+		data = self.rx_isotp_frame()
+		self.assertEqual(data, bytearray(payload))
+
+	def test_receive_data_length_5_bytes(self):
+		self.stack.params.set('ll_data_length', 5)
+		payload_size = 15
+		payload = self.make_payload(payload_size)
+		self.simulate_rx(data = [0x10, payload_size] + payload[0:3])
+		self.stack.process()
+		self.simulate_rx(data = [0x21] + payload[3:7])
+		self.simulate_rx(data = [0x22] + payload[7:11])
+		self.simulate_rx(data = [0x23] + payload[11:15])
+		self.stack.process()
+		data = self.rx_isotp_frame()
+		self.assertEqual(data, bytearray(payload))
+
+	def test_receive_data_length_12_but_set_8_bytes(self):
+		self.stack.params.set('ll_data_length', 8)
+		payload_size = 30
+		payload = self.make_payload(payload_size)
+		self.simulate_rx(data = [0x10, payload_size] + payload[0:10])
+		self.stack.process()
+		self.simulate_rx(data = [0x21] + payload[10:21])
+		self.simulate_rx(data = [0x22] + payload[21:30])
+		self.stack.process()
+		data = self.rx_isotp_frame()
+		self.assertNotEqual(data, bytearray(payload))
+
 
 	# ================ Transmission ====================
 
@@ -333,6 +370,21 @@ class TestTransportLayer(TransportLayerBaseTest):
 			self.assertEqual(msg.arbitration_id, self.TXID)
 			self.assertEqual(msg.dlc, 8)
 			self.assertEqual(msg.data, bytearray([0x0 | i] + payload + [padding_byte] * (7-i)))
+
+	def test_padding_single_frame_dl_12_bytes(self):
+		padding_byte = 0xAA
+		self.stack.params.set('tx_padding', padding_byte)
+		self.stack.params.set('ll_data_length', 12)
+
+		for i in range(1,11):
+			payload = self.make_payload(i,i)
+			self.assertIsNone(self.get_tx_can_msg())
+			self.tx_isotp_frame(payload)
+			self.stack.process()
+			msg = self.get_tx_can_msg()
+			self.assertEqual(msg.arbitration_id, self.TXID)
+			self.assertEqual(msg.dlc, 12)
+			self.assertEqual(msg.data, bytearray([0x0 | i] + payload + [padding_byte] * (11-i)))
 
 	def test_send_multiple_single_frame_one_process(self):
 		payloads = dict()
@@ -394,6 +446,32 @@ class TestTransportLayer(TransportLayerBaseTest):
 		self.assertEqual(msg.arbitration_id, self.TXID)
 		self.assertEqual(msg.dlc, 8)
 		self.assertEqual(msg.data, bytearray([0x21] + payload[6:10] + [padding_byte]*3))
+		self.assertIsNone(self.get_tx_can_msg())
+		self.stack.process()
+		self.assertIsNone(self.get_tx_can_msg())
+
+	def test_padding_multi_frame_dl_12_bytes(self):
+		padding_byte = 0x55
+		self.stack.params.set('tx_padding', padding_byte)
+		self.stack.params.set('ll_data_length', 12)
+		payload = self.make_payload(15)
+		self.assertIsNone(self.get_tx_can_msg())
+		self.tx_isotp_frame(payload)
+		self.stack.process()
+		msg = self.get_tx_can_msg()
+		self.assertEqual(msg.arbitration_id, self.TXID)
+		self.assertEqual(msg.dlc, 12)
+		self.assertEqual(msg.data, bytearray([0x10, 15] + payload[:10]))
+		self.assertIsNone(self.get_tx_can_msg())
+		self.stack.process()
+		self.assertIsNone(self.get_tx_can_msg())
+		self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=8)
+		self.stack.process()
+		msg = self.get_tx_can_msg()
+		self.assertIsNotNone(msg)
+		self.assertEqual(msg.arbitration_id, self.TXID)
+		self.assertEqual(msg.dlc, 12)
+		self.assertEqual(msg.data, bytearray([0x21] + payload[10:15] + [padding_byte]*6))
 		self.assertIsNone(self.get_tx_can_msg())
 		self.stack.process()
 		self.assertIsNone(self.get_tx_can_msg())
@@ -717,6 +795,37 @@ class TestTransportLayer(TransportLayerBaseTest):
 
 			if n > 4095:
 				break
+
+	def test_transmit_data_length_12_bytes(self):
+		self.stack.params.set('ll_data_length', 12)
+		payload = self.make_payload(30)
+		self.tx_isotp_frame(payload)
+		self.stack.process()
+		msg = self.get_tx_can_msg()
+		self.assertEqual(msg.data, bytearray([0x10, 30] + payload[:10]))
+		self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=0)
+		self.stack.process()
+		msg = self.get_tx_can_msg()
+		self.assertEqual(msg.data, bytearray([0x21] + payload[10:21]))
+		msg = self.get_tx_can_msg()
+		self.assertEqual(msg.data, bytearray([0x22] + payload[21:30]))
+
+	def test_transmit_data_length_5_bytes(self):
+		self.stack.params.set('ll_data_length', 5)
+		payload = self.make_payload(15)
+		self.tx_isotp_frame(payload)
+		self.stack.process()
+		msg = self.get_tx_can_msg()
+		self.assertEqual(msg.data, bytearray([0x10, 15] + payload[:3]))
+		self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=0)
+		self.stack.process()
+		msg = self.get_tx_can_msg()
+		self.assertEqual(msg.data, bytearray([0x21] + payload[3:7]))
+		msg = self.get_tx_can_msg()
+		self.assertEqual(msg.data, bytearray([0x22] + payload[7:11]))
+		msg = self.get_tx_can_msg()
+		self.assertEqual(msg.data, bytearray([0x23] + payload[11:15]))
+
 
 	# =============== Parameters ===========
 	def create_layer(self, params):
