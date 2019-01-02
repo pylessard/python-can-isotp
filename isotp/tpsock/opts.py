@@ -42,7 +42,7 @@ class general:
 
 
     @classmethod
-    def write(cls, s, optflag=None, frame_txtime=None, ext_address=None, txpad=None, rxpad=None, rx_ext_address=None,   ):
+    def write(cls, s, optflag=None, frame_txtime=None, ext_address=None, txpad=None, rxpad=None, rx_ext_address=None ):
         assert_is_socket(s)
         o = cls.read(s);
 
@@ -55,11 +55,13 @@ class general:
             if not isinstance(frame_txtime, int) or frame_txtime<0 or frame_txtime>0xFFFFFFFF:
                 raise ValueError("frame_txtime must be a valid 32 unsigned integer")
             o.frame_txtime = frame_txtime
+            o.optflag |= flags.FORCE_TXSTMIN
 
         if ext_address != None:
             if not isinstance(ext_address, int) or ext_address<0 or ext_address>0xFF:
                 raise ValueError("ext_address must be a an integer between 0 and FF")
             o.ext_address = ext_address
+            o.optflag |= flags.EXTEND_ADDR
 
         if txpad != None:
             if not isinstance(txpad, int) or txpad<0 or txpad>0xFF:
@@ -77,6 +79,7 @@ class general:
             if not isinstance(rx_ext_address, int) or rx_ext_address<0 or rx_ext_address>0xFF:
                 raise ValueError("rx_ext_address must be a an integer between 0 and FF")
             o.rx_ext_address = rx_ext_address
+            o.optflag |= flags.RX_EXT_ADDR
 
         opt = struct.pack("=LLBBBB", o.optflag, o.frame_txtime, o.ext_address, o.txpad, o.rxpad, o.rx_ext_address)
         s.setsockopt(SOL_CAN_ISOTP, CAN_ISOTP_OPTS, opt)

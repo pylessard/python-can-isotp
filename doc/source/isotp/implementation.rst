@@ -38,7 +38,7 @@ The transport layer ``params`` parameter must be a dictionnary with the followin
 .. attribute:: blocksize
    :annotation: (int)
 
-   **default: 0**
+   **default: 8**
 
    The single-byte Block Size to include in the flow control message that the layer will send when receiving data.
    Represents to number of consecutive frame that a sender should send before expecting the layer to send a flow control message. 0 Means infinetely large block size (implying no flow control message)
@@ -110,6 +110,8 @@ The :class:`isotp.TransportLayer<isotp.TransportLayer>` object has the following
 .. automethod:: isotp.TransportLayer.sleep_time
 
 -----
+
+.. _Errors:
 
 Errors
 ------

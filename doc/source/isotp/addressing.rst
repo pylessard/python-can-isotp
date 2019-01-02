@@ -1,7 +1,7 @@
 Addressing
 ==========
 
-Iso15765 defines several addressing modes and this module supports them all. Depending on the addressing mode, the source/target addresses will be defined in different way.
+ISO-15765 defines several addressing modes and this module supports them all. Depending on the addressing mode, the source/target addresses will be defined in different way.
 An IsoTP address is represented by the :class:`isotp.Address<isotp.Address>` object.
 
 ------

@@ -11,6 +11,45 @@ def check_support():
         else:
             raise NotImplementedError("Your version of Python does not offer support for CAN ISO-TP protocol. Support have been added since Python 3.7 on Linux build > 2.6.15.")
 
+class flags:
+        
+    LISTEN_MODE     = 0x001
+    """Put the socket in Listen mode, which prevent transmission of data"""
+
+    EXTEND_ADDR     = 0x002
+    """When set, an address extension byte (set in socket general options) will be added to each payload sent. Unless RX_EXT_ADDR is also set, this value will be expected for reception as well"""
+
+    TX_PADDING      = 0x004
+    """Enable padding of transmitted data with by set in the socket general options"""
+
+    RX_PADDING      = 0x008
+    """ Indicates that data padding is possible in reception. Must be set for CHK_PAD_LEN and CHK_PAD_DATA to have an effect"""
+
+    CHK_PAD_LEN     = 0x010
+    """ Make the socket validate the padding length of the CAN message"""
+
+    CHK_PAD_DATA    = 0x020
+    """ Make the socket validate the padding bytes of the CAN message"""
+
+    HALF_DUPLEX     = 0x040
+    """ Sets the socket in half duplex mode, forcing transmission and reception to happen sequentially """
+
+    FORCE_TXSTMIN   = 0x080
+    """Force the socket to use the separation time sets in general options, overriding stmin value received in flow control frames."""
+    
+    FORCE_RXSTMIN   = 0x100
+    """ Force the socket to ignore any message received faster than stmin given in the flow control frame"""
+
+    RX_EXT_ADDR     = 0x200
+    """ When sets, a different extended address can be used for reception than for transmission."""
+
+class mtu:
+    CAN = 16
+    """ Internal structure size of a CAN 2.0 frame"""
+
+    CAN_FD = 72
+    """ Internal structure size of a CAN FD frame"""
+
 class socket:
     """
     A IsoTP socket wrapper for easy configuration
@@ -20,18 +59,10 @@ class socket:
 
     """
 
-    class flags:
-        LISTEN_MODE     = 0x001
-        EXTEND_ADDR     = 0x002
-        TX_PADDING      = 0x004
-        RX_PADDING      = 0x008
-        CHK_PAD_LEN     = 0x010
-        CHK_PAD_DATA    = 0x020
-        HALF_DUPLEX     = 0x040
-        FORCE_TXSTMIN   = 0x080
-        FORCE_RXSTMIN   = 0x100
-        RX_EXT_ADDR     = 0x200
-
+    # We want that syntax isotp.socket.flags and isotp.socket.mtu
+    # This is a workaround for sphinx autodoc that fails to load docstring for nested-class members
+    flags = flags   
+    mtu = mtu
 
     def __init__(self, timeout=0.1):
         check_support()
