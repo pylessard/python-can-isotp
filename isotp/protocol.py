@@ -140,16 +140,16 @@ class TransportLayer:
 	"""
 	The IsoTP transport layer implementation
 
-	:param rxfn: Function to be called by the transport layer to read the CAN layer. Must return a :class:`isotp.protocol.CanMessage<isotp.protocol.CanMessage>` or None if no message has been received.
+	:param rxfn: Function to be called by the transport layer to read the CAN layer. Must return a :class:`isotp.CanMessage<isotp.CanMessage>` or None if no message has been received.
 	:type rxfn: Callable
 
-	:param txfn: Function to be called by the transport layer to send a message on the CAN layer. This function should receive a :class:`isotp.protocol.CanMessage<isotp.protocol.CanMessage>`
+	:param txfn: Function to be called by the transport layer to send a message on the CAN layer. This function should receive a :class:`isotp.CanMessage<isotp.CanMessage>`
 	:type txfn: Callable
 
 	:param address: The address information of CAN messages. Includes the addressing mode, txid/rxid, source/target address and address extension. See :class:`isotp.Address<isotp.Address>` for more details.
 	:type address: isotp.Address
 
-	:param error_handler: A function to be called when an error has been detected. An :class:`isotp.protocol.IsoTpError<isotp.protocol.IsoTpError>` (inheriting Exception class) will be given as sole parameter. See the :ref:`Error section<Errors>`
+	:param error_handler: A function to be called when an error has been detected. An :class:`isotp.IsoTpError<isotp.IsoTpError>` (inheriting Exception class) will be given as sole parameter. See the :ref:`Error section<Errors>`
 	:type error_handler: Callable
 
 	:param params: List of parameters for the transport layer

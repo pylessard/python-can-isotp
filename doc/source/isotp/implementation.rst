@@ -16,6 +16,10 @@ If python-can must be used as CAN layer, one can use the :class:`isotp.CanStack<
 
 .. autoclass:: isotp.CanStack
 
+The CAN messages going in and out from the transport layer are defined with :class:`isotp.CanMessage<isotp.CanMessage>`. 
+
+.. autoclass:: isotp.CanMessage
+
 -----
 
 Parameters
