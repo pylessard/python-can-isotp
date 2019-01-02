@@ -139,7 +139,7 @@ Sending with functional addressing (broadcast)
 Defining custom rxfn and txfn
 -----------------------------
 
-In this example, we see how to configure a TransportLayer to interract with a hardware different than python-can with a fictive api.
+In this example, we see how to configure a :class:`TransportLayer<isotp.TransportLayer>` to interract with a hardware different than python-can with a fictive API.
 
 .. code-block:: python
 
@@ -173,7 +173,7 @@ In this example, we see how to configure a TransportLayer to interract with a ha
 Defining partial rxfn and txfn
 ------------------------------
 
-If your hardwre api requires some sort of handle to be given to its functions, you will need a way to pass this handle from your app down to ``rxfn`` and ``txfn``.
+If your hardware API requires some sort of handle to be given to its functions, you will need a way to pass this handle from your app down to ``rxfn`` and ``txfn``.
 The :class:`TransportLayer<isotp.TransportLayer>` will call ``rxfn`` and ``txfn`` with no additional parameters, which might be an issue.
 
 A clean way to overcome this limitation is to use a ``functools.partial`` function. 
