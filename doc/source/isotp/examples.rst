@@ -119,6 +119,9 @@ Sending with functional addressing (broadcast)
 .. code-block:: python
 
    import isotp
+   import time
+
+   from can.interfaces.vector import VectorBus
 
    bus = VectorBus(channel=0, bitrate=500000)
    addr = isotp.Address(isotp.AddressingMode.Normal_11bits, rxid=0x123, txid=0x456)
@@ -128,5 +131,79 @@ Sending with functional addressing (broadcast)
    while stack.transmitting():
       stack.process()
       time.sleep(stack.sleep_time())
-      
+
    bus.shutdown()
+
+-----
+
+Defining custom rxfn and txfn
+-----------------------------
+
+In this example, we see how to configure a TransportLayer to interract with a hardware different than python-can with a fictive api.
+
+.. code-block:: python
+
+   import isotp
+
+   def my_rxfn():
+       # All my_hardware_somehting and get_something() function are fictive of course.
+       msg = my_hardware_api_recv()
+       return isotp.CanMesage(arbitration_id=msg.get_id(), data=msg.get_data(), dlc=msg.get_dlc(), extended_id=msg.is_extended_id())
+
+
+   def my_txfn(isotp_msg):
+       # all set_something functions and my_hardware_something are fictive.
+       msg = my_hardware_api_make_msg()
+       msg.set_id(isotp_msg.arbitration_id)
+       msg.set_data(isotp_msg.data)
+       msg.set_dlc(isotp_msg.dlc)
+       msg.set_extended_id(isotp_msg.is_extended_id)
+       my_hardware_api_send(msg)
+
+   addr = isotp.Address(isotp.AddressingMode.Normal_29bits, txid=0x123456, rxid = 0x123457)
+   layer = isotp.TransportLayer(rxfn=my_rxfn, txfn=my_txfn, address=addr)
+
+   # ... rest of programs
+   # ...
+
+   my_hardware_close()
+
+-----
+
+Defining partial rxfn and txfn
+------------------------------
+
+If your hardwre api requires some sort of handle to be given to its functions, you will need a way to pass this handle from your app down to ``rxfn`` and ``txfn``.
+The :class:`TransportLayer<isotp.TransportLayer>` will call ``rxfn`` and ``txfn`` with no additional parameters, which might be an issue.
+
+A clean way to overcome this limitation is to use a ``functools.partial`` function. 
+
+.. code-block:: python
+
+   import isotp
+   from functools import partial   # Allow partial functions
+
+   # hardware_handle is passed through partial func
+   def my_rxfn(hardware_handle):
+       msg = my_hardware_api_recv(hardware_handle)
+       return isotp.CanMesage(arbitration_id=msg.get_id(), data=msg.get_data(), dlc=msg.get_dlc(), extended_id=msg.is_extended_id())
+
+   # hardware_handle is passed through partial func
+   def my_txfn(hardware_handle, isotp_msg):
+       # all set_something functions and my_hardware_something are fictive.
+       msg = my_hardware_api_make_msg()
+       msg.set_id(isotp_msg.arbitration_id)
+       msg.set_data(isotp_msg.data)
+       msg.set_dlc(isotp_msg.dlc)
+       msg.set_extended_id(isotp_msg.is_extended_id)
+       my_hardware_api_send(hardware_handle, msg)
+
+   hardware_handle = my_hardware_open()    # Fictive handle mechanism
+   addr = isotp.Address(isotp.AddressingMode.Normal_29bits, txid=0x123456, rxid = 0x123457)
+   # This is where the magic happens
+   layer = isotp.TransportLayer(rxfn=partial(my_rxfn, hardware_handle), txfn=partial(my_txfn, hardware_handle), address=addr)
+
+   # ... rest of programs
+   # ...
+
+   my_hardware_close()
