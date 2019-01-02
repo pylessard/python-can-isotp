@@ -150,7 +150,7 @@ Condition to receive a message (discarded if not met):
 Example : 
  - source_address : 0x55
  - target_address : 0xAA
- - address_xtension : 0x99
+ - address_extension : 0x99
 
 ::
 

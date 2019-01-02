@@ -14,31 +14,31 @@ def check_support():
 class flags:
         
     LISTEN_MODE     = 0x001
-    """Put the socket in Listen mode, which prevent transmission of data"""
+    """Puts the socket in Listen mode, which prevents transmission of data"""
 
     EXTEND_ADDR     = 0x002
     """When set, an address extension byte (set in socket general options) will be added to each payload sent. Unless RX_EXT_ADDR is also set, this value will be expected for reception as well"""
 
     TX_PADDING      = 0x004
-    """Enable padding of transmitted data with by set in the socket general options"""
+    """Enables padding of transmitted data with a byte set in the socket general options"""
 
     RX_PADDING      = 0x008
     """ Indicates that data padding is possible in reception. Must be set for CHK_PAD_LEN and CHK_PAD_DATA to have an effect"""
 
     CHK_PAD_LEN     = 0x010
-    """ Make the socket validate the padding length of the CAN message"""
+    """ Makes the socket validate the padding length of the CAN message"""
 
     CHK_PAD_DATA    = 0x020
-    """ Make the socket validate the padding bytes of the CAN message"""
+    """ Makes the socket validate the padding bytes of the CAN message"""
 
     HALF_DUPLEX     = 0x040
     """ Sets the socket in half duplex mode, forcing transmission and reception to happen sequentially """
 
     FORCE_TXSTMIN   = 0x080
-    """Force the socket to use the separation time sets in general options, overriding stmin value received in flow control frames."""
+    """Forces the socket to use the separation time sets in general options, overriding stmin value received in flow control frames."""
     
     FORCE_RXSTMIN   = 0x100
-    """ Force the socket to ignore any message received faster than stmin given in the flow control frame"""
+    """ Forces the socket to ignore any message received faster than stmin given in the flow control frame"""
 
     RX_EXT_ADDR     = 0x200
     """ When sets, a different extended address can be used for reception than for transmission."""
@@ -54,7 +54,7 @@ class socket:
     """
     A IsoTP socket wrapper for easy configuration
 
-    :param timeout: The underlying socket timeout set with ``settimeout``. Make the reception thread sleep
+    :param timeout: The underlying socket timeout set with ``settimeout``. Makes the reception thread sleep
     :type timeout: int
 
     """

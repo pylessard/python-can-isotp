@@ -646,7 +646,7 @@ class TransportLayer:
 	# Clears everything within the layer.
 	def reset(self):
 		"""
-		Reset the layer: Empty all bufers, set the internal state machines to Idle
+		Reset the layer: Empty all buffers, set the internal state machines to Idle
 		"""
 		while not self.tx_queue.empty():
 			self.tx_queue.get()

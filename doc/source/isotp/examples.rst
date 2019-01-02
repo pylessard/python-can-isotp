@@ -111,4 +111,22 @@ Different type of addresses
    isotp.Address(isotp.AddressingMode.Mixed_11bits, rxid=0x123, txid=0x456, address_extension=0x99)   
    isotp.Address(isotp.AddressingMode.Mixed_29bits, source_address=0x11, target_address=0x22, address_extension=0x99)
 
+------
 
+Sending with functional addressing (broadcast)
+----------------------------------------------
+
+.. code-block:: python
+
+   import isotp
+
+   bus = VectorBus(channel=0, bitrate=500000)
+   addr = isotp.Address(isotp.AddressingMode.Normal_11bits, rxid=0x123, txid=0x456)
+   stack = isotp.CanStack(bus, address=addr)
+   stack.send(b'Hello', isotp.TargetAddressType.Functional) # Payload must fit a Single Frame. Functional addressing only works with Single Frames
+
+   while stack.transmitting():
+      stack.process()
+      time.sleep(stack.sleep_time())
+      
+   bus.shutdown()

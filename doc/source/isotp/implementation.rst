@@ -21,7 +21,7 @@ If python-can must be used as CAN layer, one can use the :class:`isotp.CanStack<
 Parameters
 ----------
 
-The transport layer ``params`` parameter must be a dictionnary with the following keys.
+The transport layer ``params`` parameter must be a dictionary with the following keys.
 
 .. _param_stmin:
 
@@ -31,7 +31,7 @@ The transport layer ``params`` parameter must be a dictionnary with the followin
    **default: 0**
 
    The single-byte Separation Time to include in the flow control message that the layer will send when receiving data. 
-   Refer to ISO-15765-2 for specific values. From 1 to 127, represents milliseconds. From 0xF1 to 0xF9, represents hundreds of millisec (100us, 200us, ..., 900us). 0 Means no timing requirements
+   Refer to ISO-15765-2 for specific values. From 1 to 127, represents milliseconds. From 0xF1 to 0xF9, represents hundreds of microseconds (100us, 200us, ..., 900us). 0 Means no timing requirements
 
 .. _param_blocksize:
 
@@ -41,7 +41,7 @@ The transport layer ``params`` parameter must be a dictionnary with the followin
    **default: 8**
 
    The single-byte Block Size to include in the flow control message that the layer will send when receiving data.
-   Represents to number of consecutive frame that a sender should send before expecting the layer to send a flow control message. 0 Means infinetely large block size (implying no flow control message)
+   Represents to number of consecutive frame that a sender should send before expecting the layer to send a flow control message. 0 Means infinitely large block size (implying no flow control message)
 
 .. _param_squash_stmin_requirement:
 
@@ -60,7 +60,7 @@ The transport layer ``params`` parameter must be a dictionnary with the followin
    **default: 1000**
 
    The number of milliseconds to wait for a flow control frame before stopping reception and triggering a :class:`FlowControlTimeoutError<isotp.FlowControlTimeoutError>`.
-   Defined as **N_BS** bys ISO-15765-2
+   Defined as **N_BS** bs ISO-15765-2
 
 .. _param_rx_consecutive_frame_timeout:
 
@@ -70,7 +70,7 @@ The transport layer ``params`` parameter must be a dictionnary with the followin
    **default: 1000**
 
    The number of milliseconds to wait for a consecutive frame before stopping reception and triggering a :class:`ConsecutiveFrameTimeoutError<isotp.ConsecutiveFrameTimeoutError>`.
-   Defined as **N_CS** bys ISO-15765-2
+   Defined as **N_CS** by ISO-15765-2
 
 .. _param_tx_padding:
 
@@ -121,10 +121,10 @@ An error handler should ba a callable function that expects an Exception as firs
 
 .. function:: my_error_handler(error)
 
-         :param error: The error
-         :type error: :class:`isotp.IsoTpError<isotp.IsoTpError>`
+   :param error: The error
+   :type error: :class:`isotp.IsoTpError<isotp.IsoTpError>`
 
-All errors inherit :class:`isotp.IsoTpError<isotp.IsoTpError>`
+All errors inherit :class:`isotp.IsoTpError<isotp.IsoTpError>` which themselve inherits :class:`Exception<Exception>`
 
 .. autoclass:: isotp.FlowControlTimeoutError
 .. autoclass:: isotp.ConsecutiveFrameTimeoutError
