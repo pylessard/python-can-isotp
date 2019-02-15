@@ -42,9 +42,9 @@ class general:
 
 
     @classmethod
-    def write(cls, s, optflag=None, frame_txtime=None, ext_address=None, txpad=None, rxpad=None, rx_ext_address=None ):
+    def write(cls, s, optflag=None, frame_txtime=None, ext_address=None, txpad=None, rxpad=None, rx_ext_address=None, tx_stmin=None):
         assert_is_socket(s)
-        o = cls.read(s);
+        o = cls.read(s)
 
         if optflag != None:
             if not isinstance(optflag, int) or optflag<0 or optflag>0xFFFFFFFF:
@@ -55,7 +55,6 @@ class general:
             if not isinstance(frame_txtime, int) or frame_txtime<0 or frame_txtime>0xFFFFFFFF:
                 raise ValueError("frame_txtime must be a valid 32 unsigned integer")
             o.frame_txtime = frame_txtime
-            o.optflag |= flags.FORCE_TXSTMIN
 
         if ext_address != None:
             if not isinstance(ext_address, int) or ext_address<0 or ext_address>0xFF:
@@ -80,6 +79,15 @@ class general:
                 raise ValueError("rx_ext_address must be a an integer between 0 and FF")
             o.rx_ext_address = rx_ext_address
             o.optflag |= flags.RX_EXT_ADDR
+
+        if tx_stmin != None:
+            if not isinstance(tx_stmin, int) or tx_stmin<0 or tx_stmin>0xFFFFFFFF:
+                raise ValueError("tx_stmin must be a valid 32 unsigned integer")
+            o.optflag |= flags.FORCE_TXSTMIN
+            s.setsockopt(SOL_CAN_ISOTP, CAN_ISOTP_TX_STMIN, struct.pack("=L", tx_stmin))
+        else:
+            # Does not make sense to let the user force STmin value without providing it
+            o.optflag &= ~flags.FORCE_TXSTMIN
 
         opt = struct.pack("=LLBBBB", o.optflag, o.frame_txtime, o.ext_address, o.txpad, o.rxpad, o.rx_ext_address)
         s.setsockopt(SOL_CAN_ISOTP, CAN_ISOTP_OPTS, opt)
