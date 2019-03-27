@@ -275,7 +275,7 @@ class TransportLayer:
 		self.remote_blocksize = None	# Block size received in Flow Control message
 
 		self.rxfn = rxfn 	# Function to call to receive a CAN message
-		self.txfn = txfn	# Function to call to transmimt a CAN message
+		self.txfn = txfn	# Function to call to transmit a CAN message
 
 		self.set_address(address)
 
@@ -291,10 +291,10 @@ class TransportLayer:
 		self.tx_frame_length = 0				# Length of the data that we are sending
 		self.last_flow_control_frame = None		# When a FlowControl is received. Put here
 		self.tx_block_counter = 0				# Keeps track of how many block we've sent
-		self.tx_seqnum = 0						# Keeps track of the actual sequence number whil sending
+		self.tx_seqnum = 0						# Keeps track of the actual sequence number while sending
 		self.wft_counter = 0 					# Keeps track of how many wait frame we've received
 
-		self.pending_flow_control_tx = False	# Flag indicating that we need to transmist a flow control message. Set by Rx Process, Cleared by Tx Process
+		self.pending_flow_control_tx = False	# Flag indicating that we need to transmit a flow control message. Set by Rx Process, Cleared by Tx Process
 		self.empty_rx_buffer()
 		self.empty_tx_buffer()
 
@@ -332,7 +332,7 @@ class TransportLayer:
 			if len(data) > 7-len(self.address.tx_payload_prefix):
 				raise ValueError('Cannot send multipacket frame with Functional TargetAddressType')
 
-		self.tx_queue.put( {'data':data, 'target_address_type':target_address_type})	# farme is always an IsoTPFrame here
+		self.tx_queue.put( {'data':data, 'target_address_type':target_address_type})	# frame is always an IsoTPFrame here
 
 	# Receive an IsoTP frame. Output of the layer
 	def recv(self):
