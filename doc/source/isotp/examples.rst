@@ -27,7 +27,7 @@ Basic transmission with python-can
       stack.process()
       time.sleep(stack.sleep_time())
 
-   print("Payload tranmission done.")
+   print("Payload transmission done.")
 
    bus.shutdown()
 
@@ -146,7 +146,7 @@ In this example, we see how to configure a :class:`TransportLayer<isotp.Transpor
    import isotp
 
    def my_rxfn():
-       # All my_hardware_somehting and get_something() function are fictive of course.
+       # All my_hardware_something and get_something() function are fictive of course.
        msg = my_hardware_api_recv()
        return isotp.CanMesage(arbitration_id=msg.get_id(), data=msg.get_data(), dlc=msg.get_dlc(), extended_id=msg.is_extended_id())
 
