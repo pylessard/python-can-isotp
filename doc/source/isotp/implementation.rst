@@ -103,9 +103,20 @@ The transport layer ``params`` parameter must be a dictionary with the following
    **default: 0**
 
    The single-byte Wait Frame Max to include in the flow control message that the layer will send when receiving data. 
-   When this limits is reached, reception will stop and an the :class:`MaximumWaitFrameReachedError<isotp.MaximumWaitFrameReachedError>`
+   When this limits is reached, reception will stop and trigger a :class:`MaximumWaitFrameReachedError<isotp.MaximumWaitFrameReachedError>`
 
    A value of 0 that wait frames are not supported and none shall be sent.
+
+.. _param_max_frame_size:
+
+.. attribute:: max_frame_size
+   :annotation: (int)
+
+   **default: 4095**
+
+   The maximum frame length that the stack will accept to receive. ISO-15765-2:2016 allows frames as long as 2^32-1 (4294967295 bytes). When a FirstFrame is sent with a length longer than ``max_frame_size``, the message will be ignored, a FlowControl message with FlowStaus=2 (Overflow) will be sent and a :class:`FrameTooLongError<isotp.FrameTooLongError>` will be triggered.
+
+   This parameter mainly is a protection to avoid crashes due to lack of memory (caused by an external device).
 
 -----
 
@@ -150,4 +161,5 @@ All errors inherit :class:`isotp.IsoTpError<isotp.IsoTpError>` which themselve i
 .. autoclass:: isotp.WrongSequenceNumberError
 .. autoclass:: isotp.UnsuportedWaitFrameError
 .. autoclass:: isotp.MaximumWaitFrameReachedError
+.. autoclass:: isotp.FrameTooLongError
 

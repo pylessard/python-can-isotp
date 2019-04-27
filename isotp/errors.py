@@ -55,3 +55,8 @@ class MaximumWaitFrameReachedError(IsoTpError):
     Happens when too much Flow Control PDU with FlowStatus=Wait is received. Refer to :ref:`wftmax<param_wftmax>`
     """
     pass
+class FrameTooLongError(IsoTpError):
+    """
+    Happens when a FirstFrame with a length (FF_DL) longer than :ref:`max_frame_size<param_max_frame_size>` is received. 
+    """
+    pass

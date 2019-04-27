@@ -702,8 +702,9 @@ class TransportLayer:
 	# Init the reception of a multi-pdu frame. 
 	def start_reception_after_first_frame(self, pdu):
 		self.empty_rx_buffer()
-		
+
 		if pdu.length > self.params.max_frame_size:
+			self.trigger_error(isotp.errors.FrameTooLongError("Received a Frist Frame with a length of %d bytes, but params.max_frame_size is set to %d bytes. Ignoring" % (pdu.length, self.params.max_frame_size)))
 			self.request_tx_flowcontrol(PDU.FlowStatus.Overflow)
 			self.rx_state = self.RxState.IDLE	
 		else:

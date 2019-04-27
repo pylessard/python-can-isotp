@@ -2,8 +2,6 @@ import unittest
 import queue
 from isotp.protocol import PDU
 
-
-
 # Just a class with some helper such as simulate_rx() to make the tests cleaners.
 class TransportLayerBaseTest(unittest.TestCase):
     def __init__(self, *args, **kwargs):
