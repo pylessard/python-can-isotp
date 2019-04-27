@@ -1,5 +1,6 @@
 import unittest
 import queue
+from isotp.protocol import PDU
 
 
 
@@ -38,14 +39,14 @@ class TransportLayerBaseTest(unittest.TestCase):
     def make_payload(self, size, start_val=0):
         return [int(x%0x100) for x in range(start_val, start_val+size)]
 
-    def assert_sent_flow_control(self, stmin, blocksize, prefix = None, padding_byte=None, extra_msg=''):
+    def assert_sent_flow_control(self, stmin, blocksize, flowstatus=PDU.FlowStatus.ContinueToSend, prefix = None, padding_byte=None, extra_msg=''):
         msg = self.get_tx_can_msg()
         self.assertIsNotNone(msg, 'Expected a Flow Control message, but none was sent.' + ' ' + extra_msg)
         data = bytearray()
         if prefix is not None:
             data.extend(prefix)
 
-        data.extend(bytearray([0x30, blocksize, stmin]))
+        data.extend(bytearray([0x30 | flowstatus, blocksize, stmin]))
         if padding_byte is not None:
             padlen = 5
             if prefix is not None:

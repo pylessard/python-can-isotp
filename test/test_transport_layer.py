@@ -150,6 +150,40 @@ class TestTransportLayer(TransportLayerBaseTest):
 		self.assertEqual(data, bytearray(payload))
 		self.assertIsNone(self.rx_isotp_frame())
 
+	def test_receive_overflow_handling(self):
+		self.stack.params.set('stmin', 0)
+		self.stack.params.set('blocksize', 0)
+		self.stack.params.set('max_frame_size', 32)
+
+		payload = self.make_payload(33)
+		self.simulate_rx(data = [0x10, 33] + payload[0:6])
+		self.stack.process()
+		self.assert_sent_flow_control(stmin=0, blocksize=0, flowstatus=isotp.protocol.PDU.FlowStatus.Overflow)
+		self.simulate_rx(data = [0x21] + payload[6:10])
+		self.stack.process()
+		self.assert_error_triggered(isotp.UnexpectedConsecutiveFrameError)
+
+		self.simulate_rx(data = [0x10, 32] + payload[0:6])
+		self.stack.process()
+		self.assert_sent_flow_control(stmin=0, blocksize=0, flowstatus=isotp.protocol.PDU.FlowStatus.ContinueToSend)
+
+	def test_receive_overflow_handling_escape_sequence(self):
+		self.stack.params.set('stmin', 0)
+		self.stack.params.set('blocksize', 0)
+		self.stack.params.set('max_frame_size', 32)
+
+		payload = self.make_payload(33)
+		self.simulate_rx(data = [0x10, 0, 0,0,0,33] + payload[0:2])
+		self.stack.process()
+		self.assert_sent_flow_control(stmin=0, blocksize=0, flowstatus=isotp.protocol.PDU.FlowStatus.Overflow)
+		self.simulate_rx(data = [0x21] + payload[6:10])
+		self.stack.process()
+		self.assert_error_triggered(isotp.UnexpectedConsecutiveFrameError)
+
+		self.simulate_rx(data = [0x10, 0,0,0,0,32] + payload[0:2])
+		self.stack.process()
+		self.assert_sent_flow_control(stmin=0, blocksize=0, flowstatus=isotp.protocol.PDU.FlowStatus.ContinueToSend)
+
 	def test_receive_multiframe_flowcontrol_padding(self):
 		padding_byte = 0x22
 		self.stack.params.set('tx_padding', padding_byte)
@@ -290,6 +324,7 @@ class TestTransportLayer(TransportLayerBaseTest):
 		self.assertIsNone(self.rx_isotp_frame())
 	
 	def test_receive_4096_multiframe(self):
+		self.stack.params.set('max_frame_size', 5000)
 		payload_size = 4096
 		payload = self.make_payload(payload_size)
 		self.simulate_rx(data = [0x10, 0x00, 0x00, 0x00, 0x10, 0x00] + payload[0:2])
@@ -304,6 +339,7 @@ class TestTransportLayer(TransportLayerBaseTest):
 		self.assertIsNone(self.rx_isotp_frame())
 
 	def test_receive_10000_multiframe(self):
+		self.stack.params.set('max_frame_size', 11000)
 		payload_size = 10000
 		payload = self.make_payload(payload_size)
 		self.simulate_rx(data = [0x10, 0x00, 0x00, 0x00, 0x27, 0x10] + payload[0:2])
@@ -1020,7 +1056,8 @@ class TestTransportLayer(TransportLayerBaseTest):
 			'squash_stmin_requirement' : False,
 			'rx_flowcontrol_timeout'  : 1000,
 			'rx_consecutive_frame_timeout' : 1000,
-			'll_data_length' : 8
+			'll_data_length' : 8,
+			'max_frame_size' : 4095
 		}
 
 		self.create_layer({}) # Empty params. Use default value
@@ -1069,7 +1106,6 @@ class TestTransportLayer(TransportLayerBaseTest):
 			self.create_layer(params)
 		params['rx_flowcontrol_timeout'] = 1000
 
-
 		with self.assertRaises(ValueError):
 			params['rx_consecutive_frame_timeout'] = -1
 			self.create_layer(params)
@@ -1094,7 +1130,16 @@ class TestTransportLayer(TransportLayerBaseTest):
 		with self.assertRaises(ValueError):
 			params['ll_data_length'] = 10
 			self.create_layer(params)
-		params['rx_consecutive_frame_timeout'] = 8
+		params['ll_data_length'] = 8
+
+		with self.assertRaises(ValueError):
+			params['max_frame_size'] = -1
+			self.create_layer(params)
+
+		with self.assertRaises(ValueError):
+			params['max_frame_size'] = 'string'
+			self.create_layer(params)
+		params['max_frame_size'] = 4095
 
 
 

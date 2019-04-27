@@ -195,7 +195,7 @@ class TransportLayer:
 	LOGGER_NAME = 'isotp'
 
 	class Params:
-		__slots__ = 'stmin', 'blocksize', 'squash_stmin_requirement', 'rx_flowcontrol_timeout', 'rx_consecutive_frame_timeout', 'tx_padding', 'wftmax', 'll_data_length'
+		__slots__ = 'stmin', 'blocksize', 'squash_stmin_requirement', 'rx_flowcontrol_timeout', 'rx_consecutive_frame_timeout', 'tx_padding', 'wftmax', 'll_data_length', 'max_frame_size'
 
 		def __init__(self):
 			self.stmin 							=  0
@@ -206,6 +206,7 @@ class TransportLayer:
 			self.tx_padding 					=  None
 			self.wftmax						    = 0
 			self.ll_data_length					= 8
+			self.max_frame_size					= 4095
 
 		def set(self, key, val):
 			setattr(self, key, val)
@@ -257,7 +258,14 @@ class TransportLayer:
 				raise ValueError('ll_data_length must be an integer')
 
 			if self.ll_data_length not in [8,12,16,20,24,32,48,64]:
-				raise ValueError('ll_data_length must be one of these value : 8, 12, 16, 20, 24, 32, 48, 64 ')				
+				raise ValueError('ll_data_length must be one of these value : 8, 12, 16, 20, 24, 32, 48, 64 ')		
+
+
+			if not isinstance(self.max_frame_size, int):
+				raise ValueError('max_frame_size must be an integer')
+
+			if self.max_frame_size < 0:
+				raise ValueError('max_frame_size must be a positive integer')				
 
 	class Timer:
 		def __init__(self, timeout):
@@ -490,7 +498,7 @@ class TransportLayer:
 		# Sends flow control if process_rx requested it
 		if self.pending_flow_control_tx:
 			self.pending_flow_control_tx = False
-			return self.make_flow_control(flow_status=PDU.FlowStatus.ContinueToSend);	# Overflow is not possible. No need to wait.
+			return self.make_flow_control(flow_status=self.pending_flowcontrol_status);	# No need to wait.
 
 		# Handle flow control reception
 		flow_control_frame = self.last_flow_control_frame	# Reads the last message received and clears it. (Dequeue message)
@@ -637,8 +645,9 @@ class TransportLayer:
 	def append_rx_data(self, data):
 		self.rx_buffer.extend(data)
 
-	def request_tx_flowcontrol(self):
+	def request_tx_flowcontrol(self, status=PDU.FlowStatus.ContinueToSend):
 		self.pending_flow_control_tx = True
+		self.pending_flowcontrol_status = status
 
 	def stop_sending_flow_control(self):
 		self.pending_flow_control_tx = False
@@ -691,15 +700,22 @@ class TransportLayer:
 		self.timer_rx_cf.stop()
 
 	# Init the reception of a multi-pdu frame. 
-	def start_reception_after_first_frame(self, frame):
+	def start_reception_after_first_frame(self, pdu):
+		self.empty_rx_buffer()
+		
+		if pdu.length > self.params.max_frame_size:
+			self.request_tx_flowcontrol(PDU.FlowStatus.Overflow)
+			self.rx_state = self.RxState.IDLE	
+		else:
+			self.rx_state = self.RxState.WAIT_CF
+			self.rx_frame_length = pdu.length
+			self.append_rx_data(pdu.data)
+			self.request_tx_flowcontrol(PDU.FlowStatus.ContinueToSend)
+		
+		self.start_rx_cf_timer()
 		self.last_seqnum = 0
 		self.rx_block_counter = 0
-		self.empty_rx_buffer()
-		self.rx_frame_length = frame.length
-		self.rx_state = self.RxState.WAIT_CF
-		self.append_rx_data(frame.data)
-		self.request_tx_flowcontrol()
-		self.start_rx_cf_timer()
+			
 
 	def trigger_error(self, error):
 		if self.error_handler is not None:
