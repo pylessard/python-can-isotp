@@ -74,13 +74,30 @@ class PDU:
 			raise ValueError('Empty CAN frame')
 
 		if self.type == self.Type.SINGLE_FRAME:
-			self.length = int(msg.data[start_of_data]) & 0xF
-			if len(msg.data) < self.length + 1:
-				raise ValueError('Single Frame length is bigger than CAN frame length')
+			if datalen > 8:
+				if len(msg.data) < start_of_data + 2:
+					raise ValueError("Message length is too short to be a valid Single Frame with data length > 8") 
 
-			if self.length == 0 or self.length > datalen-1-start_of_data:
-				raise ValueError("Received Single Frame with invalid length of %d" % self.length)
-			self.data = msg.data[1+start_of_data:][:self.length]
+			if datalen <= 8:	# CAN standard.  We support size smaller than 8 even if ISO-15765 says it is invalid because why not.
+				self.length = int(msg.data[start_of_data]) & 0xF
+
+				if len(msg.data) < self.length + 1:
+					raise ValueError('Single Frame length is bigger than CAN frame length')
+				if self.length == 0 or self.length > datalen-1-start_of_data:
+					raise ValueError("Received Single Frame with invalid length of %d" % self.length)
+				self.data = msg.data[1+start_of_data:][:self.length]
+			else:	# CAN FD
+				escape_sequence = int(msg.data[start_of_data]) & 0xF
+				if escape_sequence != 0:	# ISO-15765-2:2016 requires to ignore message with invalid escape sequence.
+					raise ValueError("Invalid escape sequence for single frame with data length > 8")
+
+				self.length = int(msg.data[start_of_data+1])
+
+				if len(msg.data) < self.length + 2:
+					raise ValueError('Single Frame length is bigger than CAN frame length')
+				if self.length == 0 or self.length > datalen-2-start_of_data:
+					raise ValueError("Received Single Frame with invalid length of %d" % self.length)
+				self.data = msg.data[2+start_of_data:][:self.length]
 
 		elif self.type == self.Type.FIRST_FRAME:
 			if len(msg.data) < 2+start_of_data:
@@ -517,9 +534,13 @@ class TransportLayer:
 						read_tx_queue = True	# Read another frame from tx_queue
 					else:
 						self.tx_buffer = bytearray(popped_object['data'])
-
-						if len(self.tx_buffer) <= self.params.ll_data_length-1-len(self.address.tx_payload_prefix):	# Single frame
-							msg_data 		= self.address.tx_payload_prefix + bytearray([0x0 | len(self.tx_buffer)]) + self.tx_buffer
+						size_on_first_byte = True if len(self.tx_buffer) <= 7 else False
+						size_offset = 1 if size_on_first_byte else 2
+						if len(self.tx_buffer) <= self.params.ll_data_length-size_offset-len(self.address.tx_payload_prefix):	# Single frame
+							if size_on_first_byte:
+								msg_data 	= self.address.tx_payload_prefix + bytearray([0x0 | len(self.tx_buffer)]) + self.tx_buffer
+							else:
+								msg_data 	= self.address.tx_payload_prefix + bytearray([0x0, len(self.tx_buffer)]) + self.tx_buffer
 							arbitration_id 	= self.address.get_tx_arbitraton_id(popped_object['target_address_type'])
 							output_msg		= self.make_tx_msg(arbitration_id, msg_data)
 						else:							# Multi frame
@@ -532,6 +553,7 @@ class TransportLayer:
 							self.tx_state 	= self.TxState.WAIT_FC
 							self.tx_seqnum 	= 1
 							self.start_rx_fc_timer()
+
 
 		elif self.tx_state == self.TxState.WAIT_FC:
 			pass # Nothing to do. Flow control will make the FSM switch state by calling init_tx_consecutive_frame
@@ -599,7 +621,19 @@ class TransportLayer:
 
 	def make_tx_msg(self, arbitration_id, data):
 		self.pad_message_data(data)
-		return CanMessage(arbitration_id = arbitration_id, dlc=len(data), data=data, extended_id=self.address.is_29bits)
+		return CanMessage(arbitration_id = arbitration_id, dlc=self.get_dlc(data), data=data, extended_id=self.address.is_29bits)
+
+	def get_dlc(self, data):
+		if len(data) <= 8:
+			return len(data)
+		else:
+			if len(data) <= 12: return 9
+			if len(data) <= 16: return 10
+			if len(data) <= 20: return 11
+			if len(data) <= 24: return 12
+			if len(data) <= 32: return 13
+			if len(data) <= 48: return 14
+			if len(data) <= 64: return 15
 
 	def make_flow_control(self, flow_status=PDU.FlowStatus.ContinueToSend, blocksize=None, stmin=None):
 		if blocksize is None:
