@@ -57,14 +57,6 @@ class TestTransportLayer(TransportLayerBaseTest):
 		self.stack.process()
 		self.assertEqual(self.rx_isotp_frame(), bytearray(payload))
 
-	def test_ignore_sf_rxdl_16_bad_escape_sequence(self):
-		self.stack.params.set('ll_data_length', 16)
-		payload = self.make_payload(10)
-
-		self.simulate_rx(data = [0x01, len(payload)] + payload)	# First byte should be 0x00 not 0x01 as ll_data_length > 8 
-		self.stack.process()
-		self.assertIsNone(self.rx_isotp_frame())
-
 	# Make sure we can receive multiple single frame
 	def test_receive_multiple_sf(self):
 		self.stack.process()
@@ -289,13 +281,42 @@ class TestTransportLayer(TransportLayerBaseTest):
 		self.simulate_rx(data = [0x1F, 0xFF] + payload[0:6])
 		n = 6
 		seqnum = 1
-		while n<4096:
-			self.simulate_rx(data = [0x20 | (seqnum & 0xF)] + payload[n:min(n+7, 4096)])	
+		while n<=payload_size:
+			self.simulate_rx(data = [0x20 | (seqnum & 0xF)] + payload[n:min(n+7, payload_size)])	
 			self.stack.process()
 			n += 7
 			seqnum +=1
 		self.assertEqual(self.rx_isotp_frame(), bytearray(payload))
 		self.assertIsNone(self.rx_isotp_frame())
+	
+	def test_receive_4096_multiframe(self):
+		payload_size = 4096
+		payload = self.make_payload(payload_size)
+		self.simulate_rx(data = [0x10, 0x00, 0x00, 0x00, 0x10, 0x00] + payload[0:2])
+		n = 2
+		seqnum = 1
+		while n<=payload_size:
+			self.simulate_rx(data = [0x20 | (seqnum & 0xF)] + payload[n:min(n+7, payload_size)])	
+			self.stack.process()
+			n += 7
+			seqnum +=1
+		self.assertEqual(self.rx_isotp_frame(), bytearray(payload))
+		self.assertIsNone(self.rx_isotp_frame())
+
+	def test_receive_10000_multiframe(self):
+		payload_size = 10000
+		payload = self.make_payload(payload_size)
+		self.simulate_rx(data = [0x10, 0x00, 0x00, 0x00, 0x27, 0x10] + payload[0:2])
+		n = 2
+		seqnum = 1
+		while n<=payload_size:
+			self.simulate_rx(data = [0x20 | (seqnum & 0xF)] + payload[n:min(n+7, payload_size)])	
+			self.stack.process()
+			n += 7
+			seqnum +=1
+		self.assertEqual(self.rx_isotp_frame(), bytearray(payload))
+		self.assertIsNone(self.rx_isotp_frame())
+	
 
 	def test_receive_4095_multiframe_check_blocksize(self):
 		for blocksize in range(1,10):
@@ -313,7 +334,7 @@ class TestTransportLayer(TransportLayerBaseTest):
 		n = 6
 		block_counter = 0
 		seqnum = 1
-		while n<4096:
+		while n<=payload_size:
 			self.simulate_rx(data = [0x20 | (seqnum & 0xF)] + payload[n:min(n+7, 4096)])	
 			self.stack.process()
 			block_counter+=1
@@ -829,6 +850,77 @@ class TestTransportLayer(TransportLayerBaseTest):
 			if n > 4095:
 				break
 
+	#Possible since 2016 version of ISO-15765-2
+	def test_send_10000_bytes_payload(self):
+		payload_size = 10000;
+		payload = self.make_payload(payload_size)
+		self.tx_isotp_frame(payload)
+		self.stack.process()
+		msg = self.get_tx_can_msg()
+		self.assertEqual(msg.data, bytearray([0x10, 0x00, 0x00, 0x00, 0x27, 0x10] + payload[:2]))
+		self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=0)
+
+		seqnum = 1
+		n=2
+		self.stack.process()
+		while True:
+			msg = self.get_tx_can_msg()
+			self.assertIsNotNone(msg)
+			self.assertEqual(msg.data, bytearray([0x20 | seqnum] + payload[n:min(n+7, payload_size)]))
+			n+=7
+			seqnum = (seqnum+1) & 0xF
+
+			if n > payload_size:
+				break
+
+	#Possible since 2016 version of ISO-15765-2
+	def test_send_4096_bytes_payload(self):
+		payload_size = 4096;
+		payload = self.make_payload(payload_size)
+		self.tx_isotp_frame(payload)
+		self.stack.process()
+		msg = self.get_tx_can_msg()
+		self.assertEqual(msg.data, bytearray([0x10, 0x00, 0x00, 0x00, 0x10, 0x00] + payload[:2]))
+		self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=0)
+
+		seqnum = 1
+		n=2
+		self.stack.process()
+		while True:
+			msg = self.get_tx_can_msg()
+			self.assertIsNotNone(msg)
+			self.assertEqual(msg.data, bytearray([0x20 | seqnum] + payload[n:min(n+7, payload_size)]))
+			n+=7
+			seqnum = (seqnum+1) & 0xF
+
+			if n > payload_size:
+				break
+
+	#Possible since 2016 version of ISO-15765-2
+	def test_send_10000_bytes_payload_dl_20(self):
+		txdl = 20
+		self.stack.params.set('ll_data_length', txdl)
+		payload_size = 10000;
+		payload = self.make_payload(payload_size)
+		self.tx_isotp_frame(payload)
+		self.stack.process()
+		msg = self.get_tx_can_msg()
+		self.assertEqual(msg.data, bytearray([0x10, 0x00, 0x00, 0x00, 0x27, 0x10] + payload[:txdl-6]))
+		self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=0)
+
+		seqnum = 1
+		n=txdl-6
+		self.stack.process()
+		while True:
+			msg = self.get_tx_can_msg()
+			self.assertIsNotNone(msg)
+			self.assertEqual(msg.data, bytearray([0x20 | seqnum] + payload[n:min(n+txdl-1, payload_size)]))
+			n+=txdl-1
+			seqnum = (seqnum+1) & 0xF
+
+			if n > payload_size:
+				break
+
 	def test_transmit_single_sf_txdl_12_bytes(self):
 		self.stack.params.set('ll_data_length', 12)
 		payload = self.make_payload(10)
@@ -885,8 +977,6 @@ class TestTransportLayer(TransportLayerBaseTest):
 		msg = self.get_tx_can_msg()
 		self.assertEqual( (msg.data[0] & 0xF0) >> 4, 1, binascii.hexlify(msg.data))
 
-
-
 	def test_transmit_multiframe_txdl_12_bytes(self):
 		self.stack.params.set('ll_data_length', 12)
 		payload = self.make_payload(30)
@@ -901,21 +991,21 @@ class TestTransportLayer(TransportLayerBaseTest):
 		msg = self.get_tx_can_msg()
 		self.assertEqual(msg.data, bytearray([0x22] + payload[21:30]))
 
-	def test_transmit_multiframe_txdl_5_bytes(self):
-		self.stack.params.set('ll_data_length', 5)
-		payload = self.make_payload(15)
-		self.tx_isotp_frame(payload)
-		self.stack.process()
-		msg = self.get_tx_can_msg()
-		self.assertEqual(msg.data, bytearray([0x10, 15] + payload[:3]))
-		self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=0)
-		self.stack.process()
-		msg = self.get_tx_can_msg()
-		self.assertEqual(msg.data, bytearray([0x21] + payload[3:7]))
-		msg = self.get_tx_can_msg()
-		self.assertEqual(msg.data, bytearray([0x22] + payload[7:11]))
-		msg = self.get_tx_can_msg()
-		self.assertEqual(msg.data, bytearray([0x23] + payload[11:15]))
+#	def test_transmit_multiframe_txdl_5_bytes(self):
+#		self.stack.params.set('ll_data_length', 5)
+#		payload = self.make_payload(15)
+#		self.tx_isotp_frame(payload)
+#		self.stack.process()
+#		msg = self.get_tx_can_msg()
+#		self.assertEqual(msg.data, bytearray([0x10, 15] + payload[:3]))
+#		self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=0)
+#		self.stack.process()
+#		msg = self.get_tx_can_msg()
+#		self.assertEqual(msg.data, bytearray([0x21] + payload[3:7]))
+#		msg = self.get_tx_can_msg()
+#		self.assertEqual(msg.data, bytearray([0x22] + payload[7:11]))
+#		msg = self.get_tx_can_msg()
+#		self.assertEqual(msg.data, bytearray([0x23] + payload[11:15]))
 
 
 	# =============== Parameters ===========
@@ -929,7 +1019,8 @@ class TestTransportLayer(TransportLayerBaseTest):
 			'blocksize' : 8,
 			'squash_stmin_requirement' : False,
 			'rx_flowcontrol_timeout'  : 1000,
-			'rx_consecutive_frame_timeout' : 1000
+			'rx_consecutive_frame_timeout' : 1000,
+			'll_data_length' : 8
 		}
 
 		self.create_layer({}) # Empty params. Use default value
@@ -987,5 +1078,24 @@ class TestTransportLayer(TransportLayerBaseTest):
 			params['rx_consecutive_frame_timeout'] = 'string'
 			self.create_layer(params)
 		params['rx_consecutive_frame_timeout'] = 1000
+
+		with self.assertRaises(ValueError):
+			params['ll_data_length'] = -1
+			self.create_layer(params)
+
+		with self.assertRaises(ValueError):
+			params['ll_data_length'] = 'string'
+			self.create_layer(params)
+
+		with self.assertRaises(ValueError):
+			params['ll_data_length'] = 2
+			self.create_layer(params)
+
+		with self.assertRaises(ValueError):
+			params['ll_data_length'] = 10
+			self.create_layer(params)
+		params['rx_consecutive_frame_timeout'] = 8
+
+
 
 

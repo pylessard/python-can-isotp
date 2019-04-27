@@ -65,6 +65,7 @@ class PDU:
 		if msg is None:
 			return
 
+		# Guarantee at least presence of byte #1
 		if len(msg.data)>start_of_data:
 			hnb =  (msg.data[start_of_data] >> 4) & 0xF
 			if hnb > 3:
@@ -74,22 +75,21 @@ class PDU:
 			raise ValueError('Empty CAN frame')
 
 		if self.type == self.Type.SINGLE_FRAME:
-			if datalen > 8:
-				if len(msg.data) < start_of_data + 2:
-					raise ValueError("Message length is too short to be a valid Single Frame with data length > 8") 
 
-			if datalen <= 8:	# CAN standard.  We support size smaller than 8 even if ISO-15765 says it is invalid because why not.
-				self.length = int(msg.data[start_of_data]) & 0xF
+			length_placeholder = int(msg.data[start_of_data]) & 0xF
+			if length_placeholder != 0:
+				self.length = length_placeholder
 
 				if len(msg.data) < self.length + 1:
 					raise ValueError('Single Frame length is bigger than CAN frame length')
-				if self.length == 0 or self.length > datalen-1-start_of_data:
+
+				if self.length > datalen-1-start_of_data:
 					raise ValueError("Received Single Frame with invalid length of %d" % self.length)
 				self.data = msg.data[1+start_of_data:][:self.length]
+			
 			else:	# CAN FD
-				escape_sequence = int(msg.data[start_of_data]) & 0xF
-				if escape_sequence != 0:	# ISO-15765-2:2016 requires to ignore message with invalid escape sequence.
-					raise ValueError("Invalid escape sequence for single frame with data length > 8")
+				if len(msg.data) < start_of_data+2:
+					raise ValueError("Single Frame with escape sequence must contains at least 2 bytes")
 
 				self.length = int(msg.data[start_of_data+1])
 
@@ -97,19 +97,37 @@ class PDU:
 					raise ValueError('Single Frame length is bigger than CAN frame length')
 				if self.length == 0 or self.length > datalen-2-start_of_data:
 					raise ValueError("Received Single Frame with invalid length of %d" % self.length)
+
 				self.data = msg.data[2+start_of_data:][:self.length]
 
 		elif self.type == self.Type.FIRST_FRAME:
 			if len(msg.data) < 2+start_of_data:
 				raise ValueError('First frame must be at least %d bytes long' % (2+start_of_data))
 
-			self.length = ((int(msg.data[start_of_data]) & 0xF) << 8) | int(msg.data[start_of_data+1])
-			if len(msg.data) < datalen:
-				if len(msg.data) < self.length + 2 + start_of_data:
-					raise ValueError('First frame specifies a length that is inconsistent with underlying CAN message DLC')
+			length_placeholder = ((int(msg.data[start_of_data]) & 0xF) << 8) | int(msg.data[start_of_data+1])
+			if length_placeholder != 0:	# Frame is maximum 4095 bytes
+				self.length = length_placeholder
+				if len(msg.data) < datalen:		# We accept First frame with data that can hold in 1 CAN frame (even if the sender should've used a SingleFrame)
+					if len(msg.data) < self.length + 2 + start_of_data:		
+						raise ValueError('First frame specifies a length that is inconsistent with underlying CAN message DLC')
+	
+				self.data = msg.data[2+start_of_data:][:min(self.length, datalen-2-start_of_data)]
+			else:	# Frame is larger than 4095 bytes
+				if len(msg.data) < 6:
+					raise ValueError("First frame must be at least 6 bytes long when using escape sequence")
 
-			self.data = msg.data[2+start_of_data:][:min(self.length, datalen-2-start_of_data)]
-				
+				if datalen < start_of_data+6:
+					raise ValueError("Cannot receive frame bigger than 4095 bytes with the actual ll_data_length and addressing mode")
+
+				data_temp = msg.data[start_of_data:]
+				self.length = (data_temp[2] << 24) | (data_temp[3] << 16) | (data_temp[4] << 8) | (data_temp[5] << 0)
+
+				if len(msg.data) < datalen:		# We accept First frame with data that can hold in 1 CAN frame (even if the sender should've used a SingleFrame)
+					if len(msg.data) < self.length + 6 + start_of_data:		
+						raise ValueError('First frame specifies a length that is inconsistent with underlying CAN message DLC')
+
+				self.data = msg.data[6+start_of_data:][:min(self.length, datalen-6-start_of_data)]
+
 		elif self.type == self.Type.CONSECUTIVE_FRAME:
 			self.seqnum = int(msg.data[start_of_data]) & 0xF
 			self.data = msg.data[start_of_data+1:datalen]
@@ -238,8 +256,8 @@ class TransportLayer:
 			if not isinstance(self.ll_data_length, int):
 				raise ValueError('ll_data_length must be an integer')
 
-			if self.ll_data_length < 4:
-				raise ValueError('ll_data_length must be at least 4 bytes')
+			if self.ll_data_length not in [8,12,16,20,24,32,48,64]:
+				raise ValueError('ll_data_length must be one of these value : 8, 12, 16, 20, 24, 32, 48, 64 ')				
 
 	class Timer:
 		def __init__(self, timeout):
@@ -544,9 +562,16 @@ class TransportLayer:
 							arbitration_id 	= self.address.get_tx_arbitraton_id(popped_object['target_address_type'])
 							output_msg		= self.make_tx_msg(arbitration_id, msg_data)
 						else:							# Multi frame
-							data_length = self.params.ll_data_length-2-len(self.address.tx_payload_prefix)
 							self.tx_frame_length = len(self.tx_buffer)
-							msg_data 		= self.address.tx_payload_prefix + bytearray([0x10|((self.tx_frame_length >> 8) & 0xF), self.tx_frame_length&0xFF]) + self.tx_buffer[:data_length]
+							encode_length_on_2_first_bytes = True if self.tx_frame_length <= 4095 else False
+
+							if encode_length_on_2_first_bytes:
+								data_length = self.params.ll_data_length-2-len(self.address.tx_payload_prefix)
+								msg_data 	= self.address.tx_payload_prefix + bytearray([0x10|((self.tx_frame_length >> 8) & 0xF), self.tx_frame_length&0xFF]) + self.tx_buffer[:data_length]
+							else:
+								data_length = self.params.ll_data_length-6-len(self.address.tx_payload_prefix)
+								msg_data 	= self.address.tx_payload_prefix + bytearray([0x10, 0x00, (self.tx_frame_length>>24) & 0xFF, (self.tx_frame_length>>16) & 0xFF, (self.tx_frame_length>>8) & 0xFF, (self.tx_frame_length>>0) & 0xFF]) + self.tx_buffer[:data_length]
+							
 							arbitration_id 	= self.address.get_tx_arbitraton_id()
 							output_msg 		= self.make_tx_msg(arbitration_id, msg_data)
 							self.tx_buffer 	= self.tx_buffer[data_length:]
