@@ -33,7 +33,7 @@ class TestSocket(unittest.TestCase):
         self.assertEqual(o.bs, 22)
         self.assertEqual(o.wftmax, 33)
 
-        s.set_opts(optflag=0xFFFF, frame_txtime=0x55, ext_address=0x11, txpad=0x22, rxpad=0x33, rx_ext_address=0x44)
+        s.set_opts(optflag=0xFFFF, frame_txtime=0x55, ext_address=0x11, txpad=0x22, rxpad=0x33, rx_ext_address=0x44, tx_stmin=0x55)
         o = s.get_opts()
 
         self.assertEqual(o.optflag, 0xFFFF)
