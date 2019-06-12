@@ -139,7 +139,7 @@ Sending with functional addressing (broadcast)
 Defining custom rxfn and txfn
 -----------------------------
 
-In this example, we see how to configure a :class:`TransportLayer<isotp.TransportLayer>` to interract with a hardware different than python-can with a fictive API.
+In this example, we see how to configure a :class:`TransportLayer<isotp.TransportLayer>` to interact with a hardware different than python-can with a fictive API.
 
 .. code-block:: python
 
