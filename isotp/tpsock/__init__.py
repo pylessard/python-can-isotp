@@ -117,7 +117,7 @@ class socket:
     def bind(self, interface, *args, **kwargs):
         """
         Binds the socket to an address. 
-        If no address is provided, all additional parameters will be used to create an adresse. This is mainly to allow a syntax such as ``sock.bind('vcan0', rxid=0x123, txid=0x456)`` for backward compatibility.
+        If no address is provided, all additional parameters will be used to create an address. This is mainly to allow a syntax such as ``sock.bind('vcan0', rxid=0x123, txid=0x456)`` for backward compatibility.
 
         :param interface: The network interface to use
         :type interface: string
