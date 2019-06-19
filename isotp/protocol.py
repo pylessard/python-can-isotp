@@ -22,14 +22,18 @@ class CanMessage:
 
 	:param extended_id: When True, the arbitration ID stands on 29 bits. 11 bits when False
 	:type extended_id: bool
-	"""
-	__slots__ = 'arbitration_id', 'dlc', 'data','is_extended_id'
 
-	def __init__(self, arbitration_id=None, dlc=None, data=None, extended_id=False):
+	:param is_fd: When True (resp. False), message has to be transmitted or has been received in a CAN FD frame (resp. in a CAN frame)
+	:type extended_id: bool
+	"""
+	__slots__ = 'arbitration_id', 'dlc', 'data', 'is_extended_id', 'is_fd'
+
+	def __init__(self, arbitration_id=None, dlc=None, data=None, extended_id=False, is_fd=False):
 		self.arbitration_id = arbitration_id
 		self.dlc = dlc
 		self.data = data
 		self.is_extended_id = extended_id
+		self.is_fd = is_fd
 
 class PDU:
 	"""
@@ -195,7 +199,7 @@ class TransportLayer:
 	LOGGER_NAME = 'isotp'
 
 	class Params:
-		__slots__ = 'stmin', 'blocksize', 'squash_stmin_requirement', 'rx_flowcontrol_timeout', 'rx_consecutive_frame_timeout', 'tx_padding', 'wftmax', 'll_data_length', 'max_frame_size'
+		__slots__ = 'stmin', 'blocksize', 'squash_stmin_requirement', 'rx_flowcontrol_timeout', 'rx_consecutive_frame_timeout', 'tx_padding', 'wftmax', 'll_data_length', 'max_frame_size', 'is_fd'
 
 		def __init__(self):
 			self.stmin 							=  0
@@ -207,6 +211,7 @@ class TransportLayer:
 			self.wftmax						    = 0
 			self.ll_data_length					= 8
 			self.max_frame_size					= 4095
+			self.is_fd							= False
 
 		def set(self, key, val):
 			setattr(self, key, val)
@@ -265,7 +270,10 @@ class TransportLayer:
 				raise ValueError('max_frame_size must be an integer')
 
 			if self.max_frame_size < 0:
-				raise ValueError('max_frame_size must be a positive integer')				
+				raise ValueError('max_frame_size must be a positive integer')
+
+			if not isinstance(self.is_fd, bool):
+				raise ValueError('is_fd must be a boolean value')
 
 	class Timer:
 		def __init__(self, timeout):
@@ -655,7 +663,7 @@ class TransportLayer:
 
 	def make_tx_msg(self, arbitration_id, data):
 		self.pad_message_data(data)
-		return CanMessage(arbitration_id = arbitration_id, dlc=self.get_dlc(data), data=data, extended_id=self.address.is_29bits)
+		return CanMessage(arbitration_id = arbitration_id, dlc=self.get_dlc(data), data=data, extended_id=self.address.is_29bits, is_fd=self.params.is_fd)
 
 	def get_dlc(self, data):
 		if len(data) <= 8:
@@ -779,12 +787,12 @@ class CanStack(TransportLayer):
 	"""
 
 	def tx_canbus(self, msg):
-		self.bus.send(can.Message(arbitration_id=msg.arbitration_id, data = msg.data, extended_id=msg.is_extended_id))
+		self.bus.send(can.Message(arbitration_id=msg.arbitration_id, data = msg.data, extended_id=msg.is_extended_id, is_fd=msg.is_fd))
 
 	def rx_canbus(self):
 		msg = self.bus.recv(0)
 		if msg is not None:
-			return CanMessage(arbitration_id=msg.arbitration_id, data=msg.data, extended_id=msg.is_extended_id)
+			return CanMessage(arbitration_id=msg.arbitration_id, data=msg.data, extended_id=msg.is_extended_id, is_fd=msg.is_fd)
 
 	def __init__(self, bus, *args, **kwargs):
 		global can
