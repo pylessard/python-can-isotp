@@ -430,18 +430,6 @@ class TestTransportLayer(TransportLayerBaseTest):
 		data = self.rx_isotp_frame()
 		self.assertEqual(data, bytearray(payload))
 
-	def test_receive_data_length_12_but_set_8_bytes(self):
-		self.stack.params.set('ll_data_length', 8)
-		payload_size = 30
-		payload = self.make_payload(payload_size)
-		self.simulate_rx(data = [0x10, payload_size] + payload[0:10])
-		self.stack.process()
-		self.simulate_rx(data = [0x21] + payload[10:21])
-		self.simulate_rx(data = [0x22] + payload[21:30])
-		self.stack.process()
-		data = self.rx_isotp_frame()
-		self.assertNotEqual(data, bytearray(payload))
-
 
 	# ================ Transmission ====================
 

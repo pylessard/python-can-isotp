@@ -26,88 +26,128 @@ class testTimer(unittest.TestCase):
 # Here we check that we decode properly ecah type of frame
 class TestPDUDecoding(unittest.TestCase):
 
-    def make_pdu(self, data, start_of_data=0, datalen=8):
-        return isotp.protocol.PDU(Message(data=bytearray(data)),start_of_data=start_of_data, datalen=datalen)
+    def make_pdu(self, data, start_of_data=0):
+        return isotp.protocol.PDU(Message(data=bytearray(data)),start_of_data=start_of_data)
 
-    def test_decode_single_frame(self):
+    def make_payload(self, size, start_val=0):
+        return [int(x%0x100) for x in range(start_val, start_val+size)]
+
+    def test_decode_single_frame_no_escape_sequence(self):
+        # Empty data
         with self.assertRaises(ValueError):
-            self.make_pdu([])
+            self.make_pdu([])   
 
+        # Single Frame, imcomplete escape sequence
         with self.assertRaises(ValueError):
-            self.make_pdu([0])
+            self.make_pdu([0])  
 
-        for i in range(8,0xF):  # Doesn't fit in default datalen=8
+        prefix =[0x55, 0xAA]
+        # Missing 1 byte of data for single frame without escape sequence
+        for length in range(1, 0xF):  
             with self.assertRaises(ValueError):
-                self.make_pdu([i])
+                data = [length&0xF] + self.make_payload(length-1)
+                self.make_pdu(data)
 
+        for length in range(1, 0xF):  
+            with self.assertRaises(ValueError):
+                data = prefix + [length&0xF] + self.make_payload(length-len(prefix)-1)
+                self.make_pdu(data, start_of_data=len(prefix))  # With prefix
+
+        # Valid single frames without escape sequence
+        for length in range(1, 0xF):
+            payload = self.make_payload(length)
+            pdu = self.make_pdu([length&0xF] + payload)
+            self.assertEqual(pdu.type, isotp.protocol.PDU.Type.SINGLE_FRAME)
+            self.assertEqual(pdu.data, bytearray(payload))
+            self.assertEqual(pdu.length, len(pdu.data))
+            self.assertEqual(pdu.length, length)
+
+        for length in range(1, 0xF):
+            payload = self.make_payload(length)
+            data = prefix+[length&0xF] + payload
+            pdu = self.make_pdu(data, start_of_data=len(prefix))    # With prefix
+            self.assertEqual(pdu.type, isotp.protocol.PDU.Type.SINGLE_FRAME)
+            self.assertEqual(pdu.data, bytearray(payload))
+            self.assertEqual(pdu.length, len(pdu.data))
+            self.assertEqual(pdu.length, length)
+
+        # Valid single frames without escape sequence and extra bytes that are ignored
+        for length in range(1, 0xF):  
+            payload = self.make_payload(length)
+            pdu = self.make_pdu([length&0xF] + payload + [0xAA]*10)
+            self.assertEqual(pdu.type, isotp.protocol.PDU.Type.SINGLE_FRAME)
+            self.assertEqual(pdu.data, bytearray(payload))
+            self.assertEqual(pdu.length, len(pdu.data))
+            self.assertEqual(pdu.length, length)
+
+        for length in range(1, 0xF):  
+            payload = self.make_payload(length)
+            data = prefix+[length&0xF] + payload+ [0xAA]*10
+            pdu = self.make_pdu(data, start_of_data=len(prefix))    # With prefix
+            self.assertEqual(pdu.type, isotp.protocol.PDU.Type.SINGLE_FRAME)
+            self.assertEqual(pdu.data, bytearray(payload))
+            self.assertEqual(pdu.length, len(pdu.data))
+            self.assertEqual(pdu.length, length)
+
+
+    def test_decode_single_frame_escape_sequence(self):
+         # Single Frame, length=0. Invalid
         with self.assertRaises(ValueError):
-            self.make_pdu([0x01])
+            self.make_pdu([0,0])  
 
-        frame = self.make_pdu([0x01, 0xAA])
-        self.assertEqual(frame.type, isotp.protocol.PDU.Type.SINGLE_FRAME)
-        self.assertEqual(frame.data, bytearray([0xAA]))
-        self.assertEqual(frame.length, len(frame.data))
-
+         # Single Frame, length=0. Invalid even with data.
         with self.assertRaises(ValueError):
-            self.make_pdu([0x02, 0x11])
+            self.make_pdu([0,0,0xAA])   
 
-        frame = self.make_pdu([0x02, 0x11, 0x22])
-        self.assertEqual(frame.type, isotp.protocol.PDU.Type.SINGLE_FRAME)
-        self.assertEqual(frame.data, bytearray([0x11, 0x22]))
-        self.assertEqual(frame.length, len(frame.data))
+        prefix =[0x55, 0xAA]
+        # Missing 1 byte of data for single frame with escape sequence
+        for length in range(1, 0xFF):   # Up to 255 bytes. More than CAN can give, but that's ok.
+            with self.assertRaises(ValueError):
+                data = [0, length] + self.make_payload(length-1)
+                self.make_pdu(data)
 
-        frame = self.make_pdu([0x02, 0x11, 0x22, 0x33, 0x44])
-        self.assertEqual(frame.type, isotp.protocol.PDU.Type.SINGLE_FRAME)
-        self.assertEqual(frame.data, bytearray([0x11, 0x22]))
-        self.assertEqual(frame.length, len(frame.data))
+        for length in range(1, 0xFF):   # Up to 255 bytes. More than CAN can give, but that's ok.
+            with self.assertRaises(ValueError):
+                data = prefix + [0, length] + self.make_payload(length-1)
+                self.make_pdu(data, start_of_data=len(prefix))  # With prefix
 
-        frame = self.make_pdu([0x07, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77])
-        self.assertEqual(frame.type, isotp.protocol.PDU.Type.SINGLE_FRAME)
-        self.assertEqual(frame.data, bytearray([0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77]))
-        self.assertEqual(frame.length, len(frame.data))
+        # Valid single frames without escape sequence
+        for length in range(1, 0xFF):  
+            payload = self.make_payload(length)
+            pdu = self.make_pdu([0, length] + payload)
+            self.assertEqual(pdu.type, isotp.protocol.PDU.Type.SINGLE_FRAME)
+            self.assertEqual(pdu.data, bytearray(payload))
+            self.assertEqual(pdu.length, len(pdu.data))
+            self.assertEqual(pdu.length, length)
 
-        with self.assertRaises(ValueError):
-            self.make_pdu([0x08,  0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88])
+        for length in range(1, 0xFF):  
+            payload = self.make_payload(length)
+            data = prefix + [0, length] + payload
+            pdu = self.make_pdu(data, start_of_data=len(prefix))    # With prefix
+            self.assertEqual(pdu.type, isotp.protocol.PDU.Type.SINGLE_FRAME)
+            self.assertEqual(pdu.data, bytearray(payload))
+            self.assertEqual(pdu.length, len(pdu.data))
+            self.assertEqual(pdu.length, length)
 
-        with self.assertRaises(ValueError):
-            self.make_pdu([0x05,  0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88], datalen=5)
+        # Valid single frames without escape sequence and extra bytes that are ignored
+        for length in range(1, 0xFF):  
+            payload = self.make_payload(length)
+            pdu = self.make_pdu([0, length] + payload + [0xAA]*10)
+            self.assertEqual(pdu.type, isotp.protocol.PDU.Type.SINGLE_FRAME)
+            self.assertEqual(pdu.data, bytearray(payload))
+            self.assertEqual(pdu.length, len(pdu.data))
+            self.assertEqual(pdu.length, length)
 
-        with self.assertRaises(ValueError):
-            self.make_pdu([0x01,  0x07, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77], start_of_data = 1, datalen=8)
+        for length in range(1, 0xFF):  
+            payload = self.make_payload(length)
+            data = prefix + [0, length] + payload + [0xAA]*10
+            pdu = self.make_pdu(data, start_of_data=len(prefix))    # With prefix
+            self.assertEqual(pdu.type, isotp.protocol.PDU.Type.SINGLE_FRAME)
+            self.assertEqual(pdu.data, bytearray(payload))
+            self.assertEqual(pdu.length, len(pdu.data))
+            self.assertEqual(pdu.length, length)
 
-        with self.assertRaises(ValueError):
-            self.make_pdu([0x01,  0x06, 0x22, 0x33, 0x44, 0x55, 0x66], start_of_data = 1, datalen=7)
-
-
-        frame = self.make_pdu([0x00, 0x01, 0xAA])
-        self.assertEqual(frame.type, isotp.protocol.PDU.Type.SINGLE_FRAME)
-        self.assertEqual(frame.data, bytearray([0xAA]))
-        self.assertEqual(frame.length, len(frame.data))
-
-        with self.assertRaises(ValueError):
-            frame = self.make_pdu([0x00, 0x00])
-
-        frame = self.make_pdu([0x00, 0x04, 0x11, 0x22, 0x33, 0x44])
-        self.assertEqual(frame.type, isotp.protocol.PDU.Type.SINGLE_FRAME)
-        self.assertEqual(frame.data, bytearray([0x11, 0x22, 0x33, 0x44]))
-        self.assertEqual(frame.length, len(frame.data))
-
-        frame = self.make_pdu([0x00, 0x06, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66])
-        self.assertEqual(frame.type, isotp.protocol.PDU.Type.SINGLE_FRAME)
-        self.assertEqual(frame.data, bytearray([0x11, 0x22, 0x33, 0x44, 0x55, 0x66]))
-        self.assertEqual(frame.length, len(frame.data))
-
-
-        frame = self.make_pdu([0x00, 0x07, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77], datalen=9)
-        self.assertEqual(frame.type, isotp.protocol.PDU.Type.SINGLE_FRAME)
-        self.assertEqual(frame.data, bytearray([0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77]))
-        self.assertEqual(frame.length, len(frame.data))
-
-        with self.assertRaises(ValueError):
-            frame = self.make_pdu([0x00, 0x0A, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77], datalen=8)
-    
-
-    def test_decode_first_frame(self):
+    def test_decode_first_frame_no_escape_sequence(self):
         with self.assertRaises(ValueError): # Empty payload
             self.make_pdu([])
 
@@ -117,71 +157,73 @@ class TestPDUDecoding(unittest.TestCase):
         with self.assertRaises(ValueError): # Incomplete length
             self.make_pdu([0x1F])
 
-        with self.assertRaises(ValueError): #Missing data
-            self.make_pdu([0x10, 0x02])
+        pdu = self.make_pdu([0x10, 0x02])
+        self.assertEqual(pdu.type, isotp.protocol.PDU.Type.FIRST_FRAME)
+        self.assertEqual(pdu.data, bytearray())
+        self.assertEqual(pdu.length, 2)
 
-        with self.assertRaises(ValueError): # Missing data byte
-            self.make_pdu([0x10, 0x02, 0x11])
+        pdu = self.make_pdu([0x10, 0x02, 0x11])
+        self.assertEqual(pdu.type, isotp.protocol.PDU.Type.FIRST_FRAME)
+        self.assertEqual(pdu.data, bytearray([0x11]))
+        self.assertEqual(pdu.length, 2)
 
-        frame = self.make_pdu([0x10, 0x02, 0x11, 0x22])
-        self.assertEqual(frame.type, isotp.protocol.PDU.Type.FIRST_FRAME)
-        self.assertEqual(frame.data, bytearray([0x11, 0x22]))
-        self.assertEqual(frame.length, 2)
+        prefix =[0x55, 0xAA]
+        
+        # Data fits in single First pdu. Shouldn't happen, but acceptable.
+        for length in range(1, 0x1FF):  
+            payload = self.make_payload(length)
+            data = [0x10 | (length >> 8)&0xF, length&0xFF] + payload
+            pdu = self.make_pdu(data)
+            self.assertEqual(pdu.type, isotp.protocol.PDU.Type.FIRST_FRAME)
+            self.assertEqual(pdu.data, bytearray(payload))
+            self.assertEqual(pdu.length, length)
 
-        frame = self.make_pdu([0x10, 0x02, 0x11, 0x22, 0x33])
-        self.assertEqual(frame.type, isotp.protocol.PDU.Type.FIRST_FRAME)
-        self.assertEqual(frame.data, bytearray([0x11, 0x22]))
-        self.assertEqual(frame.length, 2)
+        for length in range(1, 0x1FF):  
+            payload = self.make_payload(length)
+            data = prefix + [0x10 | (length >> 8)&0xF, length&0xFF] + payload
+            pdu = self.make_pdu(data, start_of_data=len(prefix))        # With prefix
+            self.assertEqual(pdu.type, isotp.protocol.PDU.Type.FIRST_FRAME)
+            self.assertEqual(pdu.data, bytearray(payload))
+            self.assertEqual(pdu.length, length)
 
-        frame = self.make_pdu([0x10, 0x06, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66])
-        self.assertEqual(frame.type, isotp.protocol.PDU.Type.FIRST_FRAME)
-        self.assertEqual(frame.data, bytearray([0x11, 0x22, 0x33, 0x44, 0x55, 0x66]))
-        self.assertEqual(frame.length, 6)
 
-        with self.assertRaises(ValueError): # Missing data byte
-            frame = self.make_pdu([0x10, 0x0A, 0x11, 0x22, 0x33, 0x44, 0x55])
+        # Data doesn't fits in first pdu. Normal use case.
+        for length in range(10, 0x1FF):  
+            payload = self.make_payload(length)
+            data = [0x10 | (length >> 8)&0xF, length&0xFF] + payload[:5]
+            pdu = self.make_pdu(data)
+            self.assertEqual(pdu.type, isotp.protocol.PDU.Type.FIRST_FRAME)
+            self.assertEqual(pdu.data, bytearray(payload[:5]))
+            self.assertEqual(pdu.length, length)
 
-        with self.assertRaises(ValueError): # Missing data byte
-            frame = self.make_pdu([0x01, 0x10, 0x0A, 0x11, 0x22, 0x33, 0x44], start_of_data=1)
+        for length in range(10, 0x1FF):  
+            payload = self.make_payload(length)
+            data = prefix + [0x10 | (length >> 8)&0xF, length&0xFF] + payload[:5]
+            pdu = self.make_pdu(data, start_of_data=len(prefix))        # With prefix
+            self.assertEqual(pdu.type, isotp.protocol.PDU.Type.FIRST_FRAME)
+            self.assertEqual(pdu.data, bytearray(payload[:5]))
+            self.assertEqual(pdu.length, length)
 
-        with self.assertRaises(ValueError): # Missing data byte
-            frame = self.make_pdu([0x01, 0x10, 0x0A, 0x11, 0x22, 0x33, 0x44, 0x55], start_of_data=1, datalen=12)
 
-        frame = self.make_pdu([0x10, 0x0A, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66])
-        self.assertEqual(frame.type, isotp.protocol.PDU.Type.FIRST_FRAME)
-        self.assertEqual(frame.data, bytearray([0x11, 0x22, 0x33, 0x44, 0x55, 0x66]))
-        self.assertEqual(frame.length, 0xA)
+        # Data fits in single First Frame + padding. Shouldn't happen, but acceptable.
+        padding = [0xAA] * 10
+        for length in range(1, 0x1FF):  
+            payload = self.make_payload(length)
+            data = [0x10 | (length >> 8)&0xF, length&0xFF] + payload + padding
+            pdu = self.make_pdu(data)
+            self.assertEqual(pdu.type, isotp.protocol.PDU.Type.FIRST_FRAME)
+            self.assertEqual(pdu.data, bytearray(payload))
+            self.assertEqual(pdu.length, length)
 
-        frame = self.make_pdu([0x1A, 0xBC, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66])
-        self.assertEqual(frame.type, isotp.protocol.PDU.Type.FIRST_FRAME)
-        self.assertEqual(frame.data, bytearray([0x11, 0x22, 0x33, 0x44, 0x55, 0x66]))
-        self.assertEqual(frame.length, 0xABC)
+        for length in range(1, 0x1FF):  
+            payload = self.make_payload(length)
+            data = prefix + [0x10 | (length >> 8)&0xF, length&0xFF] + payload + padding
+            pdu = self.make_pdu(data, start_of_data=len(prefix))        # With prefix
+            self.assertEqual(pdu.type, isotp.protocol.PDU.Type.FIRST_FRAME)
+            self.assertEqual(pdu.data, bytearray(payload))
+            self.assertEqual(pdu.length, length)
 
-        frame = self.make_pdu([0x10, 0x00, 0xAA, 0xBB, 0xCC, 0xDD, 0x11, 0x22], datalen=8)
-        self.assertEqual(frame.type, isotp.protocol.PDU.Type.FIRST_FRAME)
-        self.assertEqual(frame.data, bytearray([0x11, 0x22]))
-        self.assertEqual(frame.length, 0xAABBCCDD)
-
-        frame = self.make_pdu([0x10, 0x00, 0xAA, 0xBB, 0xCC, 0xDD, 0x11, 0x22, 0x33, 0x44], datalen=10)
-        self.assertEqual(frame.type, isotp.protocol.PDU.Type.FIRST_FRAME)
-        self.assertEqual(frame.data, bytearray([0x11, 0x22, 0x33, 0x44]))
-        self.assertEqual(frame.length, 0xAABBCCDD)
-
-        # Extra bytes truncated to datalen
-        frame = self.make_pdu([0x10, 0x00, 0xAA, 0xBB, 0xCC, 0xDD, 0x11, 0x22, 0x33, 0x44], datalen=8)
-        self.assertEqual(frame.type, isotp.protocol.PDU.Type.FIRST_FRAME)
-        self.assertEqual(frame.data, bytearray([0x11, 0x22]))
-        self.assertEqual(frame.length, 0xAABBCCDD)
-
-        # Extra bytes truncated to datalen-start_of_data
-        frame = self.make_pdu([0x99, 0x10, 0x00, 0xAA, 0xBB, 0xCC, 0xDD, 0x11, 0x22, 0x33, 0x44], datalen=8, start_of_data=1)
-        self.assertEqual(frame.type, isotp.protocol.PDU.Type.FIRST_FRAME)
-        self.assertEqual(frame.data, bytearray([0x11]))
-        self.assertEqual(frame.length, 0xAABBCCDD)
-
-        with self.assertRaises(ValueError):
-            self.make_pdu([0x10, 0x00, 0xAA, 0xBB, 0xCC, 0xDD, 0x11, 0x22, 0x33, 0x44], datalen=5)
-
+    def test_decode_first_frame_with_escape_sequence(self):
         with self.assertRaises(ValueError): # Incomplete length
             self.make_pdu([0x10, 0x00])
 
@@ -194,38 +236,111 @@ class TestPDUDecoding(unittest.TestCase):
         with self.assertRaises(ValueError): # Incomplete length
             self.make_pdu([0x10, 0x00, 0xAA, 0xBB, 0xCC])
 
-        with self.assertRaises(ValueError): # Missing data byte
-            self.make_pdu([0x10, 0x00, 0xAA, 0xBB, 0xCC, 0xDD])
+        with self.assertRaises(ValueError): # Incomplete length
+            self.make_pdu([0x10, 0x10, 0x00, 0xAA, 0xBB, 0xCC], start_of_data=1)
 
-        frame = self.make_pdu([0x10, 0x00, 0xAA, 0xBB, 0xCC, 0xDD], datalen=6)
-        self.assertEqual(frame.type, isotp.protocol.PDU.Type.FIRST_FRAME)
-        self.assertEqual(frame.data, bytearray())
-        self.assertEqual(frame.length, 0xAABBCCDD)
+        # No data in first pdu. Uncommon but possible.
+        pdu = self.make_pdu([0x10, 0x00, 0xAA, 0xBB, 0xCC, 0xDD])
+        self.assertEqual(pdu.type, isotp.protocol.PDU.Type.FIRST_FRAME)
+        self.assertEqual(pdu.data, bytearray())
+        self.assertEqual(pdu.length, 0xAABBCCDD)
 
-    
+        # No data in first pdu. Uncommon but possible.
+        pdu = self.make_pdu([0xAA, 0xAA, 0x10, 0x00, 0xAA, 0xBB, 0xCC, 0xDD], start_of_data=2)  # With prefix
+        self.assertEqual(pdu.type, isotp.protocol.PDU.Type.FIRST_FRAME)
+        self.assertEqual(pdu.data, bytearray())
+        self.assertEqual(pdu.length, 0xAABBCCDD)
+
+        pdu = self.make_pdu([0x10, 0x00, 0xAA, 0xBB, 0xCC, 0xDD, 0x11, 0x22])
+        self.assertEqual(pdu.type, isotp.protocol.PDU.Type.FIRST_FRAME)
+        self.assertEqual(pdu.data, bytearray([0x11, 0x22]))
+        self.assertEqual(pdu.length, 0xAABBCCDD)
+
+        pdu = self.make_pdu([0xAA, 0x10, 0x00, 0xAA, 0xBB, 0xCC, 0xDD, 0x11, 0x22, 0x33, 0x44], start_of_data=1)
+        self.assertEqual(pdu.type, isotp.protocol.PDU.Type.FIRST_FRAME)
+        self.assertEqual(pdu.data, bytearray([0x11, 0x22, 0x33, 0x44]))
+        self.assertEqual(pdu.length, 0xAABBCCDD)
+
+
+        prefix =[0x55, 0xAA]
+        
+        # Data fits in single First pdu. Shouldn't happen, but acceptable.
+        for length in range(1, 0x1FF):  
+            len_data = [(length >> 24) & 0xFF, (length >> 16) & 0xFF, (length >> 8) & 0xFF, (length >> 0) & 0xFF]
+            payload = self.make_payload(length)
+            data = [0x10, 0x00] + len_data + payload
+            pdu = self.make_pdu(data)
+            self.assertEqual(pdu.type, isotp.protocol.PDU.Type.FIRST_FRAME)
+            self.assertEqual(pdu.data, bytearray(payload))
+            self.assertEqual(pdu.length, length)
+
+        for length in range(1, 0x1FF):  
+            len_data = [(length >> 24) & 0xFF, (length >> 16) & 0xFF, (length >> 8) & 0xFF, (length >> 0) & 0xFF]
+            payload = self.make_payload(length)
+            data = prefix + [0x10, 0x00] + len_data + payload
+            pdu = self.make_pdu(data, start_of_data=len(prefix))    # With prefix
+            self.assertEqual(pdu.type, isotp.protocol.PDU.Type.FIRST_FRAME)
+            self.assertEqual(pdu.data, bytearray(payload))
+            self.assertEqual(pdu.length, length)
+
+        # Data doesn't fits in first pdu. Normal use case.
+        for length in range(10, 0x1FF):  
+            payload = self.make_payload(length)
+            len_data = [(length >> 24) & 0xFF, (length >> 16) & 0xFF, (length >> 8) & 0xFF, (length >> 0) & 0xFF]
+            data = [0x10, 0x00] + len_data + payload[:5]
+            pdu = self.make_pdu(data)
+            self.assertEqual(pdu.type, isotp.protocol.PDU.Type.FIRST_FRAME)
+            self.assertEqual(pdu.data, bytearray(payload[:5]))
+            self.assertEqual(pdu.length, length)
+
+        for length in range(10, 0x1FF):  
+            payload = self.make_payload(length)
+            len_data = [(length >> 24) & 0xFF, (length >> 16) & 0xFF, (length >> 8) & 0xFF, (length >> 0) & 0xFF]
+            data = prefix + [0x10, 0x00] + len_data + payload[:5]
+            pdu = self.make_pdu(data, start_of_data=len(prefix))        # With prefix
+            self.assertEqual(pdu.type, isotp.protocol.PDU.Type.FIRST_FRAME)
+            self.assertEqual(pdu.data, bytearray(payload[:5]))
+            self.assertEqual(pdu.length, length)
+
+        # Data fits in single First Frame + padding. Shouldn't happen, but acceptable.
+        padding = [0xAA] * 10
+        for length in range(1, 0x1FF):  
+            payload = self.make_payload(length)
+            len_data = [(length >> 24) & 0xFF, (length >> 16) & 0xFF, (length >> 8) & 0xFF, (length >> 0) & 0xFF]
+            data = [0x10, 0x00] + len_data + payload + padding
+            pdu = self.make_pdu(data)
+            self.assertEqual(pdu.type, isotp.protocol.PDU.Type.FIRST_FRAME)
+            self.assertEqual(pdu.data, bytearray(payload))
+            self.assertEqual(pdu.length, length)
+
+        for length in range(1, 0x1FF):  
+            payload = self.make_payload(length)
+            len_data = [(length >> 24) & 0xFF, (length >> 16) & 0xFF, (length >> 8) & 0xFF, (length >> 0) & 0xFF]
+            data = prefix + [0x10, 0x00] + len_data + payload + padding
+            pdu = self.make_pdu(data, start_of_data=len(prefix))
+            self.assertEqual(pdu.type, isotp.protocol.PDU.Type.FIRST_FRAME)
+            self.assertEqual(pdu.data, bytearray(payload))
+            self.assertEqual(pdu.length, length)
+
+
     def test_decode_consecutive_frame(self):
         with self.assertRaises(ValueError): # Empty payload
             self.make_pdu([])
 
-        frame = self.make_pdu([0x20])
-        self.assertEqual(frame.type, isotp.protocol.PDU.Type.CONSECUTIVE_FRAME)
-        self.assertEqual(frame.data, bytearray([]))
-        self.assertEqual(frame.seqnum, 0)
+        pdu = self.make_pdu([0x20])
+        self.assertEqual(pdu.type, isotp.protocol.PDU.Type.CONSECUTIVE_FRAME)
+        self.assertEqual(pdu.data, bytearray([]))
+        self.assertEqual(pdu.seqnum, 0)
 
-        frame = self.make_pdu([0x20, 0x11])
-        self.assertEqual(frame.type, isotp.protocol.PDU.Type.CONSECUTIVE_FRAME)
-        self.assertEqual(frame.data, bytearray([0x11]))
-        self.assertEqual(frame.seqnum, 0)
+        pdu = self.make_pdu([0x20, 0x11])
+        self.assertEqual(pdu.type, isotp.protocol.PDU.Type.CONSECUTIVE_FRAME)
+        self.assertEqual(pdu.data, bytearray([0x11]))
+        self.assertEqual(pdu.seqnum, 0)
 
-        frame = self.make_pdu([0x2A, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77])
-        self.assertEqual(frame.type, isotp.protocol.PDU.Type.CONSECUTIVE_FRAME)
-        self.assertEqual(frame.data, bytearray([0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77]))
-        self.assertEqual(frame.seqnum, 0xA)
-
-        frame = self.make_pdu([0x00, 0x2A, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77], start_of_data=1, datalen=6)
-        self.assertEqual(frame.type, isotp.protocol.PDU.Type.CONSECUTIVE_FRAME)
-        self.assertEqual(frame.data, bytearray([0x11, 0x22, 0x33, 0x44]))
-        self.assertEqual(frame.seqnum, 0xA)
+        pdu = self.make_pdu([0x2A, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77])
+        self.assertEqual(pdu.type, isotp.protocol.PDU.Type.CONSECUTIVE_FRAME)
+        self.assertEqual(pdu.data, bytearray([0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77]))
+        self.assertEqual(pdu.seqnum, 0xA)
 
 
     def test_decode_flow_control(self):
@@ -238,65 +353,65 @@ class TestPDUDecoding(unittest.TestCase):
         with self.assertRaises(ValueError): # incomplete
             self.make_pdu([0x30, 0x00])
 
-        frame = self.make_pdu([0x30, 0x00, 0x00])
-        self.assertEqual(frame.type, isotp.protocol.PDU.Type.FLOW_CONTROL)
-        self.assertEqual(frame.flow_status, isotp.protocol.PDU.FlowStatus.ContinueToSend)
-        self.assertEqual(frame.blocksize, 0)
-        self.assertEqual(frame.stmin, 0)
-        self.assertEqual(frame.stmin_sec, 0)
+        pdu = self.make_pdu([0x30, 0x00, 0x00])
+        self.assertEqual(pdu.type, isotp.protocol.PDU.Type.FLOW_CONTROL)
+        self.assertEqual(pdu.flow_status, isotp.protocol.PDU.FlowStatus.ContinueToSend)
+        self.assertEqual(pdu.blocksize, 0)
+        self.assertEqual(pdu.stmin, 0)
+        self.assertEqual(pdu.stmin_sec, 0)
 
-        frame = self.make_pdu([0x31, 0x00, 0x00])
-        self.assertEqual(frame.type, isotp.protocol.PDU.Type.FLOW_CONTROL)
-        self.assertEqual(frame.flow_status, isotp.protocol.PDU.FlowStatus.Wait)
-        self.assertEqual(frame.blocksize, 0)
-        self.assertEqual(frame.stmin, 0)
-        self.assertEqual(frame.stmin_sec, 0)
+        pdu = self.make_pdu([0x31, 0x00, 0x00])
+        self.assertEqual(pdu.type, isotp.protocol.PDU.Type.FLOW_CONTROL)
+        self.assertEqual(pdu.flow_status, isotp.protocol.PDU.FlowStatus.Wait)
+        self.assertEqual(pdu.blocksize, 0)
+        self.assertEqual(pdu.stmin, 0)
+        self.assertEqual(pdu.stmin_sec, 0)
 
-        frame = self.make_pdu([0x32, 0x00, 0x00])
-        self.assertEqual(frame.type, isotp.protocol.PDU.Type.FLOW_CONTROL)
-        self.assertEqual(frame.flow_status, isotp.protocol.PDU.FlowStatus.Overflow)
-        self.assertEqual(frame.blocksize, 0)
-        self.assertEqual(frame.stmin, 0)
-        self.assertEqual(frame.stmin_sec, 0)
+        pdu = self.make_pdu([0x32, 0x00, 0x00])
+        self.assertEqual(pdu.type, isotp.protocol.PDU.Type.FLOW_CONTROL)
+        self.assertEqual(pdu.flow_status, isotp.protocol.PDU.FlowStatus.Overflow)
+        self.assertEqual(pdu.blocksize, 0)
+        self.assertEqual(pdu.stmin, 0)
+        self.assertEqual(pdu.stmin_sec, 0)
 
-        frame = self.make_pdu([0xFF, 0xFF, 0x32, 0x01, 0x01], start_of_data=2)
-        self.assertEqual(frame.type, isotp.protocol.PDU.Type.FLOW_CONTROL)
-        self.assertEqual(frame.flow_status, isotp.protocol.PDU.FlowStatus.Overflow)
-        self.assertEqual(frame.blocksize, 1)
-        self.assertEqual(frame.stmin, 1)
-        self.assertEqual(frame.stmin_sec, 1/1000)
+        pdu = self.make_pdu([0xFF, 0xFF, 0x32, 0x01, 0x01], start_of_data=2)
+        self.assertEqual(pdu.type, isotp.protocol.PDU.Type.FLOW_CONTROL)
+        self.assertEqual(pdu.flow_status, isotp.protocol.PDU.FlowStatus.Overflow)
+        self.assertEqual(pdu.blocksize, 1)
+        self.assertEqual(pdu.stmin, 1)
+        self.assertEqual(pdu.stmin_sec, 1/1000)
 
         for i in range(3, 0xF): # Reserved Flow status
             with self.assertRaises(ValueError):
-                frame = self.make_pdu([0x30 + i, 0x00, 0x00])
+                pdu = self.make_pdu([0x30 + i, 0x00, 0x00])
 
-        frame = self.make_pdu([0x30, 0xFF, 0x00])
-        self.assertEqual(frame.type, isotp.protocol.PDU.Type.FLOW_CONTROL)
-        self.assertEqual(frame.flow_status, isotp.protocol.PDU.FlowStatus.ContinueToSend)
-        self.assertEqual(frame.blocksize, 0xFF)
-        self.assertEqual(frame.stmin, 0)
-        self.assertEqual(frame.stmin_sec, 0)
+        pdu = self.make_pdu([0x30, 0xFF, 0x00])
+        self.assertEqual(pdu.type, isotp.protocol.PDU.Type.FLOW_CONTROL)
+        self.assertEqual(pdu.flow_status, isotp.protocol.PDU.FlowStatus.ContinueToSend)
+        self.assertEqual(pdu.blocksize, 0xFF)
+        self.assertEqual(pdu.stmin, 0)
+        self.assertEqual(pdu.stmin_sec, 0)
 
         for i in range(0,0x7F):     # Millisecs
-            frame = self.make_pdu([0x30, 0x00, i])
-            self.assertEqual(frame.type, isotp.protocol.PDU.Type.FLOW_CONTROL)
-            self.assertEqual(frame.flow_status, isotp.protocol.PDU.FlowStatus.ContinueToSend)
-            self.assertEqual(frame.blocksize, 0)
-            self.assertEqual(frame.stmin, i)
-            self.assertEqual(frame.stmin_sec, i/1000)
+            pdu = self.make_pdu([0x30, 0x00, i])
+            self.assertEqual(pdu.type, isotp.protocol.PDU.Type.FLOW_CONTROL)
+            self.assertEqual(pdu.flow_status, isotp.protocol.PDU.FlowStatus.ContinueToSend)
+            self.assertEqual(pdu.blocksize, 0)
+            self.assertEqual(pdu.stmin, i)
+            self.assertEqual(pdu.stmin_sec, i/1000)
 
         for i in range(0xF1, 0xF9): # Microsecs
-            frame = self.make_pdu([0x30, 0x00, i])
-            self.assertEqual(frame.type, isotp.protocol.PDU.Type.FLOW_CONTROL)
-            self.assertEqual(frame.flow_status, isotp.protocol.PDU.FlowStatus.ContinueToSend)
-            self.assertEqual(frame.blocksize, 0)
-            self.assertEqual(frame.stmin, i)
-            self.assertEqual(frame.stmin_sec, (i - 0xF0)/10000)
+            pdu = self.make_pdu([0x30, 0x00, i])
+            self.assertEqual(pdu.type, isotp.protocol.PDU.Type.FLOW_CONTROL)
+            self.assertEqual(pdu.flow_status, isotp.protocol.PDU.FlowStatus.ContinueToSend)
+            self.assertEqual(pdu.blocksize, 0)
+            self.assertEqual(pdu.stmin, i)
+            self.assertEqual(pdu.stmin_sec, (i - 0xF0)/10000)
 
         for i in range(0x80, 0xF1):     # Reserved StMin
             with self.assertRaises(ValueError):
-                frame = self.make_pdu([0x30, 0x00, i])
+                pdu = self.make_pdu([0x30, 0x00, i])
 
         for i in range(0xFA, 0x100):    # Reserved StMin
             with self.assertRaises(ValueError):
-                frame = self.make_pdu([0x30, 0x00, i])
+                pdu = self.make_pdu([0x30, 0x00, i])

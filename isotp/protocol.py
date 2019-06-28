@@ -55,7 +55,7 @@ class PDU:
 		Wait = 1
 		Overflow = 2
 
-	def __init__(self, msg = None, start_of_data=0, datalen=8):
+	def __init__(self, msg = None, start_of_data=0):
 		
 		self.type = None
 		self.length = None
@@ -69,9 +69,14 @@ class PDU:
 		if msg is None:
 			return
 
+		if len(msg.data) < start_of_data:
+			raise ValueError("Received message is miggin data according to prefix size") 
+
+		msg_data = msg.data[start_of_data:]
+		datalen = len(msg_data)
 		# Guarantee at least presence of byte #1
-		if len(msg.data)>start_of_data:
-			hnb =  (msg.data[start_of_data] >> 4) & 0xF
+		if datalen > 0:
+			hnb =  (msg_data[0] >> 4) & 0xF
 			if hnb > 3:
 				raise ValueError('Received message with unknown frame type %d' % hnb)
 			self.type = int(hnb)
@@ -79,73 +84,54 @@ class PDU:
 			raise ValueError('Empty CAN frame')
 
 		if self.type == self.Type.SINGLE_FRAME:
-
-			length_placeholder = int(msg.data[start_of_data]) & 0xF
+			length_placeholder = int(msg_data[0]) & 0xF
 			if length_placeholder != 0:
 				self.length = length_placeholder
-
-				if len(msg.data) < self.length + 1:
-					raise ValueError('Single Frame length is bigger than CAN frame length')
-
-				if self.length > datalen-1-start_of_data:
-					raise ValueError("Received Single Frame with invalid length of %d" % self.length)
-				self.data = msg.data[1+start_of_data:][:self.length]
+				if self.length > datalen-1:
+					raise ValueError("Received Single Frame with length of %d while there is room for %d bytes of data with this configuration" % (self.length, datalen-1))
+				self.data = msg_data[1:][:self.length]
 			
 			else:	# CAN FD
-				if len(msg.data) < start_of_data+2:
-					raise ValueError("Single Frame with escape sequence must contains at least 2 bytes")
+				if datalen < 2:
+					raise ValueError('Single frame with escape sequence must be at least %d bytes long with this configuration' % (2+start_of_data))
 
-				self.length = int(msg.data[start_of_data+1])
-
-				if len(msg.data) < self.length + 2:
-					raise ValueError('Single Frame length is bigger than CAN frame length')
-				if self.length == 0 or self.length > datalen-2-start_of_data:
-					raise ValueError("Received Single Frame with invalid length of %d" % self.length)
-
-				self.data = msg.data[2+start_of_data:][:self.length]
+				self.length = int(msg_data[1])
+				if self.length == 0:
+					raise ValueError("Received Single Frame with length of 0 bytes")
+				if self.length > datalen-2:
+					raise ValueError("Received Single Frame with length of %d while there is room for %d bytes of data with this configuration" % (self.length, datalen-2))
+				self.data = msg_data[2:][:self.length]
 
 		elif self.type == self.Type.FIRST_FRAME:
-			if len(msg.data) < 2+start_of_data:
-				raise ValueError('First frame must be at least %d bytes long' % (2+start_of_data))
+			if datalen < 2:
+				raise ValueError('First frame without escape sequence must be at least %d bytes long with this configuration' % (2+start_of_data))
 
-			length_placeholder = ((int(msg.data[start_of_data]) & 0xF) << 8) | int(msg.data[start_of_data+1])
+			length_placeholder = ((int(msg_data[0]) & 0xF) << 8) | int(msg_data[1])
 			if length_placeholder != 0:	# Frame is maximum 4095 bytes
 				self.length = length_placeholder
-				if len(msg.data) < datalen:		# We accept First frame with data that can hold in 1 CAN frame (even if the sender should've used a SingleFrame)
-					if len(msg.data) < self.length + 2 + start_of_data:		
-						raise ValueError('First frame specifies a length that is inconsistent with underlying CAN message DLC')
-	
-				self.data = msg.data[2+start_of_data:][:min(self.length, datalen-2-start_of_data)]
+				self.data = msg_data[2:][:min(self.length, datalen-2)]
+
 			else:	# Frame is larger than 4095 bytes
-				if len(msg.data) < 6:
-					raise ValueError("First frame must be at least 6 bytes long when using escape sequence")
+				if datalen < 6:
+					raise ValueError('First frame with escape sequence must be at least %d bytes long with this configuration' % (6+start_of_data))
 
-				if datalen < start_of_data+6:
-					raise ValueError("Cannot receive frame bigger than 4095 bytes with the actual ll_data_length and addressing mode")
-
-				data_temp = msg.data[start_of_data:]
-				self.length = (data_temp[2] << 24) | (data_temp[3] << 16) | (data_temp[4] << 8) | (data_temp[5] << 0)
-
-				if len(msg.data) < datalen:		# We accept First frame with data that can hold in 1 CAN frame (even if the sender should've used a SingleFrame)
-					if len(msg.data) < self.length + 6 + start_of_data:		
-						raise ValueError('First frame specifies a length that is inconsistent with underlying CAN message DLC')
-
-				self.data = msg.data[6+start_of_data:][:min(self.length, datalen-6-start_of_data)]
+				self.length = (msg_data[2] << 24) | (msg_data[3] << 16) | (msg_data[4] << 8) | (msg_data[5] << 0)
+				self.data = msg_data[6:][:min(self.length, datalen-6)]
 
 		elif self.type == self.Type.CONSECUTIVE_FRAME:
-			self.seqnum = int(msg.data[start_of_data]) & 0xF
-			self.data = msg.data[start_of_data+1:datalen]
+			self.seqnum = int(msg_data[0]) & 0xF
+			self.data = msg_data[1:]	# No need to check size as this will return empty data if overflow.
 
 		elif self.type == self.Type.FLOW_CONTROL:
-			if len(msg.data) < 3+start_of_data:
-				raise ValueError('Flow Control frame must be at least 3 bytes')
+			if datalen < 3:
+				raise ValueError('Flow Control frame must be at least %d bytes with the actual configuration' % (3+start_of_data))
 
-			self.flow_status = int(msg.data[start_of_data]) & 0xF
+			self.flow_status = int(msg_data[0]) & 0xF
 			if self.flow_status >= 3:
 				raise ValueError('Unknown flow status')
 
-			self.blocksize = int(msg.data[1+start_of_data])
-			stmin_temp = int(msg.data[2+start_of_data])
+			self.blocksize = int(msg_data[1])
+			stmin_temp = int(msg_data[2])
 
 			if stmin_temp >= 0 and stmin_temp <= 0x7F:
 				self.stmin_sec = stmin_temp / 1000
@@ -156,6 +142,7 @@ class PDU:
 				raise ValueError('Invalid StMin received in Flow Control')
 			else:
 				self.stmin = stmin_temp
+
 	@classmethod
 	def craft_flow_control_data(cls, flow_status, blocksize, stmin):
 		return bytearray([ (0x30 | (flow_status) & 0xF), blocksize&0xFF, stmin & 0xFF])
@@ -434,7 +421,7 @@ class TransportLayer:
 
 		# Decoding of message into PDU
 		try:
-			pdu = PDU(msg, start_of_data=self.address.rx_prefix_size, datalen=self.params.ll_data_length)
+			pdu = PDU(msg, start_of_data=self.address.rx_prefix_size)
 		except Exception as e:
 			self.trigger_error(isotp.errors.InvalidCanDataError("Received invalid CAN frame. %s" % (str(e))))
 			self.stop_receiving()
