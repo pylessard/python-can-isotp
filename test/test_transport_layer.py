@@ -249,6 +249,7 @@ class TestTransportLayer(TransportLayerBaseTest):
 		self.assertIsNone(self.rx_isotp_frame())
 		self.simulate_rx(data = [0x24] + payload[27:30])
 		self.stack.process()
+		self.assertIsNone(self.get_tx_can_msg()) # Do not send flow control
 		data = self.rx_isotp_frame()
 		self.assertEqual(data, bytearray(payload))
 		self.assertIsNone(self.rx_isotp_frame())
