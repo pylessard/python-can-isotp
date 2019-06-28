@@ -229,6 +229,30 @@ class TestTransportLayer(TransportLayerBaseTest):
 		self.assertEqual(data, bytearray(payload))
 		self.assertIsNone(self.rx_isotp_frame())
 
+	def test_long_multiframe_blocksize_zero(self):
+		payload_size = 30
+		payload = self.make_payload(payload_size)
+		self.stack.params.set('blocksize', 0)
+		self.stack.params.set('stmin', 5)
+		self.simulate_rx(data = [0x10, payload_size] + payload[0:6])
+		self.stack.process()
+		self.assert_sent_flow_control(stmin=5, blocksize=0)
+		self.assertIsNone(self.rx_isotp_frame())
+		self.simulate_rx(data = [0x21] + payload[6:13])
+		self.stack.process()
+		self.assertIsNone(self.rx_isotp_frame())
+		self.simulate_rx(data = [0x22] + payload[13:20])
+		self.stack.process()
+		self.assertIsNone(self.rx_isotp_frame())
+		self.simulate_rx(data = [0x23] + payload[20:27])
+		self.stack.process()
+		self.assertIsNone(self.rx_isotp_frame())
+		self.simulate_rx(data = [0x24] + payload[27:30])
+		self.stack.process()
+		data = self.rx_isotp_frame()
+		self.assertEqual(data, bytearray(payload))
+		self.assertIsNone(self.rx_isotp_frame())
+
 	def test_receive_multiframe_bad_seqnum(self):
 		payload_size = 10
 		payload = self.make_payload(payload_size)

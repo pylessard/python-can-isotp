@@ -493,7 +493,7 @@ class TransportLayer:
 						self.stop_receiving() 							# Go back to IDLE. Reset all variables and timers.
 					else:
 						self.rx_block_counter += 1
-						if self.rx_block_counter % self.params.blocksize == 0:
+						if self.params.blocksize > 0 and (self.rx_block_counter % self.params.blocksize) == 0:
 							self.request_tx_flowcontrol()  	 # Sets a flag to 1. process_tx will send it for use.
 							self.timer_rx_cf.stop() 		 # Deactivate that timer while we wait for flow control
 				else:
