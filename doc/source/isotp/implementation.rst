@@ -47,15 +47,17 @@ The transport layer ``params`` parameter must be a dictionary with the following
    The single-byte Block Size to include in the flow control message that the layer will send when receiving data.
    Represents to number of consecutive frame that a sender should send before expecting the layer to send a flow control message. 0 Means infinitely large block size (implying no flow control message)
 
-.. _param_ll_data_length:
+.. _param_tx_data_length:
 
-.. attribute:: ll_data_length
+.. attribute:: tx_data_length
    :annotation: (int)
 
    **default: 8**
 
    The number of bytes that the Link Layer (CAN layer) can transport. For CAN 2.0, this value should stay 8, for other type of link layer (such as CAN FD) any integer greater or equal to 4 can be provided.
-   This parameter will affect the size of the CAN messages.
+   This parameter will affect the size of the CAN messages being sent.
+
+   This parameter was formely ``ll_data_length`` but has been renamed to explicitly indicate that it affects transmitted messages only.
 
 .. _param_squash_stmin_requirement:
 
@@ -117,6 +119,16 @@ The transport layer ``params`` parameter must be a dictionary with the following
    The maximum frame length that the stack will accept to receive. ISO-15765-2:2016 allows frames as long as 2^32-1 (4294967295 bytes). When a FirstFrame is sent with a length longer than ``max_frame_size``, the message will be ignored, a FlowControl message with FlowStaus=2 (Overflow) will be sent and a :class:`FrameTooLongError<isotp.FrameTooLongError>` will be triggered.
 
    This parameter mainly is a protection to avoid crashes due to lack of memory (caused by an external device).
+
+.. _param_can_fd:
+
+.. attribute:: can_fd
+   :annotation: (bool)
+
+   **default: False**
+
+   Indicates that the stack is sending CAN FD frame. CAN message outputted by the transport layer will have the ``is_fd`` property set. This parameter does not need to be set in order to have a ``tx_data_length`` greater than 8; it only simplify the integration with ``python-can``.
+
 
 -----
 

@@ -70,7 +70,7 @@ class PDU:
 			return
 
 		if len(msg.data) < start_of_data:
-			raise ValueError("Received message is miggin data according to prefix size") 
+			raise ValueError("Received message is missing data according to prefix size") 
 
 		msg_data = msg.data[start_of_data:]
 		datalen = len(msg_data)
@@ -186,7 +186,7 @@ class TransportLayer:
 	LOGGER_NAME = 'isotp'
 
 	class Params:
-		__slots__ = 'stmin', 'blocksize', 'squash_stmin_requirement', 'rx_flowcontrol_timeout', 'rx_consecutive_frame_timeout', 'tx_padding', 'wftmax', 'll_data_length', 'max_frame_size', 'is_fd'
+		__slots__ = 'stmin', 'blocksize', 'squash_stmin_requirement', 'rx_flowcontrol_timeout', 'rx_consecutive_frame_timeout', 'tx_padding', 'wftmax', 'tx_data_length', 'max_frame_size', 'can_fd'
 
 		def __init__(self):
 			self.stmin 							=  0
@@ -196,11 +196,16 @@ class TransportLayer:
 			self.rx_consecutive_frame_timeout 	=  1000
 			self.tx_padding 					=  None
 			self.wftmax						    = 0
-			self.ll_data_length					= 8
+			self.tx_data_length					= 8
 			self.max_frame_size					= 4095
-			self.is_fd							= False
+			self.can_fd							= False
 
 		def set(self, key, val):
+			param_alias = {
+				'll_data_length' : 'tx_data_length'
+			}
+			if key in param_alias:
+				key = param_alias[key]
 			setattr(self, key, val)
 			self.validate()
 
@@ -246,12 +251,11 @@ class TransportLayer:
 			if self.wftmax < 0 :
 				raise ValueError('wftmax must be and integer equal or greater than 0')
 
-			if not isinstance(self.ll_data_length, int):
-				raise ValueError('ll_data_length must be an integer')
+			if not isinstance(self.tx_data_length, int):
+				raise ValueError('tx_data_length must be an integer')
 
-			if self.ll_data_length not in [8,12,16,20,24,32,48,64]:
-				raise ValueError('ll_data_length must be one of these value : 8, 12, 16, 20, 24, 32, 48, 64 ')		
-
+			if self.tx_data_length not in [8,12,16,20,24,32,48,64]:
+				raise ValueError('tx_data_length must be one of these value : 8, 12, 16, 20, 24, 32, 48, 64 ')		
 
 			if not isinstance(self.max_frame_size, int):
 				raise ValueError('max_frame_size must be an integer')
@@ -259,8 +263,8 @@ class TransportLayer:
 			if self.max_frame_size < 0:
 				raise ValueError('max_frame_size must be a positive integer')
 
-			if not isinstance(self.is_fd, bool):
-				raise ValueError('is_fd must be a boolean value')
+			if not isinstance(self.can_fd, bool):
+				raise ValueError('can_fd must be a boolean value')
 
 	class Timer:
 		def __init__(self, timeout):
@@ -557,7 +561,7 @@ class TransportLayer:
 						self.tx_buffer = bytearray(popped_object['data'])
 						size_on_first_byte = True if len(self.tx_buffer) <= 7 else False
 						size_offset = 1 if size_on_first_byte else 2
-						if len(self.tx_buffer) <= self.params.ll_data_length-size_offset-len(self.address.tx_payload_prefix):	# Single frame
+						if len(self.tx_buffer) <= self.params.tx_data_length-size_offset-len(self.address.tx_payload_prefix):	# Single frame
 							if size_on_first_byte:
 								msg_data 	= self.address.tx_payload_prefix + bytearray([0x0 | len(self.tx_buffer)]) + self.tx_buffer
 							else:
@@ -569,10 +573,10 @@ class TransportLayer:
 							encode_length_on_2_first_bytes = True if self.tx_frame_length <= 4095 else False
 
 							if encode_length_on_2_first_bytes:
-								data_length = self.params.ll_data_length-2-len(self.address.tx_payload_prefix)
+								data_length = self.params.tx_data_length-2-len(self.address.tx_payload_prefix)
 								msg_data 	= self.address.tx_payload_prefix + bytearray([0x10|((self.tx_frame_length >> 8) & 0xF), self.tx_frame_length&0xFF]) + self.tx_buffer[:data_length]
 							else:
-								data_length = self.params.ll_data_length-6-len(self.address.tx_payload_prefix)
+								data_length = self.params.tx_data_length-6-len(self.address.tx_payload_prefix)
 								msg_data 	= self.address.tx_payload_prefix + bytearray([0x10, 0x00, (self.tx_frame_length>>24) & 0xFF, (self.tx_frame_length>>16) & 0xFF, (self.tx_frame_length>>8) & 0xFF, (self.tx_frame_length>>0) & 0xFF]) + self.tx_buffer[:data_length]
 							
 							arbitration_id 	= self.address.get_tx_arbitraton_id()
@@ -588,7 +592,7 @@ class TransportLayer:
 
 		elif self.tx_state == self.TxState.TRANSMIT_CF:
 			if self.timer_tx_stmin.is_timed_out() or self.params.squash_stmin_requirement:
-				data_length = self.params.ll_data_length-1-len(self.address.tx_payload_prefix)
+				data_length = self.params.tx_data_length-1-len(self.address.tx_payload_prefix)
 				msg_data = self.address.tx_payload_prefix + bytearray([0x20 | self.tx_seqnum]) + self.tx_buffer[:data_length]
 				arbitration_id 	= self.address.get_tx_arbitraton_id()
 				output_msg = self.make_tx_msg(arbitration_id, msg_data)
@@ -620,8 +624,8 @@ class TransportLayer:
 			self.logger.warning('Used rxid overlaps the range of ID reserved by ISO-15765 (0x7F4-0x7F6 and 0x7FA-0x7FB)')
 			
 	def pad_message_data(self, msg_data):
-		if len(msg_data) < self.params.ll_data_length and self.params.tx_padding is not None:
-			msg_data.extend(bytearray([self.params.tx_padding & 0xFF] * (self.params.ll_data_length-len(msg_data))))
+		if len(msg_data) < self.params.tx_data_length and self.params.tx_padding is not None:
+			msg_data.extend(bytearray([self.params.tx_padding & 0xFF] * (self.params.tx_data_length-len(msg_data))))
 		
 	def empty_rx_buffer(self):
 		self.rx_buffer = bytearray()
@@ -650,7 +654,7 @@ class TransportLayer:
 
 	def make_tx_msg(self, arbitration_id, data):
 		self.pad_message_data(data)
-		return CanMessage(arbitration_id = arbitration_id, dlc=self.get_dlc(data), data=data, extended_id=self.address.is_29bits, is_fd=self.params.is_fd)
+		return CanMessage(arbitration_id = arbitration_id, dlc=self.get_dlc(data), data=data, extended_id=self.address.is_29bits, is_fd=self.params.can_fd)
 
 	def get_dlc(self, data):
 		if len(data) <= 8:
