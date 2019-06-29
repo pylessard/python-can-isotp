@@ -87,3 +87,25 @@ class TransportLayerBaseTest(unittest.TestCase):
         data.extend(bytearray( [0x30 | (flow_status & 0xF), blocksize, stmin]))
 
         return data
+
+    def nearest_can_fd_size(self, size):
+        if size <= 8:
+            return size
+        if size<=12: return 12
+        if size<=16: return 16
+        if size<=20: return 20
+        if size<=24: return 24
+        if size<=32: return 32
+        if size<=48: return 48
+        if size<=64: return 64
+
+    def get_canfd_dlc(self, size):
+        if size <= 8:
+            return size
+        if size==12: return 9
+        if size==16: return 10
+        if size==20: return 11
+        if size==24: return 12
+        if size==32: return 13
+        if size==48: return 14
+        if size==64: return 15

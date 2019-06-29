@@ -54,8 +54,12 @@ The transport layer ``params`` parameter must be a dictionary with the following
 
    **default: 8**
 
-   The number of bytes that the Link Layer (CAN layer) can transport. For CAN 2.0, this value should stay 8, for other type of link layer (such as CAN FD) any integer greater or equal to 4 can be provided.
-   This parameter will affect the size of the CAN messages being sent.
+   The number of bytes that the Link Layer (CAN layer) can transport. This value defines the size of the outputed messages and can be any positive integer between 4 and 255. 
+   It not only change the length of the data inside a transmitted CAN message, but will also affect the Data Length Code (DLC) of it.
+
+   - If ``tx_data_length`` is between 4 and 8, the message dlc property will be equal to ``tx_data_length``
+   - If ``tx_data_length`` is a valid CAN FD length (12, 16, 20, 24, 32, 48, 64) a CAN FD DLC will be used (respectively 9,10,11,12,13,14,15)
+   - If ``tx_data_length`` is a non-standard value, the DLC will be set to ``None``
 
    This parameter was formely ``ll_data_length`` but has been renamed to explicitly indicate that it affects transmitted messages only.
 

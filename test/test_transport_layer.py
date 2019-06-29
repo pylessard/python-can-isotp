@@ -23,7 +23,9 @@ class TestTransportLayer(TransportLayerBaseTest):
 			'squash_stmin_requirement' : False,
 			'rx_flowcontrol_timeout'  : 1000,
 			'rx_consecutive_frame_timeout' : 1000,
-			'wftmax' : 0
+			'wftmax' : 0,
+			'can_mode' : isotp.TransportLayer.Params.CanMode.STANDARD,
+			'tx_data_length' : None
 		}
 		address = isotp.Address(isotp.AddressingMode.Normal_11bits, txid=self.TXID, rxid=self.RXID)
 		self.stack = isotp.TransportLayer(txfn=self.stack_txfn, rxfn=self.stack_rxfn, address=address, error_handler = self.error_handler, params = params)
@@ -49,13 +51,6 @@ class TestTransportLayer(TransportLayerBaseTest):
 		self.stack.process()
 		self.assertEqual(self.rx_isotp_frame(), bytearray([0x11, 0x22, 0x33, 0x44, 0x55]))
 
-	def test_receive_single_sf_rxdl_16(self):
-		self.stack.params.set('ll_data_length', 16)
-		payload = self.make_payload(10)
-
-		self.simulate_rx(data = [0x00, len(payload)] + payload, dlc=10)
-		self.stack.process()
-		self.assertEqual(self.rx_isotp_frame(), bytearray(payload))
 
 	# Make sure we can receive multiple single frame
 	def test_receive_multiple_sf(self):
@@ -78,30 +73,6 @@ class TestTransportLayer(TransportLayerBaseTest):
 		self.stack.process()
 		self.assertIsNone(self.rx_isotp_frame())
 
-	# Make sure we can receive multiple single frame
-	def test_receive_multiple_sf_rxdl_16(self):
-		self.stack.params.set('ll_data_length', 16)
-		self.stack.process()
-		self.stack.process()
-
-		payload1 = self.make_payload(10)
-		payload2 = self.make_payload(12, 100)
-
-		self.simulate_rx(data = [0, len(payload1)] + payload1)
-		self.stack.process()
-		self.assertEqual(self.rx_isotp_frame(), bytearray(payload1))
-
-		self.assertIsNone(self.rx_isotp_frame())
-		self.stack.process()
-		self.assertIsNone(self.rx_isotp_frame())
-
-		self.simulate_rx(data = [0, len(payload2)] + payload2)
-		self.stack.process()
-		self.assertEqual(self.rx_isotp_frame(), bytearray(payload2))
-
-		self.assertIsNone(self.rx_isotp_frame())
-		self.stack.process()
-		self.assertIsNone(self.rx_isotp_frame())
 
 	def test_receive_multiple_sf_single_process_call(self):
 		self.simulate_rx(data = [0x05, 0x11, 0x22, 0x33, 0x44, 0x55])
@@ -188,6 +159,7 @@ class TestTransportLayer(TransportLayerBaseTest):
 
 	def test_receive_multiframe_flowcontrol_padding(self):
 		padding_byte = 0x22
+		self.stack.params.set('tx_data_length', 8)
 		self.stack.params.set('tx_padding', padding_byte)
 		self.stack.params.set('stmin', 0x02)
 		self.stack.params.set('blocksize', 0x05)
@@ -418,17 +390,6 @@ class TestTransportLayer(TransportLayerBaseTest):
 			self.assert_error_triggered(isotp.InvalidCanDataError)
 			self.clear_errors()
 
-	def test_receive_multiframe_rxdl_12bytes(self):
-		self.stack.params.set('ll_data_length', 12)
-		payload_size = 30
-		payload = self.make_payload(payload_size)
-		self.simulate_rx(data = [0x10, payload_size] + payload[0:10])
-		self.stack.process()
-		self.simulate_rx(data = [0x21] + payload[10:21])
-		self.simulate_rx(data = [0x22] + payload[21:30])
-		self.stack.process()
-		data = self.rx_isotp_frame()
-		self.assertEqual(data, bytearray(payload))
 
 
 	# ================ Transmission ====================
@@ -459,6 +420,7 @@ class TestTransportLayer(TransportLayerBaseTest):
 
 	def test_padding_single_frame(self):
 		padding_byte = 0xAA
+		self.stack.params.set('tx_data_length', 8)
 		self.stack.params.set('tx_padding', padding_byte)
 
 		for i in range(1,7):
@@ -471,24 +433,6 @@ class TestTransportLayer(TransportLayerBaseTest):
 			self.assertEqual(msg.dlc, 8)
 			self.assertEqual(msg.data, bytearray([0x0 | i] + payload + [padding_byte] * (7-i)))
 
-	def test_padding_single_frame_dl_12_bytes(self):
-		padding_byte = 0xAA
-		self.stack.params.set('tx_padding', padding_byte)
-		self.stack.params.set('ll_data_length', 12)
-		expected_dlc = 9  # According to CAN FD. 12 btyes data requires DLC=9
-
-		for i in range(1,11):
-			payload = self.make_payload(i,i)
-			self.assertIsNone(self.get_tx_can_msg())
-			self.tx_isotp_frame(payload)
-			self.stack.process()
-			msg = self.get_tx_can_msg()
-			self.assertEqual(msg.arbitration_id, self.TXID)
-			self.assertEqual(msg.dlc, expected_dlc)
-			if i <= 7: 	
-				self.assertEqual(msg.data, bytearray([0x00 | i] + payload + [padding_byte] * (11-i)))
-			else:
-				self.assertEqual(msg.data, bytearray([0x00, i] + payload + [padding_byte] * (10-i)))
 
 	def test_send_multiple_single_frame_one_process(self):
 		payloads = dict()
@@ -531,6 +475,7 @@ class TestTransportLayer(TransportLayerBaseTest):
 
 	def test_padding_multi_frame(self):
 		padding_byte = 0x55
+		self.stack.params.set('tx_data_length', 8)
 		self.stack.params.set('tx_padding', padding_byte)
 		payload = self.make_payload(10)
 		self.assertIsNone(self.get_tx_can_msg())
@@ -550,33 +495,6 @@ class TestTransportLayer(TransportLayerBaseTest):
 		self.assertEqual(msg.arbitration_id, self.TXID)
 		self.assertEqual(msg.dlc, 8)
 		self.assertEqual(msg.data, bytearray([0x21] + payload[6:10] + [padding_byte]*3))
-		self.assertIsNone(self.get_tx_can_msg())
-		self.stack.process()
-		self.assertIsNone(self.get_tx_can_msg())
-
-	def test_padding_multi_frame_dl_12_bytes(self):
-		padding_byte = 0x55
-		expected_dlc = 9  # According to CAN FD. 12 btyes data requires DLC=9
-		self.stack.params.set('tx_padding', padding_byte)
-		self.stack.params.set('ll_data_length', 12)
-		payload = self.make_payload(15)
-		self.assertIsNone(self.get_tx_can_msg())
-		self.tx_isotp_frame(payload)
-		self.stack.process()
-		msg = self.get_tx_can_msg()
-		self.assertEqual(msg.arbitration_id, self.TXID)
-		self.assertEqual(msg.dlc, expected_dlc)
-		self.assertEqual(msg.data, bytearray([0x10, 15] + payload[:10]))
-		self.assertIsNone(self.get_tx_can_msg())
-		self.stack.process()
-		self.assertIsNone(self.get_tx_can_msg())
-		self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=8)
-		self.stack.process()
-		msg = self.get_tx_can_msg()
-		self.assertIsNotNone(msg)
-		self.assertEqual(msg.arbitration_id, self.TXID)
-		self.assertEqual(msg.dlc, expected_dlc)
-		self.assertEqual(msg.data, bytearray([0x21] + payload[10:15] + [padding_byte]*6))
 		self.assertIsNone(self.get_tx_can_msg())
 		self.stack.process()
 		self.assertIsNone(self.get_tx_can_msg())
@@ -881,6 +799,7 @@ class TestTransportLayer(TransportLayerBaseTest):
 
 	#Sets blocksize to 0, never sends flow control except after first frame
 	def test_send_blocksize_zero(self):
+		self.stack.params.set('blocksize', 0)
 		payload = self.make_payload(4095)
 		self.tx_isotp_frame(payload)
 		self.stack.process()
@@ -909,6 +828,7 @@ class TestTransportLayer(TransportLayerBaseTest):
 		self.stack.process()
 		msg = self.get_tx_can_msg()
 		self.assertEqual(msg.data, bytearray([0x10, 0x00, 0x00, 0x00, 0x27, 0x10] + payload[:2]))
+		self.assertEqual(msg.dlc, len(msg.data))
 		self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=0)
 
 		seqnum = 1
@@ -918,6 +838,7 @@ class TestTransportLayer(TransportLayerBaseTest):
 			msg = self.get_tx_can_msg()
 			self.assertIsNotNone(msg)
 			self.assertEqual(msg.data, bytearray([0x20 | seqnum] + payload[n:min(n+7, payload_size)]))
+			self.assertEqual(msg.dlc, len(msg.data))
 			n+=7
 			seqnum = (seqnum+1) & 0xF
 
@@ -932,6 +853,7 @@ class TestTransportLayer(TransportLayerBaseTest):
 		self.stack.process()
 		msg = self.get_tx_can_msg()
 		self.assertEqual(msg.data, bytearray([0x10, 0x00, 0x00, 0x00, 0x10, 0x00] + payload[:2]))
+		self.assertEqual(msg.dlc, len(msg.data))
 		self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=0)
 
 		seqnum = 1
@@ -941,122 +863,170 @@ class TestTransportLayer(TransportLayerBaseTest):
 			msg = self.get_tx_can_msg()
 			self.assertIsNotNone(msg)
 			self.assertEqual(msg.data, bytearray([0x20 | seqnum] + payload[n:min(n+7, payload_size)]))
+			self.assertEqual(msg.dlc, len(msg.data))
 			n+=7
 			seqnum = (seqnum+1) & 0xF
 
 			if n > payload_size:
 				break
 
-	#Possible since 2016 version of ISO-15765-2
-	def test_send_10000_bytes_payload_dl_20(self):
-		txdl = 20
-		self.stack.params.set('ll_data_length', txdl)
-		payload_size = 10000;
-		payload = self.make_payload(payload_size)
+	# CAN FD
+	def test_transmit_single_frame_txdl_12_bytes_escape_seq(self):
+		self.stack.params.set('can_mode', isotp.TransportLayer.Params.CanMode.CAN_FD)
+		self.stack.params.set('tx_data_length', 12)
+		payload = self.make_payload(11)
 		self.tx_isotp_frame(payload)
 		self.stack.process()
 		msg = self.get_tx_can_msg()
-		self.assertEqual(msg.data, bytearray([0x10, 0x00, 0x00, 0x00, 0x27, 0x10] + payload[:txdl-6]))
-		self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=0)
+		self.assertEqual(msg.data, bytearray([0x00 | len(payload)] + payload))
+		self.assertEqual(msg.dlc, 9 )
 
-		seqnum = 1
-		n=txdl-6
-		self.stack.process()
-		while True:
-			msg = self.get_tx_can_msg()
-			self.assertIsNotNone(msg)
-			self.assertEqual(msg.data, bytearray([0x20 | seqnum] + payload[n:min(n+txdl-1, payload_size)]))
-			n+=txdl-1
-			seqnum = (seqnum+1) & 0xF
-
-			if n > payload_size:
-				break
-
-	def test_transmit_single_sf_txdl_12_bytes(self):
-		self.stack.params.set('ll_data_length', 12)
+	def test_transmit_single_frame_txdl_12_bytes_no_escape_seq_default_padding(self):
+		self.stack.params.set('can_mode', isotp.TransportLayer.Params.CanMode.CAN_FD)
+		self.stack.params.set('tx_data_length', 12)
 		payload = self.make_payload(10)
 		self.tx_isotp_frame(payload)
 		self.stack.process()
 		msg = self.get_tx_can_msg()
-		self.assertEqual(msg.data, bytearray([0x00, len(payload)] + payload))
-		self.assertEqual(msg.dlc, len(payload) + 2 )
+		self.assertEqual(msg.data, bytearray([0x0 | len(payload)] + payload + [0xCC]))	# Default padding byte
+		self.assertEqual(msg.dlc, 9 )
 
-	def test_transmit_single_sf_txdl_12_bytes(self):
-		self.stack.params.set('ll_data_length', 12)
-		payload = self.make_payload(7)	# Message fits in 8 bytes, process like normal CAN message 
+	def test_transmit_single_frame_txdl_16_bytes_no_escape_seq_padding(self):
+		self.stack.params.set('can_mode', isotp.TransportLayer.Params.CanMode.CAN_FD)
+		self.stack.params.set('tx_data_length', 16)
+		self.stack.params.set('tx_padding', 0xAA)
+		payload = self.make_payload(10)
 		self.tx_isotp_frame(payload)
 		self.stack.process()
 		msg = self.get_tx_can_msg()
-		self.assertEqual(msg.data, bytearray([0x0 | len(payload)] + payload))
-		self.assertEqual(msg.dlc, len(payload) +1 )
+		self.assertEqual(msg.data, bytearray([0x0 | len(payload)] + payload + [0xAA] * 5))	
+		self.assertEqual(msg.dlc, 10 )
 
-	def test_transmit_multiple_sf_txdl_12_bytes(self):
-		self.stack.params.set('ll_data_length', 12)
-		payload1 = self.make_payload(10)
-		payload2 = self.make_payload(9)
-
-		expected_dlc = 9  # According to CAN FD. 12 btyes data requires DLC=9
-		
-		self.tx_isotp_frame(payload1)
-		self.tx_isotp_frame(payload2)
+	def test_transmit_single_frame_txdl_64_bytes_escape_seq_default_padding(self):
+		self.stack.params.set('can_mode', isotp.TransportLayer.Params.CanMode.CAN_FD)
+		self.stack.params.set('tx_data_length', 64)
+		payload = self.make_payload(55)
+		self.tx_isotp_frame(payload)
 		self.stack.process()
 		msg = self.get_tx_can_msg()
-		self.assertEqual(msg.data, bytearray([0x00, len(payload1)] + payload1))
-		self.assertEqual(msg.dlc, expected_dlc)
+		self.assertEqual(msg.data, bytearray([0x00, len(payload)] + payload + [0xCC] * (64-len(payload)-2)))	
+		self.assertEqual(msg.dlc, 15 )
 
-		msg = self.get_tx_can_msg()
-		self.assertEqual(msg.data, bytearray([0x00, len(payload2)] + payload2))
-		self.assertEqual(msg.dlc, expected_dlc)
-
-		self.assertIsNone(self.get_tx_can_msg())
-
-	def test_transmit_sf_size_limit_canfd(self):
-		txdl=16
-		self.stack.params.set('ll_data_length', txdl)
-
-		for i in range(1, txdl-2):
-			payload = self.make_payload(i,i)
+	def test_can_fd_singleframe_tx_dl(self):
+		self.stack.params.set('can_mode', isotp.TransportLayer.Params.CanMode.CAN_FD)
+		tx_dl_list = [4,5,6,7,8,12,16,20,24,32,48,64]
+		dlc_map = {4:4, 5:5, 6:6, 7:7, 8:8, 12:9, 16:10, 20:11, 24:12, 32:13, 48:14, 64:15}
+		for tx_dl in tx_dl_list:
+			error_details = "tx_dl = %d" % tx_dl
+			self.stack.params.set('tx_data_length', tx_dl)
+			prefix_length = 1 if tx_dl-1 <= 15 else 2
+			payload = self.make_payload(tx_dl-prefix_length)
+			prefix = [0x0 | len(payload)] if tx_dl-1 <= 15 else [0x0, len(payload)]
 			self.tx_isotp_frame(payload)
 			self.stack.process()
 			msg = self.get_tx_can_msg()
-			self.assertIsNotNone(msg, "i=%d"%i)
-			self.assertEqual( (msg.data[0] & 0xF0) >> 4, 0, binascii.hexlify(msg.data))
-			self.assertIsNone(self.get_tx_can_msg())
+			self.assertEqual(msg.data, bytearray(prefix+payload), error_details)
+			self.assertEqual(msg.dlc,  dlc_map[tx_dl], error_details)
 
-		self.tx_isotp_frame(self.make_payload(txdl-1))
-		self.stack.process()
-		msg = self.get_tx_can_msg()
-		self.assertEqual( (msg.data[0] & 0xF0) >> 4, 1, binascii.hexlify(msg.data))
-
-	def test_transmit_multiframe_txdl_12_bytes(self):
-		self.stack.params.set('ll_data_length', 12)
-		payload = self.make_payload(30)
+	def test_transmit_single_frame_can_fd_auto_datalength_48(self):
+		self.stack.params.set('can_mode', isotp.TransportLayer.Params.CanMode.CAN_FD)
+		payload = self.make_payload(43)
 		self.tx_isotp_frame(payload)
 		self.stack.process()
 		msg = self.get_tx_can_msg()
-		self.assertEqual(msg.data, bytearray([0x10, 30] + payload[:10]))
-		self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=0)
+		self.assertEqual(msg.data, bytearray([0x00, len(payload)] + payload + [0xCC]*3))
+		self.assertEqual(msg.dlc, 14 )
+
+	def test_transmit_single_frame_can_fd_auto_datalength_32(self):
+		self.stack.params.set('can_mode', isotp.TransportLayer.Params.CanMode.CAN_FD)
+		payload = self.make_payload(25)
+		self.tx_isotp_frame(payload)
 		self.stack.process()
 		msg = self.get_tx_can_msg()
-		self.assertEqual(msg.data, bytearray([0x21] + payload[10:21]))
-		msg = self.get_tx_can_msg()
-		self.assertEqual(msg.data, bytearray([0x22] + payload[21:30]))
+		self.assertEqual(msg.data, bytearray([0x00, len(payload)] + payload + [0xCC]*5))
+		self.assertEqual(msg.dlc, 13 )
 
-#	def test_transmit_multiframe_txdl_5_bytes(self):
-#		self.stack.params.set('ll_data_length', 5)
-#		payload = self.make_payload(15)
-#		self.tx_isotp_frame(payload)
-#		self.stack.process()
-#		msg = self.get_tx_can_msg()
-#		self.assertEqual(msg.data, bytearray([0x10, 15] + payload[:3]))
-#		self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=0)
-#		self.stack.process()
-#		msg = self.get_tx_can_msg()
-#		self.assertEqual(msg.data, bytearray([0x21] + payload[3:7]))
-#		msg = self.get_tx_can_msg()
-#		self.assertEqual(msg.data, bytearray([0x22] + payload[7:11]))
-#		msg = self.get_tx_can_msg()
-#		self.assertEqual(msg.data, bytearray([0x23] + payload[11:15]))
+	def test_transmit_single_frame_can_fd_auto_datalength_64_no_padding(self):
+		self.stack.params.set('can_mode', isotp.TransportLayer.Params.CanMode.CAN_FD)
+		payload = self.make_payload(62)
+		self.tx_isotp_frame(payload)
+		self.stack.process()
+		msg = self.get_tx_can_msg()
+		self.assertEqual(msg.data, bytearray([0x00, len(payload)] + payload))
+		self.assertEqual(msg.dlc, 15 )
+
+	# In this test we send a CAN FD multiframe without specifying tx_data_length so the stack decide the message size and takes the most efficent choice.
+	def _test_send_can_fd_multiframe_N_bytes_payload_no_txd(self, payload_size):
+		self.stack.params.set('can_mode', isotp.TransportLayer.Params.CanMode.CAN_FD)
+		self.stack.params.set('tx_data_length', None)
+		self.stack.params.set('tx_padding', 0x99)
+
+		error_detail = "Payload size = %d" % payload_size 	# We append the siz eof the payload to error message for debug purpose.
+
+		payload = self.make_payload(payload_size)
+		self.tx_isotp_frame(payload)
+		self.stack.process()
+		msg = self.get_tx_can_msg()
+
+		
+		if payload_size > 0xFFF:	# Escape sequence needed
+			len_bytes = [(payload_size >> 24)&0xFF, (payload_size >> 16)&0xFF, (payload_size >> 8)&0xFF, (payload_size >> 0)&0xFF]
+			data = bytearray([0x10, 0x00] + len_bytes + payload[:64-6])
+			n=64-6
+		else:						# Escape seuqnece not needed
+			data = bytearray([0x10 | (payload_size >> 8) & 0xFF, payload_size & 0xFF] + payload[:64-2])
+			n = 64-2
+		self.assertEqual(msg.data, data, error_detail)
+		self.assertEqual(msg.dlc, 15, error_detail)
+		self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=0)
+
+		# Start sending Consecutive Frames
+		seqnum = 1
+		self.stack.process()
+		while True:
+			msg = self.get_tx_can_msg()
+			self.assertIsNotNone(msg, error_detail)
+			if n+64-1 > payload_size:
+				last_msg_size = self.nearest_can_fd_size(payload_size-n+1)	# The target msg.data size
+				dlc = self.get_canfd_dlc(last_msg_size)
+				data = bytearray([0x20 | seqnum] + payload[n:payload_size] + [0x99] * (last_msg_size +n -payload_size-1) )
+				n+= (payload_size-n)
+			else:
+				data = bytearray([0x20 | seqnum] + payload[n:n+64-1])
+				n+=64-1
+				dlc = 15
+			self.assertEqual(msg.data,  data, error_detail)
+			self.assertIn(len(msg.data), [1,2,3,4,5,6,7,8,12,16,20,24,32,48,64], error_detail)	# Double check data size
+			self.assertEqual(msg.dlc, dlc, error_detail)
+			seqnum = (seqnum+1) & 0xF
+
+			if n >= payload_size:
+				break
+
+	def test_send_10000_bytes_payload_no_txdl_can_fd(self):
+		self._test_send_can_fd_multiframe_N_bytes_payload_no_txd(10000)
+
+	# Give payload size make sure that the last can message is next to DLC edge (8,12,16,20,24,32,48,64)
+	def test_canfd_multiframe_autosize_boundary(self):
+		payload_sizes = [63,64,65,123,124,125,126,134,135,136,137, 140,141, 144,145, 148,149, 156,157, 173,174, 188, 189, 0x7ff+1, 0x7ff+31, 0x7ff+32]
+		for size in payload_sizes:
+			self._test_send_can_fd_multiframe_N_bytes_payload_no_txd(size)
+
+
+
+	# NON STANDARD CAN
+#	def test_non_standard_tx_dl(self):
+#		tx_dl_list = [11,25,53,0xFF]
+#		self.stack.params.set('can_mode', TransportLayer.Params.CanMode.NON_STANDARD)
+#		for tx_dl in tx_dl_list:
+#			self.stack.params.set('tx_data_length', txdl)
+#			prefix = [0x0 | len(payload)] if tx_dl <= 15 else [0x0, len(payload)]
+#			payload = self.make_payload(tx_dl-len(prefix))
+#			self.tx_isotp_frame(payload)
+#			self.stack.process()
+#			msg = self.get_tx_can_msg()
+#			self.assertEqual(msg.data, bytearray(prefix + payload ))
+#			self.assertEqual(msg.dlc,  None)
 
 
 	# =============== Parameters ===========
@@ -1071,7 +1041,7 @@ class TestTransportLayer(TransportLayerBaseTest):
 			'squash_stmin_requirement' : False,
 			'rx_flowcontrol_timeout'  : 1000,
 			'rx_consecutive_frame_timeout' : 1000,
-			'll_data_length' : 8,
+			'tx_data_length' : 8,
 			'max_frame_size' : 4095
 		}
 
@@ -1131,21 +1101,51 @@ class TestTransportLayer(TransportLayerBaseTest):
 		params['rx_consecutive_frame_timeout'] = 1000
 
 		with self.assertRaises(ValueError):
-			params['ll_data_length'] = -1
+			params['tx_data_length'] = -1
 			self.create_layer(params)
 
 		with self.assertRaises(ValueError):
-			params['ll_data_length'] = 'string'
+			params['tx_data_length'] = 0x100
 			self.create_layer(params)
 
 		with self.assertRaises(ValueError):
-			params['ll_data_length'] = 2
+			params['tx_data_length'] = 'string'
 			self.create_layer(params)
 
 		with self.assertRaises(ValueError):
-			params['ll_data_length'] = 10
+			params['tx_data_length'] = 3
 			self.create_layer(params)
-		params['ll_data_length'] = 8
+
+		params['can_mode'] = isotp.TransportLayer.Params.CanMode.STANDARD
+		params['tx_data_length'] = 4
+		self.create_layer(params)
+		params['tx_data_length'] = 8
+		self.create_layer(params)
+		with self.assertRaises(ValueError):
+			params['tx_data_length'] = 9
+			self.create_layer(params)
+
+		params['can_mode'] = isotp.TransportLayer.Params.CanMode.CAN_FD
+		tx_dls = [4,5,6,7,8,12,16,20,24,32,48,64]
+		for tx_dl in tx_dls:
+			params['tx_data_length'] = tx_dl
+			self.create_layer(params)
+
+		with self.assertRaises(ValueError):
+			params['tx_data_length'] = 9
+			self.create_layer(params)
+
+		with self.assertRaises(ValueError):
+			params['tx_data_length'] = 63
+			self.create_layer(params)
+
+		params['can_mode'] = isotp.TransportLayer.Params.CanMode.NON_STANDARD
+		for tx_dl in range(4,255):
+			params['tx_data_length'] = tx_dl
+			self.create_layer(params)
+
+		params['can_mode'] = isotp.TransportLayer.Params.CanMode.STANDARD
+		params['tx_data_length'] = 8
 
 		with self.assertRaises(ValueError):
 			params['max_frame_size'] = -1
