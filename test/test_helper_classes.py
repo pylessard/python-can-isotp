@@ -56,11 +56,15 @@ class TestPDUDecoding(unittest.TestCase):
         # Valid single frames without escape sequence
         for length in range(1, 0xF):
             payload = self.make_payload(length)
-            pdu = self.make_pdu([length&0xF] + payload)
+            data= [length&0xF] + payload
+            pdu = self.make_pdu(data)
             self.assertEqual(pdu.type, isotp.protocol.PDU.Type.SINGLE_FRAME)
             self.assertEqual(pdu.data, bytearray(payload))
             self.assertEqual(pdu.length, len(pdu.data))
             self.assertEqual(pdu.length, length)
+            self.assertFalse(pdu.escape_sequence)
+            self.assertEqual(pdu.can_dl, len(data))
+            self.assertEqual(pdu.rx_dl, max(8,pdu.can_dl))
 
         for length in range(1, 0xF):
             payload = self.make_payload(length)
@@ -70,15 +74,22 @@ class TestPDUDecoding(unittest.TestCase):
             self.assertEqual(pdu.data, bytearray(payload))
             self.assertEqual(pdu.length, len(pdu.data))
             self.assertEqual(pdu.length, length)
+            self.assertFalse(pdu.escape_sequence)
+            self.assertEqual(pdu.can_dl, len(data))
+            self.assertEqual(pdu.rx_dl, max(8,pdu.can_dl))
 
         # Valid single frames without escape sequence and extra bytes that are ignored
         for length in range(1, 0xF):  
             payload = self.make_payload(length)
-            pdu = self.make_pdu([length&0xF] + payload + [0xAA]*10)
+            data = [length&0xF] + payload + [0xAA]*10
+            pdu = self.make_pdu(data)
             self.assertEqual(pdu.type, isotp.protocol.PDU.Type.SINGLE_FRAME)
             self.assertEqual(pdu.data, bytearray(payload))
             self.assertEqual(pdu.length, len(pdu.data))
             self.assertEqual(pdu.length, length)
+            self.assertFalse(pdu.escape_sequence)
+            self.assertEqual(pdu.can_dl, len(data))
+            self.assertEqual(pdu.rx_dl, max(8,pdu.can_dl))
 
         for length in range(1, 0xF):  
             payload = self.make_payload(length)
@@ -88,6 +99,9 @@ class TestPDUDecoding(unittest.TestCase):
             self.assertEqual(pdu.data, bytearray(payload))
             self.assertEqual(pdu.length, len(pdu.data))
             self.assertEqual(pdu.length, length)
+            self.assertFalse(pdu.escape_sequence)
+            self.assertEqual(pdu.can_dl, len(data))
+            self.assertEqual(pdu.rx_dl, max(8,pdu.can_dl))
 
 
     def test_decode_single_frame_escape_sequence(self):
@@ -114,11 +128,14 @@ class TestPDUDecoding(unittest.TestCase):
         # Valid single frames without escape sequence
         for length in range(1, 0xFF):  
             payload = self.make_payload(length)
-            pdu = self.make_pdu([0, length] + payload)
+            data = [0, length] + payload
+            pdu = self.make_pdu(data)
             self.assertEqual(pdu.type, isotp.protocol.PDU.Type.SINGLE_FRAME)
             self.assertEqual(pdu.data, bytearray(payload))
             self.assertEqual(pdu.length, len(pdu.data))
             self.assertEqual(pdu.length, length)
+            self.assertEqual(pdu.can_dl, len(data))
+            self.assertEqual(pdu.rx_dl, max(8,pdu.can_dl))
 
         for length in range(1, 0xFF):  
             payload = self.make_payload(length)
@@ -128,15 +145,22 @@ class TestPDUDecoding(unittest.TestCase):
             self.assertEqual(pdu.data, bytearray(payload))
             self.assertEqual(pdu.length, len(pdu.data))
             self.assertEqual(pdu.length, length)
+            self.assertTrue(pdu.escape_sequence)
+            self.assertEqual(pdu.can_dl, len(data))
+            self.assertEqual(pdu.rx_dl, max(8,pdu.can_dl))
 
         # Valid single frames without escape sequence and extra bytes that are ignored
         for length in range(1, 0xFF):  
             payload = self.make_payload(length)
-            pdu = self.make_pdu([0, length] + payload + [0xAA]*10)
+            data = [0, length] + payload + [0xAA]*10
+            pdu = self.make_pdu(data)
             self.assertEqual(pdu.type, isotp.protocol.PDU.Type.SINGLE_FRAME)
             self.assertEqual(pdu.data, bytearray(payload))
             self.assertEqual(pdu.length, len(pdu.data))
             self.assertEqual(pdu.length, length)
+            self.assertTrue(pdu.escape_sequence)
+            self.assertEqual(pdu.can_dl, len(data))
+            self.assertEqual(pdu.rx_dl, max(8,pdu.can_dl))
 
         for length in range(1, 0xFF):  
             payload = self.make_payload(length)
@@ -146,6 +170,9 @@ class TestPDUDecoding(unittest.TestCase):
             self.assertEqual(pdu.data, bytearray(payload))
             self.assertEqual(pdu.length, len(pdu.data))
             self.assertEqual(pdu.length, length)
+            self.assertTrue(pdu.escape_sequence)
+            self.assertEqual(pdu.can_dl, len(data))
+            self.assertEqual(pdu.rx_dl, max(8,pdu.can_dl))
 
     def test_decode_first_frame_no_escape_sequence(self):
         with self.assertRaises(ValueError): # Empty payload

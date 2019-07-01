@@ -60,3 +60,18 @@ class FrameTooLongError(IsoTpError):
     Happens when a FirstFrame with a length (FF_DL) longer than :ref:`max_frame_size<param_max_frame_size>` is received. 
     """
     pass
+class ChangingInvalidRxDlError(IsoTpError):
+    """
+    Happens when a ConsecutiveFrame is received with a length smaller than ``RX_DL`` (size fo first frame) without being the last message of the IsoTP frame.
+    """
+    pass
+class MissingEscapeSequenceError(IsoTpError):
+    """
+    Happens when a SingleFrame with length (CAN_DL) greater than 8 bytes is received and the length of the payload (SF_DL) is encoded in the first byte, which is forbidden by ISO-15765-2
+    """
+    pass
+class InvalidCanFdFirstFrameRXDL(IsoTpError):
+    """
+    Happens when a FirstFrame is received with missing data; In otherwords when CAN_DL is smaller than the deduced RX_DL. The sender did not optimized the capacity usage of the CAN message.
+    """
+    pass

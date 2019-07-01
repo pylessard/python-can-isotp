@@ -54,14 +54,12 @@ The transport layer ``params`` parameter must be a dictionary with the following
 
    **default: 8**
 
-   The number of bytes that the Link Layer (CAN layer) can transport. This value defines the size of the outputed messages and can be any positive integer between 4 and 255. 
-   It not only change the length of the data inside a transmitted CAN message, but will also affect the Data Length Code (DLC) of it.
+   The maximum number of bytes that the Link Layer (CAN layer) can transport. In other words, the biggest number of data bytes possible in a single CAN message.
+   Valid values are : 8, 12, 16, 20, 24, 32, 48, 64.
+   
+   When a value greater than 8 is used, CanMessage transmitted by the TransportLayer will have the property ``is_fd`` set to ``True``
 
-   - If ``tx_data_length`` is between 4 and 8, the message dlc property will be equal to ``tx_data_length``
-   - If ``tx_data_length`` is a valid CAN FD length (12, 16, 20, 24, 32, 48, 64) a CAN FD DLC will be used (respectively 9,10,11,12,13,14,15)
-   - If ``tx_data_length`` is a non-standard value, the DLC will be set to ``None``
-
-   This parameter was formely ``ll_data_length`` but has been renamed to explicitly indicate that it affects transmitted messages only.
+   This parameter was formely named ``ll_data_length`` but has been renamed to explicitly indicate that it affects transmitted messages only.
 
 .. _param_squash_stmin_requirement:
 
@@ -97,7 +95,7 @@ The transport layer ``params`` parameter must be a dictionary with the following
 .. attribute:: tx_padding
    :annotation: (int or None)
 
-   **default: 0**
+   **default: None**
 
    When not ``None`` represents the byte used for padding messages sent. No padding applied when ``None``
 
@@ -123,16 +121,6 @@ The transport layer ``params`` parameter must be a dictionary with the following
    The maximum frame length that the stack will accept to receive. ISO-15765-2:2016 allows frames as long as 2^32-1 (4294967295 bytes). When a FirstFrame is sent with a length longer than ``max_frame_size``, the message will be ignored, a FlowControl message with FlowStaus=2 (Overflow) will be sent and a :class:`FrameTooLongError<isotp.FrameTooLongError>` will be triggered.
 
    This parameter mainly is a protection to avoid crashes due to lack of memory (caused by an external device).
-
-.. _param_can_fd:
-
-.. attribute:: can_fd
-   :annotation: (bool)
-
-   **default: False**
-
-   Indicates that the stack is sending CAN FD frame. CAN message outputted by the transport layer will have the ``is_fd`` property set. This parameter does not need to be set in order to have a ``tx_data_length`` greater than 8; it only simplify the integration with ``python-can``.
-
 
 -----
 

@@ -42,7 +42,7 @@ class PDU:
 	:param msg: The CAN message
 	:type msg: `isotp.protocol.CanMessage`
 	"""
-	__slots__ = 'type', 'length', 'data', 'blocksize', 'stmin', 'stmin_sec', 'seqnum', 'flow_status'
+	__slots__ = 'type', 'length', 'data', 'blocksize', 'stmin', 'stmin_sec', 'seqnum', 'flow_status', 'rx_dl', 'escape_sequence', 'can_dl'
 
 	class Type:
 		SINGLE_FRAME = 0
@@ -65,6 +65,9 @@ class PDU:
 		self.stmin_sec = None
 		self.seqnum = None
 		self.flow_status = None
+		self.rx_dl = None
+		self.escape_sequence = False
+		self.can_dl = None
 
 		if msg is None:
 			return
@@ -72,6 +75,8 @@ class PDU:
 		if len(msg.data) < start_of_data:
 			raise ValueError("Received message is missing data according to prefix size") 
 
+		self.can_dl = len( msg.data)
+		self.rx_dl = max(8, self.can_dl)
 		msg_data = msg.data[start_of_data:]
 		datalen = len(msg_data)
 		# Guarantee at least presence of byte #1
@@ -91,10 +96,11 @@ class PDU:
 					raise ValueError("Received Single Frame with length of %d while there is room for %d bytes of data with this configuration" % (self.length, datalen-1))
 				self.data = msg_data[1:][:self.length]
 			
-			else:	# CAN FD
+			else:	# Escape seuqence
 				if datalen < 2:
 					raise ValueError('Single frame with escape sequence must be at least %d bytes long with this configuration' % (2+start_of_data))
 
+				self.escape_sequence = True
 				self.length = int(msg_data[1])
 				if self.length == 0:
 					raise ValueError("Received Single Frame with length of 0 bytes")
@@ -114,7 +120,7 @@ class PDU:
 			else:	# Frame is larger than 4095 bytes
 				if datalen < 6:
 					raise ValueError('First frame with escape sequence must be at least %d bytes long with this configuration' % (6+start_of_data))
-
+				self.escape_sequence = True
 				self.length = (msg_data[2] << 24) | (msg_data[3] << 16) | (msg_data[4] << 8) | (msg_data[5] << 0)
 				self.data = msg_data[6:][:min(self.length, datalen-6)]
 
@@ -186,12 +192,7 @@ class TransportLayer:
 	LOGGER_NAME = 'isotp'
 
 	class Params:
-		__slots__ = 'stmin', 'blocksize', 'squash_stmin_requirement', 'rx_flowcontrol_timeout', 'rx_consecutive_frame_timeout', 'tx_padding', 'wftmax', 'tx_data_length', 'max_frame_size', 'can_mode'
-
-		class CanMode:
-			STANDARD = 'standard'
-			CAN_FD = 'can_fd'
-			NON_STANDARD = 'non_standard'
+		__slots__ = 'stmin', 'blocksize', 'squash_stmin_requirement', 'rx_flowcontrol_timeout', 'rx_consecutive_frame_timeout', 'tx_padding', 'wftmax', 'tx_data_length', 'max_frame_size'
 
 		def __init__(self):
 			self.stmin 							=  0
@@ -199,11 +200,10 @@ class TransportLayer:
 			self.squash_stmin_requirement 		=  False
 			self.rx_flowcontrol_timeout 		=  1000
 			self.rx_consecutive_frame_timeout 	=  1000
-			self.tx_padding 					=  0xCC
+			self.tx_padding 					=  None
 			self.wftmax						    = 0
-			self.tx_data_length					= None
+			self.tx_data_length					= 8
 			self.max_frame_size					= 4095
-			self.can_mode						= self.CanMode.STANDARD
 
 		def set(self, key, val, validate=True):
 			param_alias = {
@@ -229,11 +229,12 @@ class TransportLayer:
 			if self.rx_consecutive_frame_timeout < 0:
 				raise ValueError('rx_consecutive_frame_timeout must be positive integer')
 			
-			if not isinstance(self.tx_padding, int):
-				raise ValueError('tx_padding must be an integer')
+			if self.tx_padding is not None:
+				if not isinstance(self.tx_padding, int):
+					raise ValueError('tx_padding must be an integer')
 			
-			if self.tx_padding < 0 or self.tx_padding > 0xFF:
-				raise ValueError('tx_padding must be an integer between 0x00 and 0xFF')
+				if self.tx_padding < 0 or self.tx_padding > 0xFF:
+					raise ValueError('tx_padding must be an integer between 0x00 and 0xFF')
 
 			if not isinstance(self.stmin, int):
 				raise ValueError('stmin must be an integer')
@@ -256,23 +257,11 @@ class TransportLayer:
 			if self.wftmax < 0 :
 				raise ValueError('wftmax must be and integer equal or greater than 0')
 
-			if self.can_mode not in [self.CanMode.STANDARD, self.CanMode.CAN_FD, self.CanMode.NON_STANDARD]:
-				raise ValueError('can_mode must be a one of these value : CanMode.STANDARD, CanMode.CAN_FD, CanMode.NON_STANDARD')
+			if not isinstance(self.tx_data_length, int) :
+				raise ValueError('tx_data_length must be an integer')
 
-			if self.tx_data_length is not None:
-				if not isinstance(self.tx_data_length, int) :
-					raise ValueError('tx_data_length must be an integer')
-
-				if self.tx_data_length < 4 or self.tx_data_length > 0xFF:
-					raise ValueError('tx_data_length must be an integer between 4 and 255')	
-				
-				if self.can_mode == self.CanMode.STANDARD:
-					if self.tx_data_length > 8 or self.tx_data_length < 4:
-						raise ValueError('In Standard CAN mode, tx_data_length can only range from 4 to 8')
-
-				if self.can_mode == self.CanMode.CAN_FD:
-					if self.tx_data_length not in [4,5,6,7,8,12,16,20,24,32,48,64]:
-						raise ValueError('In CAN FD mode, tx_data_length must be one of these value : 4,5,6,7,8,12,16,20,24,32,48,64 ')	
+			if self.tx_data_length not in [8,12,16,20,24,32,48,64]:
+				raise ValueError('tx_data_length must be one of these value : 8, 12, 16, 20, 24, 32, 48, 64 ')	
 
 			if not isinstance(self.max_frame_size, int):
 				raise ValueError('max_frame_size must be an integer')
@@ -361,6 +350,7 @@ class TransportLayer:
 		self.timer_rx_cf 	= self.Timer(timeout = float(self.params.rx_consecutive_frame_timeout) / 1000)
 
 		self.error_handler = error_handler
+		self.actual_rxdl   = None	
 
 
 	
@@ -461,17 +451,21 @@ class TransportLayer:
 					self.start_rx_cf_timer()
 			return # Nothing else to be done with FlowControl. Return and wait for next message
 
+		if pdu.type == PDU.Type.SINGLE_FRAME:
+			if pdu.can_dl > 8 and pdu.escape_sequence == False:
+				self.trigger_error(isotp.errors.MissingEscapeSequenceError('For SingleFrames conveyed on a CAN message with data length (CAN_DL) > 8, length should be encoded on byte #1 and byte #0 should be 0x00'))
+				return
+
 		# Process the state machine
 		if self.rx_state == self.RxState.IDLE:
 			self.rx_frame_length = 0
 			self.timer_rx_cf.stop()
-
 			if pdu.type == PDU.Type.SINGLE_FRAME:
 				if pdu.data is not None:
 					self.rx_queue.put(copy(pdu.data))
 
 			elif pdu.type == PDU.Type.FIRST_FRAME:
-				self.start_reception_after_first_frame(pdu)
+				self.start_reception_after_first_frame_if_valid(pdu)
 			elif pdu.type == PDU.Type.CONSECUTIVE_FRAME:
 				self.trigger_error(isotp.errors.UnexpectedConsecutiveFrameError('Received a ConsecutiveFrame while reception was idle. Ignoring'))
 				
@@ -484,16 +478,19 @@ class TransportLayer:
 					self.trigger_error(isotp.errors.ReceptionInterruptedWithSingleFrameError('Reception of IsoTP frame interrupted with a new SingleFrame'))
 
 			elif pdu.type == PDU.Type.FIRST_FRAME:
-				self.start_reception_after_first_frame(pdu)
+				self.start_reception_after_first_frame_if_valid(pdu)
 				self.trigger_error(isotp.errors.ReceptionInterruptedWithFirstFrameError('Reception of IsoTP frame interrupted with a new FirstFrame'))
 
 			elif pdu.type == PDU.Type.CONSECUTIVE_FRAME:
-				self.start_rx_cf_timer() 	# Received a CF message. Restart counter. Timeout handled above.
-
 				expected_seqnum = (self.last_seqnum +1) & 0xF
 				if pdu.seqnum == expected_seqnum:
-					self.last_seqnum = pdu.seqnum
 					bytes_to_receive = (self.rx_frame_length - len(self.rx_buffer) )
+					if pdu.rx_dl != self.actual_rxdl and pdu.rx_dl < bytes_to_receive:
+						self.trigger_error(isotp.errors.ChangingInvalidRxDlError("Received a ConsecutiveFrame with RX_DL=%d while expected RX_DL=%d. Ignoring frame" % (pdu.rx_dl, self.actual_rxdl)))
+						return	
+
+					self.start_rx_cf_timer() 	# Received a CF message. Restart counter. Timeout handled above.
+					self.last_seqnum = pdu.seqnum
 					self.append_rx_data(pdu.data[:bytes_to_receive])	# Python handle overflow
 					if len(self.rx_buffer) >= self.rx_frame_length:
 						self.rx_queue.put(copy(self.rx_buffer))			# Data complete
@@ -576,13 +573,11 @@ class TransportLayer:
 						read_tx_queue = True	# Read another frame from tx_queue
 					else:
 						self.tx_buffer = bytearray(popped_object['data'])
-						msg_size = self.get_optimal_message_size(len(self.tx_buffer))
-						
-						size_on_first_byte = True if len(self.tx_buffer) <= 15 else False
+						size_on_first_byte = True if len(self.tx_buffer) <= 7 else False
 						size_offset = 1 if size_on_first_byte else 2
 						
 						# Single frame
-						if len(self.tx_buffer) <= msg_size-size_offset-len(self.address.tx_payload_prefix):	
+						if len(self.tx_buffer) <= self.params.tx_data_length-size_offset-len(self.address.tx_payload_prefix):	
 							if size_on_first_byte:
 								msg_data 	= self.address.tx_payload_prefix + bytearray([0x0 | len(self.tx_buffer)]) + self.tx_buffer
 							else:
@@ -593,12 +588,12 @@ class TransportLayer:
 						# Multi frame - First Frame
 						else:							
 							self.tx_frame_length = len(self.tx_buffer)
-							encode_length_on_2_first_bytes = True if self.tx_frame_length <= 4095 else False
+							encode_length_on_2_first_bytes = True if self.tx_frame_length <= 0xFFF else False
 							if encode_length_on_2_first_bytes:
-								data_length = msg_size-2-len(self.address.tx_payload_prefix)
+								data_length = self.params.tx_data_length-2-len(self.address.tx_payload_prefix)
 								msg_data 	= self.address.tx_payload_prefix + bytearray([0x10|((self.tx_frame_length >> 8) & 0xF), self.tx_frame_length&0xFF]) + self.tx_buffer[:data_length]
 							else:
-								data_length = msg_size-6-len(self.address.tx_payload_prefix)
+								data_length = self.params.tx_data_length-6-len(self.address.tx_payload_prefix)
 								msg_data 	= self.address.tx_payload_prefix + bytearray([0x10, 0x00, (self.tx_frame_length>>24) & 0xFF, (self.tx_frame_length>>16) & 0xFF, (self.tx_frame_length>>8) & 0xFF, (self.tx_frame_length>>0) & 0xFF]) + self.tx_buffer[:data_length]
 							
 							arbitration_id 	= self.address.get_tx_arbitraton_id()
@@ -614,8 +609,7 @@ class TransportLayer:
 
 		elif self.tx_state == self.TxState.TRANSMIT_CF:
 			if self.timer_tx_stmin.is_timed_out() or self.params.squash_stmin_requirement:
-				msg_size = self.get_optimal_message_size(len(self.tx_buffer)+1)
-				data_length = msg_size-1-len(self.address.tx_payload_prefix)
+				data_length = self.params.tx_data_length-1-len(self.address.tx_payload_prefix)
 				msg_data = self.address.tx_payload_prefix + bytearray([0x20 | self.tx_seqnum]) + self.tx_buffer[:data_length]
 				arbitration_id 	= self.address.get_tx_arbitraton_id()
 				output_msg = self.make_tx_msg(arbitration_id, msg_data)
@@ -649,19 +643,16 @@ class TransportLayer:
 			self.logger.warning('Used rxid overlaps the range of ID reserved by ISO-15765 (0x7F4-0x7F6 and 0x7FA-0x7FB)')
 			
 	def pad_message_data(self, msg_data):
-		if self.params.tx_data_length is None:
-			must_pad 		= False 
-			target_length 	= 8
-		else:
+		must_pad = False
+		target_length = self.params.tx_data_length
+		if self.params.tx_padding is not None:
 			must_pad = True
-			target_length = self.params.tx_data_length
+
+		elif self.params.tx_data_length > 8 and len(msg_data) > 8:
+			must_pad = True
+			target_length = self.get_nearest_can_fd_size(len(msg_data))
 
 		padding_byte = 0xCC if self.params.tx_padding is None else self.params.tx_padding
-
-		if self.params.can_mode == self.Params.CanMode.CAN_FD:
-			if must_pad == False and len(msg_data) > 8:
-				must_pad = True
-				target_length = self.get_nearest_can_fd_size(len(msg_data))
 
 		if must_pad and len(msg_data) < target_length:
 			msg_data.extend(bytearray([padding_byte & 0xFF] * (target_length-len(msg_data))))
@@ -693,29 +684,27 @@ class TransportLayer:
 
 	def make_tx_msg(self, arbitration_id, data):
 		self.pad_message_data(data)
-		is_fd = True if self.params.can_mode == self.params.CanMode.CAN_FD else False
-		return CanMessage(arbitration_id = arbitration_id, dlc=self.get_dlc(data), data=data, extended_id=self.address.is_29bits, is_fd=is_fd)
+		is_fd = True if self.params.tx_data_length > 8 else False
+		return CanMessage(arbitration_id = arbitration_id, dlc=self.get_dlc(data, validate_tx=True), data=data, extended_id=self.address.is_29bits, is_fd=is_fd)
 
-	def get_dlc(self, data):
-		if self.params.can_mode == self.Params.CanMode.STANDARD:
-			if len(data) <= 8:
-				return len(data)
-			else:
-				raise ValueError("No possible DLC for Standard CAN mode for a payload of %d bytes" % len(data))
-		elif self.params.can_mode == self.Params.CanMode.CAN_FD:
-			if len(data) <= 8:
-				return len(data)
-			else:
-				if len(data) == 12: return 9
-				if len(data) == 16: return 10
-				if len(data) == 20: return 11
-				if len(data) == 24: return 12
-				if len(data) == 32: return 13
-				if len(data) == 48: return 14
-				if len(data) == 64: return 15
-			raise ValueError("No possible DLC in CAN FD mode for payload of %d bytes" % len(data))
-		else:
-			return None
+	def get_dlc(self, data, validate_tx=False):
+		fdlen = self.get_nearest_can_fd_size(len(data))
+		if validate_tx:
+			if self.params.tx_data_length == 8:
+				if fdlen < 2 or fdlen > 8:
+					raise ValueError("Impossible DLC size for payload of %d bytes with tx_data_length of %d" % (len(data), self.params.tx_data_length ))
+
+		if fdlen >= 2 and fdlen <= 8: return fdlen
+		elif fdlen == 12: return 9
+		elif fdlen == 16: return 10
+		elif fdlen == 20: return 11
+		elif fdlen == 24: return 12
+		elif fdlen == 32: return 13
+		elif fdlen == 48: return 14
+		elif fdlen == 64: return 15
+		raise ValueError("Impossible DLC size for payload of %d bytes with tx_data_length of %d" % (len(data)))
+
+
 
 	def get_nearest_can_fd_size(self, size):
 		if size <= 8:
@@ -728,17 +717,6 @@ class TransportLayer:
 		if size<=48: return 48
 		if size<=64: return 64
 		raise ValueError("Impossible data size for CAN FD : %d " % (size))
-
-	def get_optimal_message_size(self, big_payload_size):
-		if self.params.tx_data_length is not None:
-			return self.params.tx_data_length
-
-		if self.params.can_mode == self.Params.CanMode.STANDARD:
-			return 8 
-		elif self.params.can_mode == self.Params.CanMode.CAN_FD:
-			return self.get_nearest_can_fd_size(min(64,big_payload_size))
-		else:
-			return 255
 
 	def make_flow_control(self, flow_status=PDU.FlowStatus.ContinueToSend, blocksize=None, stmin=None):
 		if blocksize is None:
@@ -765,14 +743,21 @@ class TransportLayer:
 		self.wft_counter = 0
 
 	def stop_receiving(self):
+		self.actual_rxdl = None
 		self.rx_state = self.RxState.IDLE
 		self.empty_rx_buffer()
 		self.stop_sending_flow_control()
 		self.timer_rx_cf.stop()
 
 	# Init the reception of a multi-pdu frame. 
-	def start_reception_after_first_frame(self, pdu):
+	def start_reception_after_first_frame_if_valid(self, pdu):
 		self.empty_rx_buffer()
+		if pdu.rx_dl not in [8,12,16,20,24,32,48,64]:
+			self.trigger_error(isotp.errors.InvalidCanFdFirstFrameRXDL("Received a FirstFrame with a RX_DL value of %d which is invalid according to ISO-15765-2" % (pdu.rx_dl)))
+			self.stop_receiving()
+			return
+
+		self.actual_rxdl = pdu.rx_dl
 
 		if pdu.length > self.params.max_frame_size:
 			self.trigger_error(isotp.errors.FrameTooLongError("Received a Frist Frame with a length of %d bytes, but params.max_frame_size is set to %d bytes. Ignoring" % (pdu.length, self.params.max_frame_size)))
