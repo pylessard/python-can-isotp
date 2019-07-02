@@ -27,17 +27,14 @@ class TestLayerAgainstSocket(ThreadableTest):
     def setUp(self):
         self.socket_list = []
 
-    def make_socket(self, ll_data_length=8, *args, **kwargs):
-        if tools.get_test_interface_config("fd"):
-            mtu = isotp.tpsock.LinkLayerProtocol.CAN_FD
-        else:
-            mtu = isotp.tpsock.LinkLayerProtocol.CAN
-
+    def make_socket(self, tx_data_length=8, can_fd=False, *args, **kwargs):
+        mtu = isotp.tpsock.LinkLayerProtocol.CAN_FD if can_fd else isotp.tpsock.LinkLayerProtocol.CAN
+        
         if mtu == isotp.tpsock.LinkLayerProtocol.CAN:
-            assert ll_data_length == 8, "CAN bus only supports 8-bytes payloads"
+            assert tx_data_length == 8, "CAN bus only supports 8-bytes payloads"
 
         s = isotp.socket(*args, **kwargs)
-        s.set_ll_opts(mtu=mtu, tx_dl=ll_data_length)
+        s.set_ll_opts(mtu=mtu, tx_dl=tx_data_length)
         self.socket_list.append(s)
         return s
 
@@ -47,25 +44,31 @@ class TestLayerAgainstSocket(ThreadableTest):
             'stmin': 10,  # Will request the sender to wait 10ms between consecutive frame. 0-127ms or 100-900ns with values from 0xF1-0xF9
             'blocksize': 48,  # Request the sender to send 48 consecutives frames before sending a new flow control message
             'wftmax': 0,  # Number of wait frame allowed before triggering an error
-            'll_data_length': 8,  # Link layer (CAN layer) works with 8 byte payload (CAN 2.0)
+            'tx_data_length': 8,  # Link layer (CAN layer) works with 8 byte payload (CAN 2.0)
             'tx_padding': 0,  # Will pad all transmitted CAN messages with byte 0x00. None means no padding
             'rx_flowcontrol_timeout': 1000,  # Triggers a timeout if a flow control is awaited for more than 1000 milliseconds
             'rx_consecutive_frame_timeout': 1000,  # Triggers a timeout if a consecutive frame is awaited for more than 1000 milliseconds
             'squash_stmin_requirement': False,  # When sending, respect the stmin requirement of the receiver. If set to True, go as fast as possible.
-            'can_fd': tools.get_test_interface_config("fd")
+            'can_fd': False
         }
 
         isotp_params.update(isotp_params_overload)
 
         return isotp.CanStack(bus=self.bus, address=self.address, params=isotp_params)
 
-    def clientSetUp(self):
-        try:
-            self.bus = can.interface.Bus(**tools.get_test_interface_config())
-            self.address = isotp.Address(isotp.AddressingMode.Normal_11bits, txid=self.stack_txid, rxid=self.stack_rxid)
-            self.stack = self.get_can_stack()
-        except Exception as e:
-            print(e)
+    def clientSetUp(self, socketcan_fd=False):
+        bus_config = tools.get_test_interface_config()
+        bus_config['fd'] = socketcan_fd
+
+        if hasattr(self, 'bus'):    # In case this is recalled by the test.
+            self.bus.shutdown()
+
+        if hasattr(self, 'stack'):    # In case this is recalled by the test.
+            self.stack.reset()
+
+        self.bus = can.interface.Bus(**bus_config)
+        self.address = isotp.Address(isotp.AddressingMode.Normal_11bits, txid=self.stack_txid, rxid=self.stack_rxid)
+        self.stack = self.get_can_stack()
 
     def tearDown(self):
         for socket in self.socket_list:
@@ -111,51 +114,54 @@ class TestLayerAgainstSocket(ThreadableTest):
         
 
     # ========= Test cases ======
-    def _test_receive_ll_data_length(self, ll_data_length=8, remote_ll_data_length=8):
-        # Need a new CAN stack with ll_data_length parametrization
-        self.stack = self.get_can_stack(ll_data_length=ll_data_length)
-        s = self.make_socket(ll_data_length=remote_ll_data_length)
+    def do_test_tx_dl_receive_server(self, tx_data_length=8, remote_tx_data_length=8):
+        self.clientSetUp(socketcan_fd=True)
+        self.stack = self.get_can_stack(tx_data_length=tx_data_length, can_fd=True)
+        s = self.make_socket(tx_data_length=remote_tx_data_length, can_fd = True)
         s.bind(tools.get_test_interface_config("channel"), txid=self.stack_rxid, rxid=self.stack_txid)
         self.socket_ready = True
         s.send(b'a'*100)
         self.wait_reception_complete()
 
-    def _test_receive(self):
+    def do_test_tx_dl_receive_client(self):
         self.wait_socket_ready()
         frame = self.process_stack_receive()
         self.assertEqual(frame, b'a'*100)
 
-    def test_receive_ll_data_length_8_8(self):
-        return self._test_receive_ll_data_length(ll_data_length=8, remote_ll_data_length=8)
+    @unittest.skipIf(tools.is_can_fd_socket_possible() == False, 'CAN FD socket is not possible. %s' % tools.isotp_can_fd_socket_impossible_reason())
+    def test_receive_tx_data_length_8_8(self):
+        return self.do_test_tx_dl_receive_server(tx_data_length=8, remote_tx_data_length=8)
 
-    def _test_receive_ll_data_length_8_8(self):
-        return self._test_receive()
+    def _test_receive_tx_data_length_8_8(self):
+        return self.do_test_tx_dl_receive_client()
 
-    def test_receive_ll_data_length_64_64(self):
-        assert tools.get_test_interface_config("fd") is True, "This test requires to use a CAN-FD bus"
-        return self._test_receive_ll_data_length(ll_data_length=64, remote_ll_data_length=64)
+    @unittest.skipIf(tools.is_can_fd_socket_possible() == False, 'CAN FD socket is not possible. %s' % tools.isotp_can_fd_socket_impossible_reason())
+    def test_receive_tx_data_length_64_64(self):
+        return self.do_test_tx_dl_receive_server(tx_data_length=64, remote_tx_data_length=64)
 
-    def _test_receive_ll_data_length_64_64(self):
-        return self._test_receive()
+    def _test_receive_tx_data_length_64_64(self):
+        return self.do_test_tx_dl_receive_client()
 
-    def test_receive_ll_data_length_8_64(self):
-        assert tools.get_test_interface_config("fd") is True, "This test requires to use a CAN-FD bus"
-        return self._test_receive_ll_data_length(ll_data_length=8, remote_ll_data_length=64)
+    @unittest.skipIf(tools.is_can_fd_socket_possible() == False, 'CAN FD socket is not possible. %s' % tools.isotp_can_fd_socket_impossible_reason())
+    def test_receive_tx_data_length_8_64(self):
+        return self.do_test_tx_dl_receive_server(tx_data_length=8, remote_tx_data_length=64)
 
-    def _test_receive_ll_data_length_8_64(self):
-        return self._test_receive()
+    def _test_receive_tx_data_length_8_64(self):
+        return self.do_test_tx_dl_receive_client()
 
-    def test_receive_ll_data_length_64_8(self):
-        assert tools.get_test_interface_config("fd") is True, "This test requires to use a CAN-FD bus"
-        return self._test_receive_ll_data_length(ll_data_length=64, remote_ll_data_length=8)
+    @unittest.skipIf(tools.is_can_fd_socket_possible() == False, 'CAN FD socket is not possible. %s' % tools.isotp_can_fd_socket_impossible_reason())
+    def test_receive_tx_data_length_64_8(self):
+        return self.do_test_tx_dl_receive_server(tx_data_length=64, remote_tx_data_length=8)
 
-    def _test_receive_ll_data_length_64_8(self):
-        return self._test_receive()
+    def _test_receive_tx_data_length_64_8(self):
+        return self.do_test_tx_dl_receive_client()
 
-    def _test_transmit_ll_data_length(self, ll_data_length=8, remote_ll_data_length=8):
-        # Need a new CAN stack with ll_data_length parametrization
-        self.stack = self.get_can_stack(ll_data_length=ll_data_length)
-        s = self.make_socket(ll_data_length=remote_ll_data_length)
+
+
+    def do_test_tx_dl_transmit_server(self, tx_data_length=8, remote_tx_data_length=8):
+        self.clientSetUp(socketcan_fd=True)
+        self.stack = self.get_can_stack(tx_data_length=tx_data_length, can_fd=True)
+        s = self.make_socket(tx_data_length=remote_tx_data_length, can_fd=True)
         s.bind(tools.get_test_interface_config("channel"), txid=self.stack_rxid, rxid=self.stack_txid)
         self.socket_ready = True
 
@@ -163,37 +169,40 @@ class TestLayerAgainstSocket(ThreadableTest):
         frame = s.recv()
         self.assertEqual(frame, b'b'*100)
 
-    def _test_transmit(self):
+    def do_test_tx_dl_transmit_client(self):
         self.wait_socket_ready()
         self.stack.send(b'b'*100)
         self.process_stack_send()
-        
-    def test_transmit_ll_data_length_8_8(self):
-        return self._test_transmit_ll_data_length(ll_data_length=8, remote_ll_data_length=8)
 
-    def _test_transmit_ll_data_length_8_8(self):
-        return self._test_transmit()
+    @unittest.skipIf(tools.is_can_fd_socket_possible() == False, 'CAN FD socket is not possible. %s' % tools.isotp_can_fd_socket_impossible_reason()) 
+    def test_transmit_tx_data_length_8_8(self):
+        return self.do_test_tx_dl_transmit_server(tx_data_length=8, remote_tx_data_length=8)
 
-    def test_transmit_ll_data_length_64_64(self):
-        assert tools.get_test_interface_config("fd") is True, "This test requires to use a CAN-FD bus"
-        return self._test_transmit_ll_data_length(ll_data_length=64, remote_ll_data_length=64)
+    def _test_transmit_tx_data_length_8_8(self):
+        return self.do_test_tx_dl_transmit_client()
 
-    def _test_transmit_ll_data_length_64_64(self):
-        return self._test_transmit()
+    @unittest.skipIf(tools.is_can_fd_socket_possible() == False, 'CAN FD socket is not possible. %s' % tools.isotp_can_fd_socket_impossible_reason())
+    def test_transmit_tx_data_length_64_64(self):
+        return self.do_test_tx_dl_transmit_server(tx_data_length=64, remote_tx_data_length=64)
 
-    def test_transmit_ll_data_length_8_64(self):
-        assert tools.get_test_interface_config("fd") is True, "This test requires to use a CAN-FD bus"
-        return self._test_transmit_ll_data_length(ll_data_length=8, remote_ll_data_length=64)
+    def _test_transmit_tx_data_length_64_64(self):
+        return self.do_test_tx_dl_transmit_client()
 
-    def _test_transmit_ll_data_length_8_64(self):
-        return self._test_transmit()
+    @unittest.skipIf(tools.is_can_fd_socket_possible() == False, 'CAN FD socket is not possible. %s' % tools.isotp_can_fd_socket_impossible_reason())
+    def test_transmit_tx_data_length_8_64(self):
+        return self.do_test_tx_dl_transmit_server(tx_data_length=8, remote_tx_data_length=64)
 
-    def test_transmit_ll_data_length_64_8(self):
-        assert tools.get_test_interface_config("fd") is True, "This test requires to use a CAN-FD bus"
-        return self._test_transmit_ll_data_length(ll_data_length=64, remote_ll_data_length=8)
+    def _test_transmit_tx_data_length_8_64(self):
+        return self.do_test_tx_dl_transmit_client()
 
-    def _test_transmit_ll_data_length_64_8(self):
-        return self._test_transmit()
+    @unittest.skipIf(tools.is_can_fd_socket_possible() == False, 'CAN FD socket is not possible. %s' % tools.isotp_can_fd_socket_impossible_reason())
+    def test_transmit_tx_data_length_64_8(self):
+        return self.do_test_tx_dl_transmit_server(tx_data_length=64, remote_tx_data_length=8)
+
+    def _test_transmit_tx_data_length_64_8(self):
+        return self.do_test_tx_dl_transmit_client()
+
+
 
     def test_transmit_long_stmin(self):
         s = self.make_socket()
