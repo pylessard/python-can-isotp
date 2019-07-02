@@ -52,7 +52,7 @@ class TestLayerAgainstSocket(ThreadableTest):
             'rx_flowcontrol_timeout': 1000,  # Triggers a timeout if a flow control is awaited for more than 1000 milliseconds
             'rx_consecutive_frame_timeout': 1000,  # Triggers a timeout if a consecutive frame is awaited for more than 1000 milliseconds
             'squash_stmin_requirement': False,  # When sending, respect the stmin requirement of the receiver. If set to True, go as fast as possible.
-            'is_fd': tools.get_test_interface_config("fd")
+            'can_fd': tools.get_test_interface_config("fd")
         }
 
         isotp_params.update(isotp_params_overload)
@@ -60,9 +60,12 @@ class TestLayerAgainstSocket(ThreadableTest):
         return isotp.CanStack(bus=self.bus, address=self.address, params=isotp_params)
 
     def clientSetUp(self):
-        self.bus = can.interface.Bus(**tools.get_test_interface_config())
-        self.address = isotp.Address(isotp.AddressingMode.Normal_11bits, txid=self.stack_txid, rxid=self.stack_rxid)
-        self.stack = self.get_can_stack()
+        try:
+            self.bus = can.interface.Bus(**tools.get_test_interface_config())
+            self.address = isotp.Address(isotp.AddressingMode.Normal_11bits, txid=self.stack_txid, rxid=self.stack_rxid)
+            self.stack = self.get_can_stack()
+        except Exception as e:
+            print(e)
 
     def tearDown(self):
         for socket in self.socket_list:

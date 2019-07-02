@@ -192,7 +192,7 @@ class TransportLayer:
 	LOGGER_NAME = 'isotp'
 
 	class Params:
-		__slots__ = 'stmin', 'blocksize', 'squash_stmin_requirement', 'rx_flowcontrol_timeout', 'rx_consecutive_frame_timeout', 'tx_padding', 'wftmax', 'tx_data_length', 'max_frame_size'
+		__slots__ = 'stmin', 'blocksize', 'squash_stmin_requirement', 'rx_flowcontrol_timeout', 'rx_consecutive_frame_timeout', 'tx_padding', 'wftmax', 'tx_data_length', 'max_frame_size', 'can_fd'
 
 		def __init__(self):
 			self.stmin 							=  0
@@ -204,6 +204,7 @@ class TransportLayer:
 			self.wftmax						    = 0
 			self.tx_data_length					= 8
 			self.max_frame_size					= 4095
+			self.can_fd							= False
 
 		def set(self, key, val, validate=True):
 			param_alias = {
@@ -268,6 +269,9 @@ class TransportLayer:
 
 			if self.max_frame_size < 0:
 				raise ValueError('max_frame_size must be a positive integer')
+
+			if not isinstance(self.can_fd, bool):
+				raise ValueError('can_fd must be a boolean value')
 
 
 	class Timer:
@@ -684,8 +688,7 @@ class TransportLayer:
 
 	def make_tx_msg(self, arbitration_id, data):
 		self.pad_message_data(data)
-		is_fd = True if self.params.tx_data_length > 8 else False
-		return CanMessage(arbitration_id = arbitration_id, dlc=self.get_dlc(data, validate_tx=True), data=data, extended_id=self.address.is_29bits, is_fd=is_fd)
+		return CanMessage(arbitration_id = arbitration_id, dlc=self.get_dlc(data, validate_tx=True), data=data, extended_id=self.address.is_29bits, is_fd=self.params.can_fd)
 
 	def get_dlc(self, data, validate_tx=False):
 		fdlen = self.get_nearest_can_fd_size(len(data))

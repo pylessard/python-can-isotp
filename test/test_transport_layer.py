@@ -1022,7 +1022,6 @@ class TestTransportLayer(TransportLayerBaseTest):
 		self.tx_isotp_frame(payload)
 		self.stack.process()
 		msg = self.get_tx_can_msg()
-		self.assertTrue(msg.is_fd)
 		self.assertEqual(msg.data, bytearray([0x00, len(payload)] + payload))
 		self.assertEqual(msg.dlc, 9 )
 
@@ -1032,7 +1031,6 @@ class TestTransportLayer(TransportLayerBaseTest):
 		self.tx_isotp_frame(payload)
 		self.stack.process()
 		msg = self.get_tx_can_msg()
-		self.assertTrue(msg.is_fd)
 		self.assertEqual(msg.data, bytearray([0x00, len(payload)] + payload + [0xCC] ))	# Default padding byte
 		self.assertEqual(msg.dlc, 9 )
 
@@ -1043,7 +1041,6 @@ class TestTransportLayer(TransportLayerBaseTest):
 		self.tx_isotp_frame(payload)
 		self.stack.process()
 		msg = self.get_tx_can_msg()
-		self.assertTrue(msg.is_fd)
 		self.assertEqual(msg.data, bytearray([0x0, len(payload)] + payload + [0xAA] * 4))	
 		self.assertEqual(msg.dlc, 10 )
 
@@ -1053,7 +1050,6 @@ class TestTransportLayer(TransportLayerBaseTest):
 		self.tx_isotp_frame(payload)
 		self.stack.process()
 		msg = self.get_tx_can_msg()
-		self.assertTrue(msg.is_fd)
 		self.assertEqual(msg.data, bytearray([0x00, len(payload)] + payload + [0xCC] * (64-len(payload)-2)))	
 		self.assertEqual(msg.dlc, 15 )
 
@@ -1070,12 +1066,23 @@ class TestTransportLayer(TransportLayerBaseTest):
 			self.tx_isotp_frame(payload)
 			self.stack.process()
 			msg = self.get_tx_can_msg()
-			if tx_dl == 8:
-				self.assertFalse(msg.is_fd)
-			else:
-				self.assertTrue(msg.is_fd)
 			self.assertEqual(msg.data, bytearray(prefix+payload), error_details)
 			self.assertEqual(msg.dlc,  dlc_map[tx_dl], error_details)
+
+	def test_transmit_is_fd_property(self):
+		self.stack.params.set('can_fd', True)
+		payload = self.make_payload(5)
+		self.tx_isotp_frame(payload)
+		self.stack.process()
+		msg = self.get_tx_can_msg()
+		self.assertTrue(msg.is_fd)	
+
+		self.stack.params.set('can_fd', False)
+		payload = self.make_payload(5)
+		self.tx_isotp_frame(payload)
+		self.stack.process()
+		msg = self.get_tx_can_msg()
+		self.assertFalse(msg.is_fd)	
 
 	# In this test we send a CAN FD multiframe without specifying tx_data_length so the stack decide the message size and takes the most efficent choice.
 	def _test_send_can_fd_multiframe_N_bytes_payload_no_txd(self, payload_size, tx_dl):
