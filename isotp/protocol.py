@@ -23,7 +23,7 @@ class CanMessage:
 	:param extended_id: When True, the arbitration ID stands on 29 bits. 11 bits when False
 	:type extended_id: bool
 
-	:param is_fd: When True (resp. False), message has to be transmitted or has been received in a CAN FD frame (resp. in a CAN frame)
+	:param is_fd: When True, message has to be transmitted or has been received in a CAN FD frame. CAN frame when set to False
 	:type extended_id: bool
 	"""
 	__slots__ = 'arbitration_id', 'dlc', 'data', 'is_extended_id', 'is_fd'
@@ -399,7 +399,7 @@ class TransportLayer:
 
 	def available(self):
 		"""
-		Returns ``True`` if an IsoTP frame is awaiting in the reception ``queue``. False otherwise
+		Returns ``True`` if an IsoTP frame is awaiting in the reception ``queue``. ``False`` otherwise
 		"""	
 		return not self.rx_queue.empty()
 
@@ -490,7 +490,7 @@ class TransportLayer:
 				if pdu.seqnum == expected_seqnum:
 					bytes_to_receive = (self.rx_frame_length - len(self.rx_buffer) )
 					if pdu.rx_dl != self.actual_rxdl and pdu.rx_dl < bytes_to_receive:
-						self.trigger_error(isotp.errors.ChangingInvalidRxDlError("Received a ConsecutiveFrame with RX_DL=%d while expected RX_DL=%d. Ignoring frame" % (pdu.rx_dl, self.actual_rxdl)))
+						self.trigger_error(isotp.errors.ChangingInvalidRXDLError("Received a ConsecutiveFrame with RX_DL=%d while expected RX_DL=%d. Ignoring frame" % (pdu.rx_dl, self.actual_rxdl)))
 						return	
 
 					self.start_rx_cf_timer() 	# Received a CF message. Restart counter. Timeout handled above.

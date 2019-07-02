@@ -512,7 +512,7 @@ class TestTransportLayer(TransportLayerBaseTest):
 		self.simulate_rx([0x21] + payload[30:61])	#32
 		self.simulate_rx([0x22] + payload[61:80])	# Ooops can_dl = 20. Should be 32
 		self.stack.process()
-		self.assert_error_triggered(isotp.ChangingInvalidRxDlError)
+		self.assert_error_triggered(isotp.ChangingInvalidRXDLError)
 		self.simulate_rx([0x23] + payload[80:100] + [0xCC]*11)
 		self.stack.process()
 		self.assert_error_triggered(isotp.WrongSequenceNumberError)

@@ -122,6 +122,18 @@ The transport layer ``params`` parameter must be a dictionary with the following
 
    This parameter mainly is a protection to avoid crashes due to lack of memory (caused by an external device).
 
+.. _param_can_fd:
+
+.. attribute:: can_fd
+   :annotation: (bool)
+
+   **default: False**
+
+   When set to ``True``, transmitted messages will be CAN FD. CAN 2.0 when ``False``.
+
+   Setting this parameter to ``True`` does not change the behaviour of the :class:`TransportLayer<isotp.TransportLayer>` except that outputted message will have their ``is_fd`` property set to ``True``. This parameter is just a convenience integrate more easily with python-can
+
+
 -----
 
 Usage
@@ -166,4 +178,7 @@ All errors inherit :class:`isotp.IsoTpError<isotp.IsoTpError>` which themselve i
 .. autoclass:: isotp.UnsuportedWaitFrameError
 .. autoclass:: isotp.MaximumWaitFrameReachedError
 .. autoclass:: isotp.FrameTooLongError
+.. autoclass:: isotp.ChangingInvalidRXDLError
+.. autoclass:: isotp.MissingEscapeSequenceError
+.. autoclass:: isotp.InvalidCanFdFirstFrameRXDL
 
