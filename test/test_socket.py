@@ -50,8 +50,8 @@ class TestSocket(unittest.TestCase):
         s2 = self.make_socket(timeout=0.2)
         addr1 = isotp.Address(isotp.AddressingMode.Normal_11bits, txid=txid, rxid=rxid)
         addr2 = isotp.Address(isotp.AddressingMode.Normal_11bits, txid=rxid, rxid=txid)
-        s1.bind(interface = tools.get_test_interface(), address=addr1)
-        s2.bind(interface = tools.get_test_interface(), address=addr2)
+        s1.bind(interface = tools.get_test_interface_config("channel"), address=addr1)
+        s2.bind(interface = tools.get_test_interface_config("channel"), address=addr2)
         s1.send(payload)
         t1 = time.time()
         payload2 = s2.recv()
@@ -69,8 +69,8 @@ class TestSocket(unittest.TestCase):
 
         s2.set_fc_opts(stmin=100, bs=5)
 
-        s1.bind(interface = tools.get_test_interface(), address=addr1)
-        s2.bind(interface = tools.get_test_interface(), address=addr2)
+        s1.bind(interface = tools.get_test_interface_config("channel"), address=addr1)
+        s2.bind(interface = tools.get_test_interface_config("channel"), address=addr2)
         s1.send(payload)
         t1 = time.time()
         payload2 = s2.recv()
@@ -82,7 +82,7 @@ class TestSocket(unittest.TestCase):
     def test_addressing_normal_11bits(self):
         addr = isotp.Address(isotp.AddressingMode.Normal_11bits, txid=0x123, rxid=0x456)
         s = self.make_socket()
-        s.bind(tools.get_test_interface(), addr)
+        s.bind(tools.get_test_interface_config("channel"), addr)
         (interface, rxid, txid) = s._socket.getsockname()
         opts = s.get_opts()
         self.assertEqual(txid, 0x123)
@@ -93,7 +93,7 @@ class TestSocket(unittest.TestCase):
     def test_addressing_normal_29bits(self):
         addr = isotp.Address(isotp.AddressingMode.Normal_29bits, txid=0x123456, rxid=0x789ABC)
         s = self.make_socket()
-        s.bind(tools.get_test_interface(), addr)
+        s.bind(tools.get_test_interface_config("channel"), addr)
         (interface, rxid, txid) = s._socket.getsockname()
         opts = s.get_opts()
         self.assertEqual(txid, 0x123456 | socket.CAN_EFF_FLAG)
@@ -105,7 +105,7 @@ class TestSocket(unittest.TestCase):
     def test_addressing_normal_fixed_29bits(self):
         addr = isotp.Address(isotp.AddressingMode.NormalFixed_29bits, source_address=0xaa, target_address=0x55)
         s = self.make_socket()
-        s.bind(tools.get_test_interface(), addr)
+        s.bind(tools.get_test_interface_config("channel"), addr)
         (interface, rxid, txid) = s._socket.getsockname()
         opts = s.get_opts()
         self.assertEqual(txid, 0x18DA55AA | socket.CAN_EFF_FLAG)
@@ -116,7 +116,7 @@ class TestSocket(unittest.TestCase):
     def test_addressing_extended_11bits(self):
         addr = isotp.Address(isotp.AddressingMode.Extended_11bits, txid=0x123, rxid=0x456, source_address=0xAA, target_address=0x55)
         s = self.make_socket()
-        s.bind(tools.get_test_interface(), addr)
+        s.bind(tools.get_test_interface_config("channel"), addr)
         (interface, rxid, txid) = s._socket.getsockname()
         opts = s.get_opts()
         self.assertEqual(txid, 0x123)
@@ -129,7 +129,7 @@ class TestSocket(unittest.TestCase):
     def test_addressing_extended_29bits(self):
         addr = isotp.Address(isotp.AddressingMode.Extended_29bits, txid=0x123456, rxid=0x789abc, source_address=0xAA, target_address=0x55)
         s = self.make_socket()
-        s.bind(tools.get_test_interface(), addr)
+        s.bind(tools.get_test_interface_config("channel"), addr)
         (interface, rxid, txid) = s._socket.getsockname()
         opts = s.get_opts()
         self.assertEqual(txid, 0x123456 | socket.CAN_EFF_FLAG)
@@ -142,7 +142,7 @@ class TestSocket(unittest.TestCase):
     def test_addressing_mixed_11bits(self):
         addr = isotp.Address(isotp.AddressingMode.Mixed_11bits, txid=0x123, rxid=0x456, address_extension=0x99)
         s = self.make_socket()
-        s.bind(tools.get_test_interface(), addr)
+        s.bind(tools.get_test_interface_config("channel"), addr)
         (interface, rxid, txid) = s._socket.getsockname()
         opts = s.get_opts()
         self.assertEqual(txid, 0x123)
@@ -155,7 +155,7 @@ class TestSocket(unittest.TestCase):
     def test_addressing_mixed_29bits(self):
         addr = isotp.Address(isotp.AddressingMode.Mixed_29bits, source_address=0xAA, target_address=0x55, address_extension=0x99)
         s = self.make_socket()
-        s.bind(tools.get_test_interface(), addr)
+        s.bind(tools.get_test_interface_config("channel"), addr)
         (interface, rxid, txid) = s._socket.getsockname()
         opts = s.get_opts()
         self.assertEqual(txid, 0x18CE55AA | socket.CAN_EFF_FLAG)
