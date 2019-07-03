@@ -8,7 +8,7 @@ Transport layer
 
 Depending on your constraints, you may want to have the IsoTP protocol layer to run in Python (in the user space). For example, if you want to rely on `python-can <https://python-can.readthedocs.io/>`_ for the support of your CAN interface, you will need to run the IsoTP layer in Python.
 
-In such case, the :class:`isotp.TransportLayer<isotp.TransportLayer>` will be the right tool. One must first define functions to access the hardware and given as parameters with ``rxfn`` and ``txfn``.
+In such case, the :class:`isotp.TransportLayer<isotp.TransportLayer>` will be the right tool. One must first define functions to access the hardware and provide them to the :class:`isotp.TransportLayer<isotp.TransportLayer>` as parameters named ``rxfn`` and ``txfn``.
 
 .. autoclass:: isotp.TransportLayer
 
@@ -57,7 +57,7 @@ The transport layer ``params`` parameter must be a dictionary with the following
    The maximum number of bytes that the Link Layer (CAN layer) can transport. In other words, the biggest number of data bytes possible in a single CAN message.
    Valid values are : 8, 12, 16, 20, 24, 32, 48, 64.
    
-   When a value greater than 8 is used, CanMessage transmitted by the TransportLayer will have the property ``is_fd`` set to ``True``
+   Large frames will be transmitted in small CAN ,essages of this size except for the last CAN message that will be as small as possible, unless padding is used. 
 
    This parameter was formely named ``ll_data_length`` but has been renamed to explicitly indicate that it affects transmitted messages only.
 
@@ -158,14 +158,14 @@ Errors
 ------
 
 When calling ``TransportLayer.process``, no exception should raise. Still, errors are possible and are given to an error handler provided by the user. 
-An error handler should ba a callable function that expects an Exception as first parameter.
+An error handler should be a callable function that expects an Exception as first parameter.
 
 .. function:: my_error_handler(error)
 
    :param error: The error
    :type error: :class:`isotp.IsoTpError<isotp.IsoTpError>`
 
-All errors inherit :class:`isotp.IsoTpError<isotp.IsoTpError>` which themselve inherits :class:`Exception<Exception>`
+All errors inherit :class:`isotp.IsoTpError<isotp.IsoTpError>` which itself inherits :class:`Exception<Exception>`
 
 .. autoclass:: isotp.FlowControlTimeoutError
 .. autoclass:: isotp.ConsecutiveFrameTimeoutError
