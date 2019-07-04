@@ -122,6 +122,23 @@ class TestAddressingMode(TransportLayerBaseTest):
         self.assertEqual(msg.data, bytearray([0x03, 0x04, 0x05, 0x06]))
         self.assertFalse(msg.is_extended_id)
 
+        #Transmit single frame - Functional : tx_dl = 32
+        layer.reset()
+        layer.params.set('tx_data_length', 32)
+        layer.send(b'\xAA'*30, functional)
+        layer.process()
+        msg = self.get_tx_can_msg()
+        self.assertIsNotNone(msg)
+        self.assertEqual(msg.arbitration_id, txid)
+        self.assertEqual(msg.data, bytearray([0x00, 30] + [0xaa]*30))
+        self.assertFalse(msg.is_extended_id)
+
+        with self.assertRaises(ValueError):
+            layer.reset()
+            layer.params.set('tx_data_length', 32)
+            layer.send(b'\x04'*31, functional)
+        layer.params.set('tx_data_length', 8)
+
         # Transmit multiframe - Physical
         layer.reset()
         layer.send(b'\x04\x05\x06\x07\x08\x09\x0A\x0B', physical)
@@ -387,6 +404,24 @@ class TestAddressingMode(TransportLayerBaseTest):
         self.assertEqual(msg.arbitration_id, txid)
         self.assertEqual(msg.data, bytearray([ta, 0x03, 0x04, 0x05, 0x06]))
         self.assertFalse(msg.is_extended_id)
+
+        #Transmit single frame - Functional; txdl=32
+        layer.reset()
+        layer.params.set('tx_data_length', 32)
+        layer.send(b'\x55' * 29, functional)
+        layer.process()
+        msg = self.get_tx_can_msg()
+        self.assertIsNotNone(msg)
+        self.assertEqual(msg.arbitration_id, txid)
+        self.assertEqual(msg.data, bytearray([ta, 0x00, 29] + [0x55]*29))
+        self.assertFalse(msg.is_extended_id)
+
+        #Transmit single frame - Functional; txdl=32
+        with self.assertRaises(ValueError):
+            layer.reset()
+            layer.params.set('tx_data_length', 32)
+            layer.send(b'\x55' * 30, functional)
+        layer.params.set('tx_data_length', 8)
 
         # Transmit multiframe - Physical
         layer.reset()

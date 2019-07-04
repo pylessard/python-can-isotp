@@ -1053,6 +1053,15 @@ class TestTransportLayer(TransportLayerBaseTest):
 		self.assertEqual(msg.data, bytearray([0x00, len(payload)] + payload + [0xCC] * (64-len(payload)-2)))	
 		self.assertEqual(msg.dlc, 15 )
 
+	def test_transmit_functional_frame_txdl_32(self):
+		self.stack.params.set('tx_data_length', 32)
+		payload = self.make_payload(30)
+		self.tx_isotp_frame(payload)
+		self.stack.process()
+		msg = self.get_tx_can_msg()
+		self.assertEqual(msg.data, bytearray([0x00, len(payload)] + payload + [0xCC] * (64-len(payload)-2)))	
+		self.assertEqual(msg.dlc, 15 )
+
 	def test_can_fd_singleframe_tx_dl(self):
 		tx_dl_list = [8,12,16,20,24,32,48,64]
 		dlc_map = {4:4, 5:5, 6:6, 7:7, 8:8, 12:9, 16:10, 20:11, 24:12, 32:13, 48:14, 64:15}

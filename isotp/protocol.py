@@ -381,7 +381,10 @@ class TransportLayer:
 			raise RuntimeError('Transmit queue is full')
 
 		if target_address_type == isotp.address.TargetAddressType.Functional:
-			if len(data) > 7-len(self.address.tx_payload_prefix):
+			length_bytes = 1 if self.params.tx_data_length == 8 else 2
+			maxlen = self.params.tx_data_length - length_bytes - len(self.address.tx_payload_prefix) 
+
+			if len(data) > maxlen:
 				raise ValueError('Cannot send multipacket frame with Functional TargetAddressType')
 
 		self.tx_queue.put( {'data':data, 'target_address_type':target_address_type})	# frame is always an IsoTPFrame here
