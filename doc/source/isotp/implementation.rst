@@ -131,7 +131,7 @@ The transport layer ``params`` parameter must be a dictionary with the following
 
    When set to ``True``, transmitted messages will be CAN FD. CAN 2.0 when ``False``.
 
-   Setting this parameter to ``True`` does not change the behaviour of the :class:`TransportLayer<isotp.TransportLayer>` except that outputted message will have their ``is_fd`` property set to ``True``. This parameter is just a convenience integrate more easily with python-can
+   Setting this parameter to ``True`` does not change the behaviour of the :class:`TransportLayer<isotp.TransportLayer>` except that outputted message will have their ``is_fd`` property set to ``True``. This parameter is just a convenience to integrate more easily with python-can
 
 
 -----
