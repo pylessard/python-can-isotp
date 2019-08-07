@@ -12,7 +12,7 @@ def check_support():
             raise NotImplementedError("Your version of Python does not offer support for CAN ISO-TP protocol. Support have been added since Python 3.7 on Linux build > 2.6.15.")
 
 class flags:
-        
+
     LISTEN_MODE     = 0x001
     """Puts the socket in Listen mode, which prevents transmission of data"""
 
@@ -36,7 +36,7 @@ class flags:
 
     FORCE_TXSTMIN   = 0x080
     """Forces the socket to use the separation time sets in general options, overriding stmin value received in flow control frames."""
-    
+
     FORCE_RXSTMIN   = 0x100
     """ Forces the socket to ignore any message received faster than stmin given in the flow control frame"""
 
@@ -146,7 +146,7 @@ class socket:
         # If functional is required, it Ids can be manually crafted in Normal / extended mode
         rxid = self.address.get_rx_arbitraton_id(isotp.TargetAddressType.Physical)
         txid = self.address.get_tx_arbitraton_id(isotp.TargetAddressType.Physical)
-        
+
         if self.address.is_29bits == True:
             rxid = (rxid & socket_module.CAN_EFF_MASK) | socket_module.CAN_EFF_FLAG
         else:
@@ -161,7 +161,7 @@ class socket:
             o = self.get_opts()
             o.optflag |= self.flags.EXTEND_ADDR | self.flags.RX_EXT_ADDR
             self.set_opts(optflag = o.optflag, ext_address = self.address.get_tx_extension_byte(), rx_ext_address=self.address.get_rx_extension_byte())
-            
+
         self._socket.bind((interface, rxid, txid))
         self.bound=True
 

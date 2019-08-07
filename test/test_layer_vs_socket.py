@@ -9,7 +9,7 @@ import math
 
 @unittest.skipIf(tools.check_isotp_socket_possible() == False, 'Cannot test stack against IsoTP socket. %s' % tools.isotp_socket_impossible_reason())
 class TestLayerAgainstSocket(ThreadableTest):
-    
+
     def __init__(self, *args, **kwargs):
         ThreadableTest.__init__(self, *args, **kwargs)
         if not hasattr(self.__class__, '_next_id'):
@@ -29,7 +29,7 @@ class TestLayerAgainstSocket(ThreadableTest):
 
     def make_socket(self, tx_data_length=8, can_fd=False, *args, **kwargs):
         mtu = isotp.tpsock.LinkLayerProtocol.CAN_FD if can_fd else isotp.tpsock.LinkLayerProtocol.CAN
-        
+
         if mtu == isotp.tpsock.LinkLayerProtocol.CAN:
             assert tx_data_length == 8, "CAN bus only supports 8-bytes payloads"
 
@@ -111,7 +111,7 @@ class TestLayerAgainstSocket(ThreadableTest):
         t1 = time.time()
         while time.time() - t1 < timeout and self.socket_ready == False:
             time.sleep(0.05)
-        
+
 
     # ========= Test cases ======
     def do_test_tx_dl_receive_server(self, tx_data_length=8, remote_tx_data_length=8):

@@ -30,7 +30,7 @@ class general:
         self.rxpad = None
         self.rx_ext_address = None
 
-    
+
     @classmethod
     def read(cls, s):
         assert_is_socket(s)
@@ -105,7 +105,7 @@ class general:
 
 class flowcontrol:
     struct_size = 3
-    
+
     def __init__(self):
         self.stmin = None;
         self.bs = None;
@@ -151,7 +151,7 @@ class flowcontrol:
 
 class linklayer:
     struct_size = 3
-    
+
     def __init__(self):
         self.mtu = None;
         self.tx_dl = None;

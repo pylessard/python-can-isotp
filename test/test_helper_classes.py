@@ -195,7 +195,7 @@ class TestPDUDecoding(unittest.TestCase):
         self.assertEqual(pdu.length, 2)
 
         prefix =[0x55, 0xAA]
-        
+
         # Data fits in single First pdu. Shouldn't happen, but acceptable.
         for length in range(1, 0x1FF):  
             payload = self.make_payload(length)
@@ -290,7 +290,7 @@ class TestPDUDecoding(unittest.TestCase):
 
 
         prefix =[0x55, 0xAA]
-        
+
         # Data fits in single First pdu. Shouldn't happen, but acceptable.
         for length in range(1, 0x1FF):  
             len_data = [(length >> 24) & 0xFF, (length >> 16) & 0xFF, (length >> 8) & 0xFF, (length >> 0) & 0xFF]

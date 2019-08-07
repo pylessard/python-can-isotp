@@ -72,7 +72,7 @@ class Address:
         # From here, input is good. Do some precomputing for speed optimization without bothering about types or values
         self.tx_arbitration_id_physical     = self._get_tx_arbitraton_id(TargetAddressType.Physical)
         self.tx_arbitration_id_functional   = self._get_tx_arbitraton_id(TargetAddressType.Functional)
-       
+
         self.rx_arbitration_id_physical     = self._get_rx_arbitration_id(TargetAddressType.Physical)
         self.rx_arbitration_id_functional   = self._get_rx_arbitration_id(TargetAddressType.Functional)
 
@@ -114,11 +114,11 @@ class Address:
                 raise ValueError('txid and rxid must be specified for Normal addressing mode (11 bits ID)')
             if self.rxid == self.txid:
                 raise ValueError('txid and rxid must be different for Normal addressing mode')
-        
+
         elif self.addressing_mode == AddressingMode.NormalFixed_29bits:
             if self.target_address is None or self.source_address is None:
                 raise ValueError('target_address and source_address must be specified for Normal Fixed addressing (29 bits ID)')
-        
+
         elif self.addressing_mode in [AddressingMode.Extended_11bits, AddressingMode.Extended_29bits]:
             if self.target_address is None or self.rxid is None or self.txid is None:
                 raise ValueError('target_address, rxid and txid must be specified for Extended addressing mode ')
@@ -269,6 +269,6 @@ class Address:
                 val_dict[key] = val
         vals_str = ', '.join(['%s:0x%02x' % (k,val_dict[k]) for k in val_dict])
         return '[%s - %s]' % (AddressingMode.get_name(self.addressing_mode), vals_str)
-    
+
     def __repr__(self):
         return '<IsoTP Address %s at 0x%08x>' % (self.get_content_str(), id(self))

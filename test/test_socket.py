@@ -78,7 +78,7 @@ class TestSocket(unittest.TestCase):
         self.assertEqual(payload, payload2)
         self.assertGreater(diff, expected_time*0.9)
         self.assertLess(diff, expected_time*1.1)
-        
+
     def test_addressing_normal_11bits(self):
         addr = isotp.Address(isotp.AddressingMode.Normal_11bits, txid=0x123, rxid=0x456)
         s = self.make_socket()
@@ -100,7 +100,7 @@ class TestSocket(unittest.TestCase):
         self.assertEqual(rxid, 0x789ABC | socket.CAN_EFF_FLAG)
         self.assertEqual(opts.optflag & isotp.socket.flags.EXTEND_ADDR, 0)
         self.assertEqual(opts.optflag & isotp.socket.flags.RX_EXT_ADDR, 0)
-        
+
 
     def test_addressing_normal_fixed_29bits(self):
         addr = isotp.Address(isotp.AddressingMode.NormalFixed_29bits, source_address=0xaa, target_address=0x55)

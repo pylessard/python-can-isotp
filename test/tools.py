@@ -11,7 +11,7 @@ class Vars:
     CAN_FD_POSSIBLE = False
     CAN_FD_IMPOSSIBLE_REASON = ''
     ISOTP_STATUS_CHECKED = False
-    
+
     next_id = 10
 
 

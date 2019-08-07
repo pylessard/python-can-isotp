@@ -63,7 +63,7 @@ class TestAddressingMode(TransportLayerBaseTest):
         layer.send(self.make_payload(6), tatype)
         with self.assertRaises(ValueError):
             layer.send(self.make_payload(7), tatype)
-        
+
     def test_11bits_normal_basic(self):
         rxid = 0x123
         txid = 0x456
@@ -241,7 +241,7 @@ class TestAddressingMode(TransportLayerBaseTest):
         rxid_functional = 0x18DBAA55
         txid_physical = 0x18DA55AA
         txid_functional = 0x18DB55AA
-        
+
         address = isotp.Address(isotp.AddressingMode.NormalFixed_29bits, target_address = ta, source_address=sa)
 
         self.assertTrue(address.is_for_me(Message(rxid_physical,  extended_id=True)))
@@ -266,7 +266,7 @@ class TestAddressingMode(TransportLayerBaseTest):
         rxid_functional = 0x18DBAA55
         txid_physical = 0x18DA55AA
         txid_functional = 0x18DB55AA
-        
+
         address = isotp.Address(isotp.AddressingMode.NormalFixed_29bits, target_address = ta, source_address=sa)
         layer = isotp.TransportLayer(txfn=self.stack_txfn, rxfn=self.stack_rxfn, address=address, params={'stmin':0, 'blocksize':0})
 
@@ -339,7 +339,7 @@ class TestAddressingMode(TransportLayerBaseTest):
         rxid = 0x456
         sa = 0x55
         ta = 0xAA
-        
+
         address = isotp.Address(isotp.AddressingMode.Extended_11bits, txid=txid, rxid=rxid, source_address=sa, target_address=ta)
 
         self.assertFalse(address.is_for_me(Message(rxid,  extended_id=False))) # No data
@@ -362,7 +362,7 @@ class TestAddressingMode(TransportLayerBaseTest):
         rxid = 0x456
         sa = 0x55
         ta = 0xAA
-        
+
         address = isotp.Address(isotp.AddressingMode.Extended_11bits, txid=txid, rxid=rxid, source_address=sa, target_address=ta)
         layer = isotp.TransportLayer(txfn=self.stack_txfn, rxfn=self.stack_rxfn, address=address, params={'stmin':0, 'blocksize':0})
 
@@ -446,7 +446,7 @@ class TestAddressingMode(TransportLayerBaseTest):
         rxid = 0x456
         sa = 0x55
         ta = 0xAA
-        
+
         address = isotp.Address(isotp.AddressingMode.Extended_29bits, txid=txid, rxid=rxid, source_address=sa, target_address=ta)
 
         self.assertFalse(address.is_for_me(Message(rxid,  extended_id=True))) # No data
@@ -469,7 +469,7 @@ class TestAddressingMode(TransportLayerBaseTest):
         rxid = 0x456
         sa = 0x55
         ta = 0xAA
-        
+
         address = isotp.Address(isotp.AddressingMode.Extended_29bits, txid=txid, rxid=rxid, source_address=sa, target_address=ta)
         layer = isotp.TransportLayer(txfn=self.stack_txfn, rxfn=self.stack_rxfn, address=address, params={'stmin':0, 'blocksize':0})
 
@@ -534,7 +534,7 @@ class TestAddressingMode(TransportLayerBaseTest):
         txid = 0x123
         rxid = 0x456
         ae = 0x99
-        
+
         address = isotp.Address(isotp.AddressingMode.Mixed_11bits, txid=txid, rxid=rxid, address_extension = ae)
 
         self.assertFalse(address.is_for_me(Message(rxid,  extended_id=False))) # No data
@@ -555,7 +555,7 @@ class TestAddressingMode(TransportLayerBaseTest):
         txid = 0x123
         rxid = 0x456
         ae = 0x99
-        
+
         address = isotp.Address(isotp.AddressingMode.Mixed_11bits, txid=txid, rxid=rxid, address_extension = ae)
         layer = isotp.TransportLayer(txfn=self.stack_txfn, rxfn=self.stack_rxfn, address=address, params={'stmin':0, 'blocksize':0})
 
@@ -654,7 +654,7 @@ class TestAddressingMode(TransportLayerBaseTest):
         rxid_functional = 0x18CDAA55
         txid_physical = 0x18CE55AA
         txid_functional = 0x18CD55AA
-        
+
         address = isotp.Address(isotp.AddressingMode.Mixed_29bits, source_address=sa, target_address=ta, address_extension = ae)
         layer = isotp.TransportLayer(txfn=self.stack_txfn, rxfn=self.stack_rxfn, address=address, params={'stmin':0, 'blocksize':0})
 

@@ -8,7 +8,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
     long_description = f.read()
 
 setup(
-  name = 'can-isotp',
+    name = 'can-isotp',
   packages = find_packages(exclude=['test']),
   version = '1.5',
   description = 'Module enabling the IsoTP protocol defined by ISO-15765',
