@@ -375,7 +375,7 @@ class TransportLayer:
 			try:
 				data = bytearray(data)
 			except:
-				raise ValueError('data must be an IsoTpFrame or bytearray')
+				raise ValueError('data must be a bytearray')
 
 		if self.tx_queue.full():
 			raise RuntimeError('Transmit queue is full')
