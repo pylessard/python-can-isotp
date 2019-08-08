@@ -57,15 +57,16 @@ class Address:
     :type address_extension: int or None
     """
 
-    def __init__(self, addressing_mode = AddressingMode.Normal_11bits, txid=None, rxid=None, target_address=None, source_address=None, address_extension=None):
+    def __init__(self, addressing_mode=AddressingMode.Normal_11bits, txid=None, rxid=None, target_address=None, functional_address=None, source_address=None, address_extension=None):
 
-        self.addressing_mode    = addressing_mode
-        self.target_address     = target_address
-        self.source_address     = source_address
-        self.address_extension  = address_extension
-        self.txid               = txid
-        self.rxid               = rxid
-        self.is_29bits          = True if self.addressing_mode in [ AddressingMode.Normal_29bits, AddressingMode.NormalFixed_29bits, AddressingMode.Extended_29bits, AddressingMode.Mixed_29bits] else False
+        self.addressing_mode            = addressing_mode
+        self.target_address             = target_address
+        self.functional_address         = functional_address
+        self.source_address             = source_address
+        self.address_extension          = address_extension
+        self.txid                       = txid
+        self.rxid                       = rxid
+        self.is_29bits                  = True if self.addressing_mode in [AddressingMode.Normal_29bits, AddressingMode.NormalFixed_29bits, AddressingMode.Extended_29bits, AddressingMode.Mixed_29bits] else False
 
         self.validate()
 
@@ -139,6 +140,12 @@ class Address:
             if self.target_address < 0 or self.target_address > 0xFF:
                 raise ValueError('target_address must be an integer between 0x00 and 0xFF')
 
+        if self.functional_address is not None:
+            if not isinstance(self.functional_address, int):
+                raise ValueError('functional_address must be an integer')
+            if self.functional_address < 0 or self.functional_address > 0xFF:
+                raise ValueError('functional_address must be an integer between 0x00 and 0xFF')
+
         if self.source_address is not None:
             if not isinstance(self.source_address, int):
                 raise ValueError('source_address must be an integer')
@@ -187,8 +194,13 @@ class Address:
         elif self.addressing_mode == AddressingMode.Normal_29bits:
             return self.txid
         elif self.addressing_mode == AddressingMode.NormalFixed_29bits:
-            bits23_16 = 0xDA0000 if address_type==TargetAddressType.Physical else 0xDB0000
-            return 0x18000000 | bits23_16 | (self.target_address << 8) | self.source_address
+            if address_type == TargetAddressType.Physical:
+                bits23_16 = 0xDA0000
+                _target_address = self.target_address
+            else:
+                bits23_16 = 0xDB0000
+                _target_address = self.functional_address if self.functional_address else self.target_address
+            return 0x18000000 | bits23_16 | (_target_address << 8) | self.source_address
         elif self.addressing_mode == AddressingMode.Extended_11bits:
             return self.txid
         elif self.addressing_mode == AddressingMode.Extended_29bits:
@@ -205,8 +217,13 @@ class Address:
         elif self.addressing_mode == AddressingMode.Normal_29bits:
             return self.rxid
         elif self.addressing_mode == AddressingMode.NormalFixed_29bits:
-            bits23_16 = 0xDA0000 if address_type==TargetAddressType.Physical else 0xDB0000
-            return 0x18000000 | bits23_16 | (self.source_address << 8) | self.target_address
+            if address_type == TargetAddressType.Physical:
+                bits23_16 = 0xDA0000
+                _source_address = self.source_address
+            else:
+                bits23_16 = 0xDB0000
+                _source_address = self.functional_address if self.functional_address else self.source_address
+            return 0x18000000 | bits23_16 | (_source_address << 8) | self.target_address
         elif self.addressing_mode == AddressingMode.Extended_11bits:
             return self.rxid
         elif self.addressing_mode == AddressingMode.Extended_29bits:
@@ -229,9 +246,13 @@ class Address:
         return False
 
     def _is_for_me_normalfixed(self, msg):
+        return_value = False
         if self.is_29bits == msg.is_extended_id:
-            return ((msg.arbitration_id >> 16) & 0xFF) in [218,219] and (msg.arbitration_id & 0xFF00) >> 8 == self.source_address and msg.arbitration_id & 0xFF == self.target_address
-        return False
+            if (((msg.arbitration_id >> 16) & 0xFF) in [218, 219] and
+                    ((msg.arbitration_id & 0xFF00) >> 8) in [self.source_address, self.functional_address] and
+                    msg.arbitration_id & 0xFF == self.target_address):
+                return_value = True
+        return return_value
 
     def _is_for_me_mixed_11bits(self, msg):
         if self.is_29bits == msg.is_extended_id:

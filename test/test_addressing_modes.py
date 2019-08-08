@@ -14,6 +14,7 @@ class TestAddressingMode(TransportLayerBaseTest):
         isotp.Address(isotp.AddressingMode.Normal_11bits, txid=1, rxid=2)
         isotp.Address(isotp.AddressingMode.Normal_29bits, txid=1, rxid=2)
         isotp.Address(isotp.AddressingMode.NormalFixed_29bits, source_address=1, target_address=2)
+        isotp.Address(isotp.AddressingMode.NormalFixed_29bits, source_address=1, target_address=2, functional_address=255)
         isotp.Address(isotp.AddressingMode.Extended_11bits, txid=1, rxid=2, target_address=3)
         isotp.Address(isotp.AddressingMode.Extended_29bits, txid=1, rxid=2, target_address=3)
         isotp.Address(isotp.AddressingMode.Mixed_11bits, txid=1, rxid=2, address_extension=3)
@@ -39,6 +40,19 @@ class TestAddressingMode(TransportLayerBaseTest):
         layer.send(self.make_payload(7), tatype)
         with self.assertRaises(ValueError):
             layer.send(self.make_payload(8), tatype)
+
+        address = isotp.Address(isotp.AddressingMode.NormalFixed_29bits, source_address=1, target_address=2, functional_address=255)
+        layer = isotp.TransportLayer(txfn=self.stack_txfn, rxfn=self.stack_rxfn, address=address)
+        layer.send(self.make_payload(7), tatype)
+        with self.assertRaises(ValueError):
+            layer.send(self.make_payload(8), tatype)
+        with self.assertRaises(ValueError):
+            isotp.Address(isotp.AddressingMode.NormalFixed_29bits, source_address=1, target_address=2, functional_address='b')
+        with self.assertRaises(ValueError):
+            isotp.Address(isotp.AddressingMode.NormalFixed_29bits, source_address=1, target_address=2, functional_address=256)
+        with self.assertRaises(ValueError):
+            isotp.Address(isotp.AddressingMode.NormalFixed_29bits, source_address=1, target_address=2, functional_address=-1)
+
 
         address = isotp.Address(isotp.AddressingMode.Extended_11bits, txid=1, rxid=2, target_address=3)
         layer = isotp.TransportLayer(txfn=self.stack_txfn, rxfn=self.stack_rxfn, address=address)
@@ -243,6 +257,30 @@ class TestAddressingMode(TransportLayerBaseTest):
         txid_functional = 0x18DB55AA
 
         address = isotp.Address(isotp.AddressingMode.NormalFixed_29bits, target_address = ta, source_address=sa)
+
+        self.assertTrue(address.is_for_me(Message(rxid_physical,  extended_id=True)))
+        self.assertTrue(address.is_for_me(Message(rxid_functional,  extended_id=True)))
+        self.assertFalse(address.is_for_me(Message(txid_physical,  extended_id=True)))
+        self.assertFalse(address.is_for_me(Message(txid_functional,  extended_id=True)))
+        self.assertFalse(address.is_for_me(Message(arbitration_id=(rxid_physical) & 0x7FF, extended_id=False)))
+        self.assertFalse(address.is_for_me(Message(arbitration_id=rxid_physical+1, extended_id=True)))
+        self.assertFalse(address.is_for_me(Message(arbitration_id=(rxid_physical+1)&0x7FF, extended_id=False)))
+
+        self.assertEqual(address.get_tx_arbitraton_id(isotp.TargetAddressType.Physical), txid_physical)
+        self.assertEqual(address.get_tx_arbitraton_id(isotp.TargetAddressType.Functional), txid_functional)
+        self.assertEqual(address.get_rx_arbitraton_id(isotp.TargetAddressType.Physical), rxid_physical)
+        self.assertEqual(address.get_rx_arbitraton_id(isotp.TargetAddressType.Functional), rxid_functional)
+
+    def test_29bits_normal_fixed_functional(self):
+        ta = 0x55
+        fa = 0xFF
+        sa = 0xAA
+        rxid_physical = 0x18DAAA55
+        rxid_functional = 0x18DBFF55
+        txid_physical = 0x18DA55AA
+        txid_functional = 0x18DBFFAA
+
+        address = isotp.Address(isotp.AddressingMode.NormalFixed_29bits, target_address=ta, functional_address=fa, source_address=sa)
 
         self.assertTrue(address.is_for_me(Message(rxid_physical,  extended_id=True)))
         self.assertTrue(address.is_for_me(Message(rxid_functional,  extended_id=True)))
