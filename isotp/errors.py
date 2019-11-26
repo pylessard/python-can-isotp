@@ -75,3 +75,8 @@ class InvalidCanFdFirstFrameRXDL(IsoTpError):
     Happens when a FirstFrame is received with missing data; In other words when CAN_DL is smaller than the deduced RX_DL. The sender did not optimized the capacity usage of the CAN message.
     """
     pass
+class OverflowError(IsoTpError):
+    """
+    Happens when the TransportLayer receive a FlowControl PDU with a FlowStatus=Overflow (2). In this event, the transmission is stopped.
+    """
+    pass

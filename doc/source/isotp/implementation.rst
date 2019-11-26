@@ -181,4 +181,4 @@ All errors inherit :class:`isotp.IsoTpError<isotp.IsoTpError>` which itself inhe
 .. autoclass:: isotp.ChangingInvalidRXDLError
 .. autoclass:: isotp.MissingEscapeSequenceError
 .. autoclass:: isotp.InvalidCanFdFirstFrameRXDL
-
+.. autoclass:: isotp.OverflowError

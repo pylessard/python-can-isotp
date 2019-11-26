@@ -526,6 +526,7 @@ class TransportLayer:
         if flow_control_frame is not None:
             if flow_control_frame.flow_status == PDU.FlowStatus.Overflow: 	# Needs to stop sending. 
                 self.stop_sending()
+                self.trigger_error(isotp.errors.OverflowError('Received a FlowControl PDU indicating an Overflow. Stopping transmission.'))
                 return
 
             if self.tx_state == self.TxState.IDLE:

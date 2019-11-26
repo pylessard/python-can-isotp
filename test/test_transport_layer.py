@@ -721,6 +721,20 @@ class TestTransportLayer(TransportLayerBaseTest):
         self.assertIsNone(self.get_tx_can_msg())
         self.assert_error_triggered(isotp.UnexpectedFlowControlError)
 
+    def test_send_respect_overflow(self):
+        payload = self.make_payload(0x30)
+        self.tx_isotp_frame(payload)
+        self.stack.process()
+        msg = self.get_tx_can_msg()
+        self.assertEqual(msg.data, bytearray([0x10, 0x30] + payload[:6]))
+        self.assertIsNone(self.get_tx_can_msg())
+        self.stack.process()
+        self.assertIsNone(self.get_tx_can_msg())
+        self.simulate_rx_flowcontrol(flow_status=2, stmin=0, blocksize=8)   # Overflow
+        self.stack.process()
+        self.assert_error_triggered(isotp.OverflowError)
+        self.assertIsNone(self.get_tx_can_msg()) 
+
     def test_send_respect_wait_frame(self):
         self.stack.params.set('wftmax', 15)
         self.stack.params.set('rx_flowcontrol_timeout', 500)
