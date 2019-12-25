@@ -82,14 +82,14 @@ Usage
 
 To configure a socket, few methods are available 
 
-.. py:method:: socket.set_opts(optflag=None, frame_txtime=None, ext_address=None, txpad=None, rxpad=None, rx_ext_address=None)
+.. py:method:: socket.set_opts(optflag=None, frame_txtime=None, ext_address=None, txpad=None, rxpad=None, rx_ext_address=None, tx_stmin=None)
    
    Sets the general options of the socket
 
    :param optflag: A list of flags modifying the protocol behaviour. Refer to :class:`socket.flags<isotp.socket.flags>`
    :type optflag: int
 
-   :param frame_txtime: Sets the transmit separation time that will override the receiver requirement. If not None, flags.FORCE_TXSTMIN will be set
+   :param frame_txtime: Frame transmission time (N_As/N_Ar) in nanoseconds.
    :type frame_txtime: int
 
    :param ext_address: The extended address to use. If not None, flags.EXTEND_ADDR will be set.
@@ -103,6 +103,9 @@ To configure a socket, few methods are available
 
    :param rx_ext_address: The extended address to use in reception. If not None, flags.RX_EXT_ADDR will be set
    :type rx_ext_address: int
+
+   :param tx_stmin: Sets the transmit separation time (time between consecutive frame) in nanoseconds. This value will overrides the value received through FlowControl frames. If not None, flags.FORCE_TXSTMIN will be set
+   :type tx_stmin: int
 
 
 .. py:method:: socket.set_fc_opts(bs=None, stmin=None, wftmax=None)
