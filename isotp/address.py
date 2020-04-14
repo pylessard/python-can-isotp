@@ -57,7 +57,7 @@ class Address:
     :type address_extension: int or None
     """
 
-    def __init__(self, addressing_mode = AddressingMode.Normal_11bits, txid=None, rxid=None, target_address=None, source_address=None, address_extension=None):
+    def __init__(self, addressing_mode = AddressingMode.Normal_11bits, txid=None, rxid=None, target_address=None, source_address=None, address_extension=None, **kwargs):
 
         self.addressing_mode    = addressing_mode
         self.target_address     = target_address
@@ -225,7 +225,7 @@ class Address:
     def _is_for_me_extended(self, msg):
         if self.is_29bits == msg.is_extended_id:
             if msg.data is not None and len(msg.data) > 0:
-                return msg.arbitration_id == self.rxid and int(msg.data[0]) == self.source_address 
+                return msg.arbitration_id == self.rxid and int(msg.data[0]) == self.source_address
         return False
 
     def _is_for_me_normalfixed(self, msg):
