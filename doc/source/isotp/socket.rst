@@ -104,7 +104,7 @@ To configure a socket, few methods are available
    :param rx_ext_address: The extended address to use in reception. If not None, flags.RX_EXT_ADDR will be set
    :type rx_ext_address: int
 
-   :param tx_stmin: Sets the transmit separation time (time between consecutive frame) in nanoseconds. This value will overrides the value received through FlowControl frames. If not None, flags.FORCE_TXSTMIN will be set
+   :param tx_stmin: Sets the transmit separation time (time between consecutive frame) in nanoseconds. This value will override the value received through FlowControl frame. If not None, flags.FORCE_TXSTMIN will be set
    :type tx_stmin: int
 
 
