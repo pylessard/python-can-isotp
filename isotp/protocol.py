@@ -192,7 +192,10 @@ class TransportLayer:
     LOGGER_NAME = 'isotp'
 
     class Params:
-        __slots__ = 'stmin', 'blocksize', 'squash_stmin_requirement', 'rx_flowcontrol_timeout', 'rx_consecutive_frame_timeout', 'tx_padding', 'wftmax', 'tx_data_length', 'max_frame_size', 'can_fd'
+        __slots__ = (   'stmin', 'blocksize', 'squash_stmin_requirement', 'rx_flowcontrol_timeout', 
+                        'rx_consecutive_frame_timeout', 'tx_padding', 'wftmax', 'tx_data_length', 'tx_data_min_length', 
+                        'max_frame_size', 'can_fd'
+                        )
 
         def __init__(self):
             self.stmin 							=  0
@@ -203,6 +206,7 @@ class TransportLayer:
             self.tx_padding 					=  None
             self.wftmax						    = 0
             self.tx_data_length					= 8
+            self.tx_data_min_length             = None
             self.max_frame_size					= 4095
             self.can_fd							= False
 
@@ -262,7 +266,17 @@ class TransportLayer:
                 raise ValueError('tx_data_length must be an integer')
 
             if self.tx_data_length not in [8,12,16,20,24,32,48,64]:
-                raise ValueError('tx_data_length must be one of these value : 8, 12, 16, 20, 24, 32, 48, 64 ')	
+                raise ValueError('tx_data_length must be one of these value : 8, 12, 16, 20, 24, 32, 48, 64 ')  
+
+            if self.tx_data_min_length is not None:
+                if not isinstance(self.tx_data_min_length, int) :
+                    raise ValueError('tx_data_min_length must be an integer')
+
+                if self.tx_data_min_length not in [1,2,3,4,5,6,7,8,12,16,20,24,32,48,64]:
+                    raise ValueError('tx_data_min_length must be one of these value : 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64 ')  
+
+                if self.tx_data_min_length > self.tx_data_length:
+                    raise ValueError('tx_data_min_length cannot be greater than tx_data_length')
 
             if not isinstance(self.max_frame_size, int):
                 raise ValueError('max_frame_size must be an integer')
@@ -652,15 +666,27 @@ class TransportLayer:
 
     def pad_message_data(self, msg_data):
         must_pad = False
-        target_length = self.params.tx_data_length
-        if self.params.tx_padding is not None:
-            must_pad = True
-
-        elif self.params.tx_data_length > 8 and len(msg_data) > 8:
-            must_pad = True
-            target_length = self.get_nearest_can_fd_size(len(msg_data))
-
         padding_byte = 0xCC if self.params.tx_padding is None else self.params.tx_padding
+        
+        if self.params.tx_data_length == 8: 
+            if self.params.tx_data_min_length is None:
+                if self.params.tx_padding is not None:     # ISO-15765:2016 - 10.4.2.1
+                    must_pad = True
+                    target_length = 8
+                else:   # ISO-15765:2016 - 10.4.2.2
+                    pass  
+
+            else:       # issue #27
+                must_pad = True
+                target_length = self.params.tx_data_min_length
+
+        elif self.params.tx_data_length > 8:
+            if self.params.tx_data_min_length is None:  # ISO-15765:2016 - 10.4.2.3
+                target_length = self.get_nearest_can_fd_size(len(msg_data))
+                must_pad = True
+            else:               # Issue #27
+                must_pad = True
+                target_length = max(self.params.tx_data_min_length, self.get_nearest_can_fd_size(len(msg_data)))
 
         if must_pad and len(msg_data) < target_length:
             msg_data.extend(bytearray([padding_byte & 0xFF] * (target_length-len(msg_data))))

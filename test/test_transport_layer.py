@@ -1055,7 +1055,18 @@ class TestTransportLayer(TransportLayerBaseTest):
         self.tx_isotp_frame(payload)
         self.stack.process()
         msg = self.get_tx_can_msg()
-        self.assertEqual(msg.data, bytearray([0x0, len(payload)] + payload + [0xAA] * 4))	
+        self.assertEqual(msg.data, bytearray([0x0, len(payload)] + payload))	
+        self.assertEqual(msg.dlc, 9 )
+
+    def test_transmit_single_frame_txdl_16_bytes_padding_min_length_16(self):
+        self.stack.params.set('tx_data_length', 16)
+        self.stack.params.set('tx_data_min_length', 16)
+        self.stack.params.set('tx_padding', 0xAA)
+        payload = self.make_payload(10)
+        self.tx_isotp_frame(payload)
+        self.stack.process()
+        msg = self.get_tx_can_msg()
+        self.assertEqual(msg.data, bytearray([0x0, len(payload)] + payload + [0xAA] * 4))   
         self.assertEqual(msg.dlc, 10 )
 
     def test_transmit_single_frame_txdl_64_bytes_default_padding(self):
@@ -1064,8 +1075,68 @@ class TestTransportLayer(TransportLayerBaseTest):
         self.tx_isotp_frame(payload)
         self.stack.process()
         msg = self.get_tx_can_msg()
-        self.assertEqual(msg.data, bytearray([0x00, len(payload)] + payload + [0xCC] * (64-len(payload)-2)))	
+        self.assertEqual(msg.data, bytearray([0x00, len(payload)] + payload + [0xCC] * (64-len(payload)-2)))    
         self.assertEqual(msg.dlc, 15 )
+
+    def test_transmit_single_frame_txdl_64_bytes_small_payload(self):
+        self.stack.params.set('tx_data_length', 64)
+        payload = self.make_payload(16)
+        self.tx_isotp_frame(payload)
+        self.stack.process()
+        msg = self.get_tx_can_msg()
+        self.assertEqual(msg.data, bytearray([0x00, len(payload)] + payload + [0xCC, 0xCC]))    
+        self.assertEqual(msg.dlc, 11 )
+
+    def test_transmit_single_frame_txdl_64_bytes_min_length_64(self):
+        self.stack.params.set('tx_data_length', 64)
+        self.stack.params.set('tx_data_min_length', 64)
+        payload = self.make_payload(16)
+        self.tx_isotp_frame(payload)
+        self.stack.process()
+        msg = self.get_tx_can_msg()
+        self.assertEqual(msg.data, bytearray([0x00, len(payload)] + payload + [0xCC] * (64-len(payload)-2)))    
+        self.assertEqual(msg.dlc, 15 )
+
+    def test_transmit_single_frame_txdl_64_bytes_min_length_32(self):
+        self.stack.params.set('tx_data_length', 64)
+        self.stack.params.set('tx_data_min_length', 32)
+        self.stack.params.set('tx_padding', 0xBB)
+        payload = self.make_payload(128)
+        self.tx_isotp_frame(payload)
+        self.stack.process()
+        msg = self.get_tx_can_msg()
+        self.assertEqual(msg.data, bytearray([0x10, len(payload)] + payload[:62]) )    
+        self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=0)
+        self.stack.process()
+        msg = self.get_tx_can_msg()
+        #from IPython import embed
+        #embed()
+        self.assertEqual(msg.data, bytearray([0x21] + payload[62:125]))
+        msg = self.get_tx_can_msg()
+        self.assertEqual(msg.data, bytearray([0x22] + payload[125:] + [0xBB] * 28))   
+        self.assertEqual(msg.dlc, 13 )
+
+    def test_transmit_single_frame_txdl_8_min_length_6(self):
+        self.stack.params.set('tx_data_length', 8)
+        self.stack.params.set('tx_data_min_length', 6)  # This behaviour is not defined by the standard, but we allow it
+        self.stack.params.set('tx_padding', 0xAA)
+        payload = self.make_payload(3)
+        self.tx_isotp_frame(payload)
+        self.stack.process()
+        msg = self.get_tx_can_msg()
+        self.assertEqual(msg.data, bytearray([0x03] + payload + [0xAA]*2))
+        self.assertEqual(msg.dlc, 6 )
+
+    def test_transmit_single_frame_txdl_8_no_min_length(self):
+        self.stack.params.set('tx_data_length', 8)
+        self.stack.params.set('tx_data_min_length', None)  # For TX_DL=8, padding is always up to 8 bytes
+        self.stack.params.set('tx_padding', 0xAA)
+        payload = self.make_payload(3)
+        self.tx_isotp_frame(payload)
+        self.stack.process()
+        msg = self.get_tx_can_msg()
+        self.assertEqual(msg.data, bytearray([0x03] + payload + [0xAA]*4))
+        self.assertEqual(msg.dlc, 8 )
 
     def test_can_fd_singleframe_tx_dl(self):
         tx_dl_list = [8,12,16,20,24,32,48,64]
@@ -1272,7 +1343,34 @@ class TestTransportLayer(TransportLayerBaseTest):
         with self.assertRaises(ValueError):
             params['tx_data_length'] = 9
             self.create_layer(params)
+        params['tx_data_length'] = 8
 
+        with self.assertRaises(ValueError):
+            params['tx_data_min_length'] = -1
+            self.create_layer(params)
+
+        with self.assertRaises(ValueError):
+            params['tx_data_min_length'] = 0x100
+            self.create_layer(params)
+
+        with self.assertRaises(ValueError):
+            params['tx_data_min_length'] = 'string'
+            self.create_layer(params)
+
+        with self.assertRaises(ValueError):
+            params['tx_data_min_length'] = 0
+            self.create_layer(params)
+
+        with self.assertRaises(ValueError):
+            params['tx_data_min_length'] = 9
+            self.create_layer(params)
+
+        with self.assertRaises(ValueError):
+            params['tx_data_length'] = 32
+            params['tx_data_min_length'] = 64
+            self.create_layer(params)
+
+        params['tx_data_min_length'] = None
         tx_dls = [8,12,16,20,24,32,48,64]
         for tx_dl in tx_dls:
             params['tx_data_length'] = tx_dl

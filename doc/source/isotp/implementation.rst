@@ -57,10 +57,23 @@ The transport layer ``params`` parameter must be a dictionary with the following
    The maximum number of bytes that the Link Layer (CAN layer) can transport. In other words, the biggest number of data bytes possible in a single CAN message.
    Valid values are : 8, 12, 16, 20, 24, 32, 48, 64.
    
-   Large frames will be transmitted in small CAN ,essages of this size except for the last CAN message that will be as small as possible, unless padding is used. 
+   Large frames will be transmitted in small CAN messages of this size except for the last CAN message that will be as small as possible, unless padding is used. 
 
    This parameter was formely named ``ll_data_length`` but has been renamed to explicitly indicate that it affects transmitted messages only.
 
+.. _param_tx_data_min_length:
+
+.. attribute:: tx_data_min_length
+   :annotation: (int)
+
+   **default: None**
+
+   Sets the minimum length of CAN messages. Message with less data than this value will be padded using ``tx_padding`` byte or ``0xCC`` if ``tx_padding=None``. 
+
+   When set to ``None``, CAN messages will be as small as possible unless ``tx_data_length=8`` and ``tx_padding != None``; in that case, all CAN messages will be padded up to 8 bytes to be compliant with ISO-15765.
+
+   Valid values are : 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64.
+   
 .. _param_squash_stmin_requirement:
 
 .. attribute:: squash_stmin_requirement
@@ -97,7 +110,7 @@ The transport layer ``params`` parameter must be a dictionary with the following
 
    **default: None**
 
-   When not ``None`` represents the byte used for padding messages sent. No padding applied when ``None``
+   When not ``None`` represents the byte used for padding messages sent. No padding applied when ``None`` unless ``tx_data_min_length`` is set or CAN FD mandatory padding is required.
 
 .. _param_wftmax:
 
