@@ -867,7 +867,10 @@ class CanStack(TransportLayer):
 
     """
 
-    def tx_canbus(self, msg):
+    def _tx_canbus_3plus(self, msg):
+        self.bus.send(can.Message(arbitration_id=msg.arbitration_id, data = msg.data, is_extended_id=msg.is_extended_id, is_fd=msg.is_fd))
+
+    def _tx_canbus_3minus(self, msg):
         self.bus.send(can.Message(arbitration_id=msg.arbitration_id, data = msg.data, extended_id=msg.is_extended_id, is_fd=msg.is_fd))
 
     def rx_canbus(self):
@@ -878,6 +881,14 @@ class CanStack(TransportLayer):
     def __init__(self, bus, *args, **kwargs):
         global can
         import can
+
+        # Backward compatibility stuff.
+        message_input_args =  can.Message.__init__.__code__.co_varnames[:can.Message.__init__.__code__.co_argcount]
+        if 'is_extended_id' in message_input_args:
+            self.tx_canbus = self._tx_canbus_3plus
+        else:
+            self.tx_canbus = self._tx_canbus_3minus
+
         self.set_bus(bus)
         TransportLayer.__init__(self, rxfn=self.rx_canbus, txfn=self.tx_canbus, *args, **kwargs)
 
