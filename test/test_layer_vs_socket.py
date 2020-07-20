@@ -28,9 +28,6 @@ class TestLayerAgainstSocket(ThreadableTest):
         self.reception_complete = False
         self.socket_ready=False
 
-        global can
-        import can
-
     def setUp(self):
         self.socket_list = []
 
