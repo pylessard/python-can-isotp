@@ -6,8 +6,15 @@ from . import unittest_logging
 from . import tools
 import math
 
+try:
+    import can
+    can_module_missing = False
+except ImportError:
+    can_module_missing = True
+
 
 @unittest.skipIf(tools.check_isotp_socket_possible() == False, 'Cannot test stack against IsoTP socket. %s' % tools.isotp_socket_impossible_reason())
+@unittest.skipIf(can_module_missing, 'Python-can must be isntalled to run this test suite')
 class TestLayerAgainstSocket(ThreadableTest):
 
     def __init__(self, *args, **kwargs):
