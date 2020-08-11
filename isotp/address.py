@@ -111,7 +111,7 @@ class Address:
 
         if self.addressing_mode in [AddressingMode.Normal_11bits, AddressingMode.Normal_29bits]:
             if self.rxid is None or self.txid is None:
-                raise ValueError('txid and rxid must be specified for Normal addressing mode (11 bits ID)')
+                raise ValueError('txid and rxid must be specified for Normal addressing mode (11 or 29 bits ID)')
             if self.rxid == self.txid:
                 raise ValueError('txid and rxid must be different for Normal addressing mode')
 
@@ -121,17 +121,17 @@ class Address:
 
         elif self.addressing_mode in [AddressingMode.Extended_11bits, AddressingMode.Extended_29bits]:
             if self.target_address is None or self.rxid is None or self.txid is None:
-                raise ValueError('target_address, rxid and txid must be specified for Extended addressing mode ')
+                raise ValueError('target_address, rxid and txid must be specified for Extended addressing mode (11 or 29 bits ID)')
             if self.rxid == self.txid:
                 raise ValueError('txid and rxid must be different')
 
         elif self.addressing_mode == AddressingMode.Mixed_11bits:
             if self.rxid is None or self.txid is None or self.address_extension is None:
-                raise ValueError('rxid, txid and address_extension must be specified for Mixed addressing mode')
+                raise ValueError('rxid, txid and address_extension must be specified for Mixed addressing mode (11 bits ID)')
 
         elif self.addressing_mode == AddressingMode.Mixed_29bits:
             if self.target_address is None or self.source_address is None or self.address_extension is None:
-                raise ValueError('target_address, source_address and address_extension must be specified for Mixed addressing mode')
+                raise ValueError('target_address, source_address and address_extension must be specified for Mixed addressing mode (29 bits ID)')
 
         if self.target_address is not None:
             if not isinstance(self.target_address, int):
