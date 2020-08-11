@@ -1,7 +1,7 @@
 Addressing
 ==========
 
-ISO-15765 defines several addressing modes and this module supports them all. Depending on the addressing mode, the source/target addresses will be defined in different way.
+ISO-15765 defines several addressing modes and this module supports them all. Depending on the addressing mode, the source/target addresses will be defined in a different way.
 An IsoTP address is represented by the :class:`isotp.Address<isotp.Address>` object.
 
 ------
@@ -110,7 +110,7 @@ Mixed addressing - 11 bits
 
 Mixed addressing (11 bits) is a mix of normal addressing and extended addressing. The payload prefix is called ``address_extension``
 
-When used in legislated 11-bits CAN, Mixed addressing behave like extended addressing with both source_address and target_address being defined by ``address_extension``
+When used in legislated 11-bits CAN, Mixed addressing behaves like extended addressing with both source_address and target_address being defined by ``address_extension``
 
 Condition to receive a message (discarded if not met): 
  - Message arbitration ID must match receiver ``rxid``
