@@ -43,6 +43,9 @@ class flags:
     RX_EXT_ADDR     = 0x200
     """ When sets, a different extended address can be used for reception than for transmission."""
 
+    WAIT_TX_DONE     = 0x400
+    """ When set, we wait for tx completion to make sure the PDU is completely passed to the CAN netdevice queue."""
+
 class LinkLayerProtocol:
     CAN = 16
     """ Internal structure size of a CAN 2.0 frame"""
