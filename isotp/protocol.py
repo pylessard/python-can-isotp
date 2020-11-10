@@ -370,7 +370,13 @@ class TransportLayer:
         self.error_handler = error_handler
         self.actual_rxdl   = None	
 
+        self.timings = {
+            (self.RxState.IDLE, self.TxState.IDLE) 	: 0.05,
+            (self.RxState.IDLE, self.TxState.WAIT_FC) 	: 0.01,
+        }
 
+        self.idle_sleep = 0.05                  # Default
+        self.wait_fc_sleep = 0.01
 
     def send(self, data, target_address_type=isotp.address.TargetAddressType.Physical):
         """
@@ -648,6 +654,15 @@ class TransportLayer:
 
         return output_msg
 
+    def set_sleep_timing(self, idle, wait_fc):
+        """
+        Sets values in seconds that can be passed to ``time.sleep()`` when the stack is processed in a different thread.
+        """
+        self.timings = {
+            (self.RxState.IDLE, self.TxState.IDLE) 	: idle,
+            (self.RxState.IDLE, self.TxState.WAIT_FC) 	: wait_fc,
+        }
+
     def set_address(self, address):
         """
         Sets the layer :class:`Address<isotp.Address>`. Can be set after initialization if needed.
@@ -837,14 +852,11 @@ class TransportLayer:
 
         The value will change according to the internal state machine state, sleeping longer while idle and shorter when active.
         """
-        timings = {
-                (self.RxState.IDLE, self.TxState.IDLE) 		: 0.05,
-                (self.RxState.IDLE, self.TxState.WAIT_FC) 	: 0.01,
-        }
 
         key = (self.rx_state, self.tx_state)
-        if key in timings:
-            return timings[key]
+        if key in self.timings:
+            return self.timings[key]
+
         else:
             return 0.001
 
