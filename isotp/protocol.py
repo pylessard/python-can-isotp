@@ -375,9 +375,6 @@ class TransportLayer:
             (self.RxState.IDLE, self.TxState.WAIT_FC) 	: 0.01,
         }
 
-        self.idle_sleep = 0.05                  # Default
-        self.wait_fc_sleep = 0.01
-
     def send(self, data, target_address_type=isotp.address.TargetAddressType.Physical):
         """
         Enqueue an IsoTP frame to be sent over CAN network
