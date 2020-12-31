@@ -147,6 +147,18 @@ The transport layer ``params`` parameter must be a dictionary with the following
    Setting this parameter to ``True`` does not change the behaviour of the :class:`TransportLayer<isotp.TransportLayer>` except that outputted message will have their ``is_fd`` property set to ``True``. This parameter is just a convenience to integrate more easily with python-can
 
 
+.. _param_bitrate_switch:
+
+.. attribute:: bitrate_switch
+   :annotation: (bool)
+
+   **default: False**
+
+   When set to ``True``, tx message will have a flag ``bitrate_switch`` marked as ``True``, meaning that the underlying layer shall performe a CAN FD bitrate switch after arbitration phase.
+
+   Setting this parameter to ``True`` does not change the behaviour of the :class:`TransportLayer<isotp.TransportLayer>` except that outputted message will have their ``bitrate_switch`` property set to ``True``. This parameter is just a convenience to integrate more easily with python-can
+
+
 -----
 
 Usage
