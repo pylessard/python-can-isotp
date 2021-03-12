@@ -439,6 +439,9 @@ class TransportLayer:
         Function to be called periodically, as fast as possible. 
         This function is non-blocking.
         """	
+
+        self.check_timeouts_rx()
+
         msg = True
         while msg is not None:
             msg = self.rxfn()
@@ -453,6 +456,12 @@ class TransportLayer:
                 self.logger.debug("Sending : <%03X> (%d)\t %s" % (msg.arbitration_id, len(msg.data), binascii.hexlify(msg.data)))
                 self.txfn(msg)
 
+    def check_timeouts_rx(self):
+        # Check timeout first
+        if self.timer_rx_cf.is_timed_out():
+            self.trigger_error(isotp.errors.ConsecutiveFrameTimeoutError("Reception of CONSECUTIVE_FRAME timed out."))
+            self.stop_receiving()
+
     def process_rx(self, msg):
 
         if not self.address.is_for_me(msg):
@@ -465,11 +474,6 @@ class TransportLayer:
             self.trigger_error(isotp.errors.InvalidCanDataError("Received invalid CAN frame. %s" % (str(e))))
             self.stop_receiving()
             return
-
-        # Check timeout first
-        if self.timer_rx_cf.is_timed_out():
-            self.trigger_error(isotp.errors.ConsecutiveFrameTimeoutError("Reception of CONSECUTIVE_FRAME timed out."))
-            self.stop_receiving()
 
         # Process Flow Control message
         if pdu.type == PDU.Type.FLOW_CONTROL:
@@ -587,7 +591,6 @@ class TransportLayer:
 
 
         # ======= FSM ======
-
         # Check this first as we may have another isotp frame to send and we need to handle it right away without waiting for next "process()" call
         if self.tx_state != self.TxState.IDLE and len(self.tx_buffer) == 0:
             self.stop_sending()	

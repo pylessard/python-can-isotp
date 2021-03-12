@@ -235,6 +235,18 @@ class TestTransportLayer(TransportLayerBaseTest):
         self.assertIsNone(self.get_tx_can_msg()) # Do not send flow control
         self.assert_error_triggered(isotp.WrongSequenceNumberError)
 
+    def test_receive_timeout_consecutive_frame_after_flow_control(self):
+        self.stack.params.set('rx_consecutive_frame_timeout', 200)
+
+        payload_size = 10
+        payload = self.make_payload(payload_size)
+        self.simulate_rx(data = [0x10, payload_size] + payload[0:6])
+        self.stack.process()
+        time.sleep(0.2) # Should stop receivving after 200 msec
+        self.stack.process()
+        self.assertIsNone(self.rx_isotp_frame())    # No message received indeed
+        self.assert_error_triggered(isotp.ConsecutiveFrameTimeoutError)
+
     def test_receive_timeout_consecutive_frame_after_first_frame(self):
         self.stack.params.set('rx_consecutive_frame_timeout', 200)
 
@@ -242,12 +254,12 @@ class TestTransportLayer(TransportLayerBaseTest):
         payload = self.make_payload(payload_size)
         self.simulate_rx(data = [0x10, payload_size] + payload[0:6])
         self.stack.process()
-        time.sleep(0.2)	# Should stop receivving after 200 msec
+        time.sleep(0.2) # Should stop receivving after 200 msec
         self.simulate_rx(data = [0x21] + payload[6:10])
         self.stack.process()
-        self.assertIsNone(self.rx_isotp_frame())	# No message received indeed
+        self.assertIsNone(self.rx_isotp_frame())    # No message received indeed
         self.assert_error_triggered(isotp.ConsecutiveFrameTimeoutError)
-        self.assert_error_triggered(isotp.UnexpectedConsecutiveFrameError)
+        self.assert_error_triggered(isotp.UnexpectedConsecutiveFrameError)        
 
     def test_receive_recover_timeout_consecutive_frame(self):
         self.stack.params.set('rx_consecutive_frame_timeout', 200)
