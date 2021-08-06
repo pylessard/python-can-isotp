@@ -45,7 +45,7 @@ Example :
 
    // Reception of a 10 bytes payload
    0x123    [8]   10 0A 00 01 02 03 04    // First frame
-   0x456    [4]   03 00 08 00             // Flow control
+   0x456    [4]   30 00 08 00             // Flow control
    0x123    [6]   21 05 06 07 08 09       // Consecutive frame
 
 -----
@@ -74,7 +74,7 @@ Example :
 
    // Reception of a 10 bytes payload
    0x18DA55AA    [8]   10 0A 00 01 02 03 04  // First frame
-   0x18DAAA55    [4]   03 00 08 00           // Flow control
+   0x18DAAA55    [4]   30 00 08 00           // Flow control
    0x18DA55AA    [6]   21 05 06 07 08 09     // Consecutive frame
 
 -----
@@ -100,7 +100,7 @@ Example :
 
    // Reception of a 10 bytes payload
    0x123    [8]   55 10 0A 00 01 02 03    // First frame
-   0x456    [5]   AA 03 00 08 00          // Flow control
+   0x456    [5]   AA 30 00 08 00          // Flow control
    0x123    [8]   55 21 04 05 06 07 08 09 // consecutive frame
 
 -----
@@ -125,7 +125,7 @@ Example :
 
    // Reception of a 10 bytes payload
    0x123    [8]   99 10 0A 00 01 02 03    // First frame
-   0x456    [5]   99 03 00 08 00          // Flow control
+   0x456    [5]   99 30 00 08 00          // Flow control
    0x123    [8]   99 21 04 05 06 07 08 09 // consecutive frame
 
 
@@ -156,5 +156,5 @@ Example :
 
    // Reception of a 10 bytes payload
    0x18CE55AA    [8]   99 10 0A 00 01 02 03    // First frame
-   0x18CEAA55    [5]   99 03 00 08 00          // Flow control
+   0x18CEAA55    [5]   99 30 00 08 00          // Flow control
    0x18CE55AA    [8]   99 21 04 05 06 07 08 09 // consecutive frame
