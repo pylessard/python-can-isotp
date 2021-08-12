@@ -159,6 +159,20 @@ The transport layer ``params`` parameter must be a dictionary with the following
    Setting this parameter to ``True`` does not change the behaviour of the :class:`TransportLayer<isotp.TransportLayer>` except that outputted message will have their ``bitrate_switch`` property set to ``True``. This parameter is just a convenience to integrate more easily with python-can
 
 
+.. _param_default_target_address_type:
+
+.. attribute:: default_target_address_type
+   :annotation: (int)
+
+   **default: Physical (0)**
+
+   When using the :meth:`TransportLayer.send<isotp.TransportLayer.send>` method without specifying ``target_address_type``, the value in this field will be used.
+   The purpose of this parameter is to easily switch the address type if your program is not calling `send` directly; for example, if you use a library
+   that interact with the :class:`TransportLayer<isotp.TransportLayer>` object (such as a UDS client).
+
+   Can either be :class:`Physical (0)<isotp.TargetAddressType>` or :meth:`Functional (1)<isotp.TargetAddressType>`
+
+
 -----
 
 Usage

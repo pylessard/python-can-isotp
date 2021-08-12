@@ -195,7 +195,7 @@ class TransportLayer:
     class Params:
         __slots__ = (   'stmin', 'blocksize', 'squash_stmin_requirement', 'rx_flowcontrol_timeout', 
                         'rx_consecutive_frame_timeout', 'tx_padding', 'wftmax', 'tx_data_length', 'tx_data_min_length', 
-                        'max_frame_size', 'can_fd', 'bitrate_switch'
+                        'max_frame_size', 'can_fd', 'bitrate_switch', 'default_target_address_type'
                         )
 
         def __init__(self):
@@ -211,6 +211,7 @@ class TransportLayer:
             self.max_frame_size					= 4095
             self.can_fd							= False
             self.bitrate_switch                 = False
+            self.default_target_address_type    = isotp.address.TargetAddressType.Physical
 
         def set(self, key, val, validate=True):
             param_alias = {
@@ -291,6 +292,12 @@ class TransportLayer:
             
             if not isinstance(self.bitrate_switch, bool):
                 raise ValueError('bitrate_switch must be a boolean value')
+
+            if not isinstance(self.default_target_address_type, int):
+                raise ValueError('default_target_address_type must be an an integer')
+
+            if self.default_target_address_type not in [isotp.address.TargetAddressType.Physical, isotp.address.TargetAddressType.Functional]:
+                raise ValueError('default_target_address_type must be either be Physical (%d) or Functional (%d)' % (isotp.address.TargetAddressType.Physical, isotp.address.TargetAddressType.Functional))
 
 
     class Timer:
@@ -380,19 +387,24 @@ class TransportLayer:
             (self.RxState.IDLE, self.TxState.WAIT_FC) 	: 0.01,
         }
 
-    def send(self, data, target_address_type=isotp.address.TargetAddressType.Physical):
+    def send(self, data, target_address_type=None):
         """
         Enqueue an IsoTP frame to be sent over CAN network
 
         :param data: The data to be sent
         :type data: bytearray
 
-        :param target_address_type: Optional parameter that can be Physical (0) for 1-to-1 communication or Functional (1) for 1-to-n. See :class:`isotp.TargetAddressType<isotp.TargetAddressType>`
+        :param target_address_type: Optional parameter that can be Physical (0) for 1-to-1 communication or Functional (1) for 1-to-n. See :class:`isotp.TargetAddressType<isotp.TargetAddressType>`.
+            If not provided, parameter :ref:`default_target_address_type<param_default_target_address_type>` will be used (default to `Physical`)
         :type target_address_type: int
 
         :raises ValueError: Input parameter is not a bytearray or not convertible to bytearray
         :raises RuntimeError: Transmit queue is full
         """	
+
+        if target_address_type is None:
+            target_address_type = self.params.default_target_address_type
+
         if not isinstance(data, bytearray):
             try:
                 data = bytearray(data)

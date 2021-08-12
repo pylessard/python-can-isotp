@@ -1401,3 +1401,17 @@ class TestTransportLayer(TransportLayerBaseTest):
             params['max_frame_size'] = 'string'
             self.create_layer(params)
         params['max_frame_size'] = 4095
+
+        with self.assertRaises(ValueError):
+            params['default_target_address_type'] = -1
+            self.create_layer(params)
+
+        with self.assertRaises(ValueError):
+            params['default_target_address_type'] = 2
+            self.create_layer(params)
+
+        with self.assertRaises(ValueError):
+            params['default_target_address_type'] = 'asd'
+            self.create_layer(params)
+
+        params['default_target_address_type'] = isotp.address.TargetAddressType.Physical
