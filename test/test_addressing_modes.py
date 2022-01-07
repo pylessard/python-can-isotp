@@ -423,6 +423,20 @@ class TestAddressingMode(TransportLayerBaseTest):
             layer.send(b'\x55' * 30, functional)
         layer.params.set('tx_data_length', 8)
 
+        # Transmit single frame with payload length 7 - Physical; txdl=16...64
+        for tx_len in (12, 16, 20, 24, 32, 48, 64):
+            layer.reset()
+            layer.params.set("tx_data_length", tx_len)
+            layer.send(b'\x55' * 7)
+            layer.process()
+
+            msg = self.get_tx_can_msg()
+            self.assertIsNotNone(msg)
+            self.assertEqual(msg.arbitration_id, txid)
+            self.assertEqual(msg.data, bytearray([ta, 0x00, 0x07] + [0x55] * 7 + [0xCC] * 2))
+            self.assertFalse(msg.is_extended_id)
+        layer.params.set("tx_data_length", 8)
+
         # Transmit multiframe - Physical
         layer.reset()
         layer.send(b'\x04\x05\x06\x07\x08\x09\x0A\x0B', physical)

@@ -618,7 +618,7 @@ class TransportLayer:
                         read_tx_queue = True	# Read another frame from tx_queue
                     else:
                         self.tx_buffer = bytearray(popped_object['data'])
-                        size_on_first_byte = True if len(self.tx_buffer) <= 7 else False
+                        size_on_first_byte = (len(self.tx_buffer) + len(self.address.tx_payload_prefix)) <= 7
                         size_offset = 1 if size_on_first_byte else 2
 
                         # Single frame
