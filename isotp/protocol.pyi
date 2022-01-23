@@ -64,7 +64,7 @@ class TransportLayer:
     params: Dict[Any, Any]
     logger: Logger
     remote_blocksize: Optional[int]
-    rxfn: Callable[[], CanMessage]
+    rxfn: Callable[[], Optional[CanMessage]]
     txfn: Callable[[CanMessage], None]
     tx_queue: Queue[bytearray]
     rx_queue: Queue[bytearray]
@@ -86,7 +86,7 @@ class TransportLayer:
     actual_rxdl: Optional[int]
     timings: Dict[Tuple[int, int], float]
     def __init__(self,
-                 rxfn: Optional[Callable[[], CanMessage]],
+                 rxfn: Optional[Callable[[], Optional[CanMessage]]],
                  txfn: Optional[Callable[[CanMessage], None]],
                  address: Optional[Address] = ...,
                  error_handler: Optional[Callable[[Any], None]] = ...,
