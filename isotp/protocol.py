@@ -195,7 +195,7 @@ class TransportLayer:
     class Params:
         __slots__ = (   'stmin', 'blocksize', 'squash_stmin_requirement', 'rx_flowcontrol_timeout', 
                         'rx_consecutive_frame_timeout', 'tx_padding', 'wftmax', 'tx_data_length', 'tx_data_min_length', 
-                        'max_frame_size', 'can_fd', 'bitrate_switch', 'default_target_address_type'
+                        'max_frame_size', 'can_fd', 'bitrate_switch', 'default_target_address_type', 'rx_flowcontrol_on'
                         )
 
         def __init__(self):
@@ -212,6 +212,7 @@ class TransportLayer:
             self.can_fd							= False
             self.bitrate_switch                 = False
             self.default_target_address_type    = isotp.address.TargetAddressType.Physical
+            self.rx_flowcontrol_on              = True
 
         def set(self, key, val, validate=True):
             param_alias = {
@@ -555,7 +556,8 @@ class TransportLayer:
         # Sends flow control if process_rx requested it
         if self.pending_flow_control_tx:
             self.pending_flow_control_tx = False
-            return self.make_flow_control(flow_status=self.pending_flowcontrol_status);	# No need to wait.
+            if self.params.rx_flowcontrol_on == True: # Only send flow control if parameter is on
+                return self.make_flow_control(flow_status=self.pending_flowcontrol_status);	# No need to wait.
 
         # Handle flow control reception
         flow_control_frame = self.last_flow_control_frame	# Reads the last message received and clears it. (Dequeue message)
