@@ -457,14 +457,6 @@ class TestTransportLayer(TransportLayerBaseTest):
         self.assertIsNotNone(frame)
         self.assertEqual(frame, bytearray(payload))
 
-    def test_receive_can_fd_single_frame_64_bytes_padding(self):
-        payload = self.make_payload(60)
-        self.simulate_rx([0x00, 60] + payload + [0xAA, 0xBB])
-        self.stack.process()
-        frame = self.rx_isotp_frame()
-        self.assertIsNotNone(frame)
-        self.assertEqual(frame, bytearray(payload))
-
     def test_receive_can_fd_multiframe_12_bytes(self):
         self.stack.params.set('stmin', 5)
         self.stack.params.set('blocksize', 4)
@@ -708,7 +700,6 @@ class TestTransportLayer(TransportLayerBaseTest):
         self.stack.params.set('rx_flowcontrol_timeout', 200)
 
         payload = self.make_payload(10)
-        payload2 = self.make_payload(10,1)
         self.tx_isotp_frame(payload)
         self.stack.process()
         msg = self.get_tx_can_msg()
@@ -937,7 +928,6 @@ class TestTransportLayer(TransportLayerBaseTest):
         payload = self.make_payload(payload_size)
         self.tx_isotp_frame(payload)
         self.stack.process()
-        t = time.time()
         msg = self.get_tx_can_msg()
         self.assertEqual(msg.data, bytearray([0x10 | ((payload_size >> 8) & 0xF), payload_size & 0xFF] + payload[:6]), 'stmin = %d' % stmin)
         self.simulate_rx_flowcontrol(flow_status=0, stmin=stmin, blocksize=blocksize)
@@ -1259,7 +1249,81 @@ class TestTransportLayer(TransportLayerBaseTest):
 
         self.assertIsNone(self.get_tx_can_msg())
         self.stack.process()
-        self.assertIsNone(self.get_tx_can_msg())		
+        self.assertIsNone(self.get_tx_can_msg())	
+
+
+    # === Rate limiter ====
+
+    def test_send_big_multiframe_rate_limited(self):
+        target_bitrate = 5000   # Cannot be too low. 
+        self.stack.params.set('rate_limit_max_bitrate', target_bitrate)
+        self.stack.params.set('rate_limit_window_size', 0.2)
+        self.stack.params.set('rate_limit_enable', True)
+        self.stack.load_params()
+
+        payload_size = 2000
+        payload = self.make_payload(payload_size)
+        self.tx_isotp_frame(payload)
+        self.stack.process()
+        tstart = time.time()
+        nbytes = 0
+        msg = self.get_tx_can_msg()
+        self.assertIsNotNone(msg)
+        nbytes += len(msg.data)
+        self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=0)
+        self.stack.process()
+
+        timeout = 30
+        timed_out = False
+        while self.stack.transmitting():
+            self.stack.process()
+            if time.time() - tstart > timeout:
+                timed_out = True
+                break
+            msg = self.get_tx_can_msg()
+            if msg is not None:
+                nbytes += len(msg.data)
+            else:
+                time.sleep(0.001)
+
+        tstop = time.time()
+        self.assertFalse(timed_out)
+        self.assertNotEqual(tstart, tstop)
+        measured_bitrate = nbytes*8/(tstop-tstart)        
+        self.assertGreater(measured_bitrate, target_bitrate*0.90)
+        self.assertLess(measured_bitrate, target_bitrate*1.05)
+
+
+    def test_multiple_single_frames_rate_limited(self):
+        self.stack.params.set('rate_limit_max_bitrate', 2*8*8, validate=False) # 2 single frame per second
+        self.stack.params.set('rate_limit_window_size', 1, validate=False)  
+        self.stack.params.set('rate_limit_enable', True)
+        self.stack.load_params()
+
+        for i in range(6):
+            self.tx_isotp_frame(self.make_payload(7, i))
+
+        self.stack.process()
+        self.assertIsNotNone(self.get_tx_can_msg())     # First message should go out
+        self.assertIsNotNone(self.get_tx_can_msg())     # Second message should go out
+        self.assertIsNone(self.get_tx_can_msg())        # Third message should be stopped by the rate limiter.
+        time.sleep(0.7)
+        self.stack.process()
+        self.assertIsNone(self.get_tx_can_msg())        # Still no message to be expected.
+        time.sleep(0.3)
+        self.stack.process()
+        self.assertIsNotNone(self.get_tx_can_msg())     # First message should go out
+        self.assertIsNotNone(self.get_tx_can_msg())     # Second message should go out
+        self.assertIsNone(self.get_tx_can_msg())        # Third message should be stopped by the rate limiter.
+        time.sleep(1)
+        self.stack.process()
+        self.assertIsNotNone(self.get_tx_can_msg())     # First message should go out
+        self.assertIsNotNone(self.get_tx_can_msg())     # Second message should go out
+        self.assertIsNone(self.get_tx_can_msg())        # Third message should be stopped by the rate limiter.
+        time.sleep(1)
+        self.stack.process()
+        self.assertIsNone(self.get_tx_can_msg())        # No more messages
+
 
     # =============== Parameters ===========
     def create_layer(self, params):
@@ -1415,3 +1479,50 @@ class TestTransportLayer(TransportLayerBaseTest):
             self.create_layer(params)
 
         params['default_target_address_type'] = isotp.address.TargetAddressType.Physical
+
+
+        with self.assertRaises(ValueError):
+            params['rate_limit_max_bitrate'] = None
+            self.create_layer(params)
+
+        with self.assertRaises(ValueError):
+            params['rate_limit_max_bitrate'] = 'asd'
+            self.create_layer(params)
+
+        with self.assertRaises(ValueError):
+            params['rate_limit_max_bitrate'] = 0
+            self.create_layer(params)
+
+        with self.assertRaises(ValueError):
+            params['rate_limit_max_bitrate'] = -1
+            self.create_layer(params)
+
+        params['rate_limit_max_bitrate'] = 10000000
+
+        with self.assertRaises(ValueError):
+            params['rate_limit_window_size'] = None
+            self.create_layer(params)
+
+        with self.assertRaises(ValueError):
+            params['rate_limit_window_size'] = -1
+            self.create_layer(params)
+
+        with self.assertRaises(ValueError):
+            params['rate_limit_window_size'] = 0
+            self.create_layer(params)
+
+        with self.assertRaises(ValueError):
+            params['rate_limit_window_size'] = 'asd'
+            self.create_layer(params)
+
+        params['rate_limit_window_size'] = 0.1
+
+        with self.assertRaises(ValueError):
+            params['rate_limit_enable'] = 1
+            self.create_layer(params)
+
+        with self.assertRaises(ValueError):
+            params['rate_limit_enable'] = 'asd'
+            self.create_layer(params)
+
+        params['rate_limit_enable'] = False

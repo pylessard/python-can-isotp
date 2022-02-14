@@ -2,6 +2,7 @@ import unittest
 import isotp
 import time
 from . import unittest_logging
+from isotp.protocol import RateLimiter
 
 Message = isotp.CanMessage
 
@@ -441,4 +442,84 @@ class TestPDUDecoding(unittest.TestCase):
 
         for i in range(0xFA, 0x100):    # Reserved StMin
             with self.assertRaises(ValueError):
-                pdu = self.make_pdu([0x30, 0x00, i])
+                pdu = self.make_pdu([0x30, 0x00, i])        
+
+
+class TestRateLimiter(unittest.TestCase):
+    def test_rate_limit_behavior(self):
+        rate_limiter = RateLimiter(mean_bitrate = 1024, window_size_sec = 1)
+        rate_limiter.enable()
+        rate_limiter.update()
+
+        self.assertEqual(rate_limiter.allowed_bytes(), 128) # 1024/8 = 128
+        rate_limiter.inform_byte_sent(96)
+        self.assertEqual(rate_limiter.allowed_bytes(), 32)
+            
+        rate_limiter.update()
+        time.sleep(0.4)
+        rate_limiter.update()
+
+        self.assertEqual(rate_limiter.allowed_bytes(), 32)
+
+        time.sleep(0.7)
+        rate_limiter.update()
+        self.assertEqual(rate_limiter.allowed_bytes(), 128)
+
+        rate_limiter.inform_byte_sent(128*2)
+        self.assertEqual(rate_limiter.allowed_bytes(), 0)
+        time.sleep(0.4)
+        rate_limiter.update()
+        self.assertEqual(rate_limiter.allowed_bytes(), 0)
+        time.sleep(0.4)
+        rate_limiter.update()
+        self.assertEqual(rate_limiter.allowed_bytes(), 0)
+        time.sleep(0.4)
+        rate_limiter.update()
+        self.assertEqual(rate_limiter.allowed_bytes(), 128)
+        
+
+    def test_rate_limit_measurement(self):
+        bitrate = 10000
+        window_size_sec = 1
+
+        rate_limiter = RateLimiter(mean_bitrate = bitrate, window_size_sec = window_size_sec)
+
+        runtime = 5
+        tstart = time.time()
+        time_axis = []
+        data_axis = []
+        max_write_chunk = bitrate/8/10    # 
+        while time.time() - tstart < runtime:
+            rate_limiter.update()
+            bcount = rate_limiter.allowed_bytes()
+            bcount = min(max_write_chunk, bcount)
+            rate_limiter.inform_byte_sent(bcount)
+            time_axis.append(time.time())
+            data_axis.append(bcount)
+            time.sleep(0.001)
+
+        dt = time_axis[-1] - time_axis[0]
+        total = 0
+        for x in data_axis:
+            total += x
+
+        measured_bitrate = total/dt*8
+        
+        self.assertGreater(measured_bitrate, bitrate * 0.85)
+        self.assertLess(measured_bitrate, bitrate * 1.15)
+
+        # Now make sure that the buffer wan'T overloaded
+        buffer_estimation = []
+        buffer_peak =0
+        for i in range(len(data_axis)):
+            
+            if len(buffer_estimation) == 0:
+                buffer_estimation.append(data_axis[i])
+            else:
+                dt = time_axis[i] - time_axis[i-1] 
+                buffer_estimation.append(buffer_estimation[-1]+data_axis[i] - bitrate/8*dt)
+                buffer_peak = max(buffer_peak, buffer_estimation[-1])
+
+        self.assertLess(buffer_peak, bitrate/window_size_sec)
+
+        
