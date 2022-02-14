@@ -3,9 +3,10 @@ import logging
 from copy import copy
 import binascii
 import time
-import functools
 import isotp.address
 import isotp.errors
+import math
+import enum
 
 class CanMessage:
     """
@@ -169,6 +170,109 @@ class PDU:
         else:
             return "Reserved"
 
+class RateLimiter:
+
+    TIME_SLOT_LENGTH = 0.005
+
+    def __init__(self, mean_bitrate = None, window_size_sec = 0.1):
+        self.enabled = False
+        self.mean_bitrate = mean_bitrate
+        self.window_size_sec = window_size_sec
+        self.error_reason = ''
+        self.reset()
+
+        if self.can_be_enabled():
+            self.enable()
+
+    def can_be_enabled(self):
+        try:
+            float(self.mean_bitrate)
+        except:
+            self.error_reason = 'mean_bitrate is not numerical'
+            return False
+
+        if float(self.mean_bitrate) <= 0:
+            self.error_reason = 'mean_bitrate must be greater than 0'
+            return False
+
+        try:
+            float(self.window_size_sec)
+        except:
+            self.error_reason = 'window_size_sec is not numerical'
+            return False
+
+        if float(self.window_size_sec) <= 0:
+            self.error_reason = 'window_size_sec must be greater than 0'
+            return False
+
+        return True
+
+    def set_bitrate(self, mean_bitrate):
+        self.mean_bitrate = mean_bitrate
+
+    def enable(self):
+        if self.can_be_enabled():
+            self.mean_bitrate = float(self.mean_bitrate)
+            self.window_size_sec = float(self.window_size_sec)
+            self.enabled = True
+            self.reset()
+        else:
+            raise ValueError('Cannot enable Rate Limiter.  \n %s' % self.error_reason )
+
+    def disable(self):
+        self.enabled = False
+
+    def reset(self):
+       self.burst_bitcount = []
+       self.burst_time = []
+       self.bit_total = 0
+       self.window_bit_max = self.mean_bitrate*self.window_size_sec
+
+
+    def update(self):
+        if not self.enabled:
+           self.reset()
+           return 
+
+        t = time.time()
+
+        while len(self.burst_time) > 0:
+            t2 = self.burst_time[0]
+            if t-t2 > self.window_size_sec:
+                self.burst_time.pop(0)
+                n_to_remove = self.burst_bitcount.pop(0)
+                self.bit_total -= n_to_remove
+            else:
+                break
+
+
+    def allowed_bytes(self):
+        no_limit = 0xFFFFFFFF
+
+        if not self.enabled:
+            return no_limit
+
+        allowed_bits = max(self.window_bit_max - self.bit_total, 0)
+
+        return math.floor(allowed_bits/8)
+
+    def inform_byte_sent(self, datalen):
+        if self.enabled:
+            bytelen = datalen*8;
+            t = time.time()
+            self.bit_total += bytelen
+            if len(self.burst_time) == 0:
+                self.burst_time.append(t)
+                self.burst_bitcount.append(bytelen)
+            else:
+                last_time = self.burst_time[-1]
+                if t - last_time > self.TIME_SLOT_LENGTH:
+                    self.burst_time.append(t)
+                    self.burst_bitcount.append(bytelen)
+                else:
+                    self.burst_bitcount[-1] += bytelen
+
+
 class TransportLayer:
     """
     The IsoTP transport layer implementation
@@ -195,7 +299,8 @@ class TransportLayer:
     class Params:
         __slots__ = (   'stmin', 'blocksize', 'squash_stmin_requirement', 'rx_flowcontrol_timeout', 
                         'rx_consecutive_frame_timeout', 'tx_padding', 'wftmax', 'tx_data_length', 'tx_data_min_length', 
-                        'max_frame_size', 'can_fd', 'bitrate_switch', 'default_target_address_type'
+                        'max_frame_size', 'can_fd', 'bitrate_switch', 'default_target_address_type',
+                        'rate_limit_max_bitrate', 'rate_limit_window_size', 'rate_limit_enable'
                         )
 
         def __init__(self):
@@ -212,10 +317,13 @@ class TransportLayer:
             self.can_fd							= False
             self.bitrate_switch                 = False
             self.default_target_address_type    = isotp.address.TargetAddressType.Physical
+            self.rate_limit_max_bitrate         = 100000000
+            self.rate_limit_window_size         = 0.2
+            self.rate_limit_enable              = False
 
         def set(self, key, val, validate=True):
             param_alias = {
-                    'll_data_length' : 'tx_data_length'	# For backward compatibility
+                'll_data_length' : 'tx_data_length'	# For backward compatibility
             }
             if key in param_alias:
                 key = param_alias[key]
@@ -294,10 +402,28 @@ class TransportLayer:
                 raise ValueError('bitrate_switch must be a boolean value')
 
             if not isinstance(self.default_target_address_type, int):
-                raise ValueError('default_target_address_type must be an an integer')
+                raise ValueError('default_target_address_type must be an integer')
 
             if self.default_target_address_type not in [isotp.address.TargetAddressType.Physical, isotp.address.TargetAddressType.Functional]:
                 raise ValueError('default_target_address_type must be either be Physical (%d) or Functional (%d)' % (isotp.address.TargetAddressType.Physical, isotp.address.TargetAddressType.Functional))
+
+            if not isinstance(self.rate_limit_max_bitrate, int):
+                raise ValueError('rate_limit_max_bitrate must be an integer')
+
+            if self.rate_limit_max_bitrate <= 0:
+                raise ValueError('rate_limit_max_bitrate must be greater than 0')
+
+            if not (isinstance(self.rate_limit_window_size, float) or isinstance(self.rate_limit_window_size, int)):
+                raise ValueError('rate_limit_window_size must be a float ')
+
+            if self.rate_limit_window_size <= 0:
+                raise ValueError('rate_limit_window_size must be greater than 0')
+
+            if not isinstance(self.rate_limit_enable, bool):
+                raise ValueError('rate_limit_enable must be a boolean value')
+
+            if self.rate_limit_max_bitrate * self.rate_limit_window_size < self.tx_data_length * 8:
+                raise ValueError('Rate limiter is so restrictive that a SingleFrame cannot be sent. Please, allow a higher bitrate or increase the window size. (tx_data_length = %d)' % self.tx_data_length)
 
 
     class Timer:
@@ -331,14 +457,16 @@ class TransportLayer:
         def is_stopped(self):
             return self.start_time == None
 
-    class RxState:
+    class RxState(enum.Enum):
         IDLE = 0
         WAIT_CF = 1
 
-    class TxState:
+    class TxState(enum.Enum):
         IDLE = 0
         WAIT_FC = 1
         TRANSMIT_CF = 2
+        TRANSMIT_SF_STANDBY = 3
+        TRANSMIT_FF_STANDBY = 4
 
     def __init__(self, rxfn, txfn, address=None, error_handler=None, params=None):
         self.params = self.Params()
@@ -358,6 +486,7 @@ class TransportLayer:
 
         self.tx_queue = queue.Queue()			# Layer Input queue for IsoTP frame
         self.rx_queue = queue.Queue()			# Layer Output queue for IsoTP frame
+        self.tx_standby_msg = None
 
         self.rx_state = self.RxState.IDLE		# State of the reception FSM
         self.tx_state = self.TxState.IDLE		# State of the transmission FSM
@@ -376,8 +505,6 @@ class TransportLayer:
         self.empty_tx_buffer()
 
         self.timer_tx_stmin = self.Timer(timeout = 0)
-        self.timer_rx_fc  	= self.Timer(timeout = float(self.params.rx_flowcontrol_timeout) / 1000)
-        self.timer_rx_cf 	= self.Timer(timeout = float(self.params.rx_consecutive_frame_timeout) / 1000)
 
         self.error_handler = error_handler
         self.actual_rxdl   = None	
@@ -386,6 +513,19 @@ class TransportLayer:
             (self.RxState.IDLE, self.TxState.IDLE) 	: 0.05,
             (self.RxState.IDLE, self.TxState.WAIT_FC) 	: 0.01,
         }
+
+        self.load_params()
+
+    def load_params(self):
+        self.params.validate()
+        self.timer_rx_fc    = self.Timer(timeout = float(self.params.rx_flowcontrol_timeout) / 1000)
+        self.timer_rx_cf    = self.Timer(timeout = float(self.params.rx_consecutive_frame_timeout) / 1000)
+
+        self.rate_limiter = RateLimiter(mean_bitrate = self.params.rate_limit_max_bitrate, window_size_sec = self.params.rate_limit_window_size)
+        if self.params.rate_limit_enable:
+            self.rate_limiter.enable()
+
+
 
     def send(self, data, target_address_type=None):
         """
@@ -453,6 +593,7 @@ class TransportLayer:
         """	
 
         self.check_timeouts_rx()
+        self.rate_limiter.update()
 
         msg = True
         while msg is not None:
@@ -551,6 +692,7 @@ class TransportLayer:
 
     def process_tx(self):
         output_msg = None 	 # Value outputed.  If None, no subsequent call to process_tx will be done.
+        allowed_bytes = self.rate_limiter.allowed_bytes() 
 
         # Sends flow control if process_rx requested it
         if self.pending_flow_control_tx:
@@ -606,8 +748,7 @@ class TransportLayer:
         # Check this first as we may have another isotp frame to send and we need to handle it right away without waiting for next "process()" call
         if self.tx_state != self.TxState.IDLE and len(self.tx_buffer) == 0:
             self.stop_sending()	
-
-
+        
         if self.tx_state == self.TxState.IDLE:
             read_tx_queue = True	# Read until we get non-empty frame to send
             while read_tx_queue:
@@ -627,8 +768,15 @@ class TransportLayer:
                                 msg_data 	= self.address.tx_payload_prefix + bytearray([0x0 | len(self.tx_buffer)]) + self.tx_buffer
                             else:
                                 msg_data 	= self.address.tx_payload_prefix + bytearray([0x0, len(self.tx_buffer)]) + self.tx_buffer
-                            arbitration_id 	= self.address.get_tx_arbitraton_id(popped_object['target_address_type'])
-                            output_msg		= self.make_tx_msg(arbitration_id, msg_data)
+
+                            arbitration_id  = self.address.get_tx_arbitraton_id(popped_object['target_address_type'])
+                            msg_temp = self.make_tx_msg(arbitration_id, msg_data)
+
+                            if len(msg_data) > allowed_bytes:
+                                self.tx_standby_msg = msg_temp
+                                self.tx_state = self.TxState.TRANSMIT_SF_STANDBY
+                            else:
+                                output_msg		= msg_temp
 
                         # Multi frame - First Frame
                         else:							
@@ -641,12 +789,33 @@ class TransportLayer:
                                 data_length = self.params.tx_data_length-6-len(self.address.tx_payload_prefix)
                                 msg_data 	= self.address.tx_payload_prefix + bytearray([0x10, 0x00, (self.tx_frame_length>>24) & 0xFF, (self.tx_frame_length>>16) & 0xFF, (self.tx_frame_length>>8) & 0xFF, (self.tx_frame_length>>0) & 0xFF]) + self.tx_buffer[:data_length]
 
-                            arbitration_id 	= self.address.get_tx_arbitraton_id()
-                            output_msg 		= self.make_tx_msg(arbitration_id, msg_data)
+                            arbitration_id  = self.address.get_tx_arbitraton_id()
                             self.tx_buffer 	= self.tx_buffer[data_length:]
-                            self.tx_state 	= self.TxState.WAIT_FC
                             self.tx_seqnum 	= 1
-                            self.start_rx_fc_timer()
+                            msg_temp = self.make_tx_msg(arbitration_id, msg_data)
+                            if len(msg_data) <= allowed_bytes:
+                                output_msg = msg_temp
+                                self.tx_state   = self.TxState.WAIT_FC
+                                self.start_rx_fc_timer()
+                            else:
+                                self.tx_standby_msg = msg_temp
+                                self.tx_state = self.TxState.TRANSMIT_FF_STANDBY
+
+
+        elif self.tx_state in [self.TxState.TRANSMIT_SF_STANDBY, self.TxState.TRANSMIT_FF_STANDBY]:
+            # This states serves if the rate limiter prevent from starting a new transmission.
+            # We need to pop the isotp frame to know if the rate limiter must kick, but isnce the data is already popped, 
+            # we can't stay in IDLE state. So we come here until the rate limiter gives us permission to proceed.
+
+            if self.tx_standby_msg is not None:
+                if len(self.tx_standby_msg.data) <= allowed_bytes:
+                    output_msg = self.tx_standby_msg
+                    self.tx_standby_msg = None
+
+                    if self.tx_state == self.TxState.TRANSMIT_FF_STANDBY:
+                        self.start_rx_fc_timer()
+                    self.tx_state = self.TxState.IDLE
+
 
 
         elif self.tx_state == self.TxState.WAIT_FC:
@@ -657,17 +826,23 @@ class TransportLayer:
                 data_length = self.params.tx_data_length-1-len(self.address.tx_payload_prefix)
                 msg_data = self.address.tx_payload_prefix + bytearray([0x20 | self.tx_seqnum]) + self.tx_buffer[:data_length]
                 arbitration_id 	= self.address.get_tx_arbitraton_id()
-                output_msg = self.make_tx_msg(arbitration_id, msg_data)
-                self.tx_buffer = self.tx_buffer[data_length:]
-                self.tx_seqnum = (self.tx_seqnum + 1 ) & 0xF
-                self.timer_tx_stmin.start()
-                self.tx_block_counter+=1
+                msg_temp = self.make_tx_msg(arbitration_id, msg_data)
+                if len(msg_temp.data) <= allowed_bytes:
+                    output_msg = msg_temp
+                    self.tx_buffer = self.tx_buffer[data_length:]
+                    self.tx_seqnum = (self.tx_seqnum + 1 ) & 0xF
+                    self.timer_tx_stmin.start()
+                    self.tx_block_counter+=1
+            
             if (len(self.tx_buffer) == 0):
                 self.stop_sending()
 
             elif self.remote_blocksize != 0 and self.tx_block_counter >= self.remote_blocksize:
                 self.tx_state = self.TxState.WAIT_FC
                 self.start_rx_fc_timer()
+
+        if output_msg is not None:
+            self.rate_limiter.inform_byte_sent(len(output_msg.data))
 
         return output_msg
 
@@ -806,6 +981,8 @@ class TransportLayer:
         self.tx_block_counter = 0
         self.tx_seqnum = 0
         self.wft_counter = 0
+        self.tx_standby_msg = None
+
 
     def stop_receiving(self):
         self.actual_rxdl = None
@@ -861,6 +1038,8 @@ class TransportLayer:
 
         self.stop_sending()
         self.stop_receiving()
+
+        self.rate_limiter.reset()
 
     # Gives a time to pass to time.sleep() based on the state of the FSM. Avoid using too much CPU
     def sleep_time(self):

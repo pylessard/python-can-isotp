@@ -13,8 +13,8 @@ class TestSocket(unittest.TestCase):
         self.socket_list = []
 
     def tearDown(self):
-        for socket in self.socket_list:
-            socket.close()
+        for s in self.socket_list:
+            s.close()
 
     def make_socket(self, *args, **kwargs):
         s = isotp.socket(*args, **kwargs)
@@ -53,7 +53,6 @@ class TestSocket(unittest.TestCase):
         s1.bind(interface = tools.get_test_interface_config("channel"), address=addr1)
         s2.bind(interface = tools.get_test_interface_config("channel"), address=addr2)
         s1.send(payload)
-        t1 = time.time()
         payload2 = s2.recv()
         self.assertEqual(payload, payload2)
 

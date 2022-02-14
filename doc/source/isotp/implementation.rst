@@ -173,6 +173,77 @@ The transport layer ``params`` parameter must be a dictionary with the following
    Can either be :class:`Physical (0)<isotp.TargetAddressType>` or :meth:`Functional (1)<isotp.TargetAddressType>`
 
 
+.. _param_rate_limit_enable:
+
+.. attribute:: rate_limit_enable
+   :annotation: (bool)
+
+   **default: False**
+
+   Enable or disable the rate limiter. When disabled, no throttling is done on the output rate. When enabled, extra wait states are added in between CAN message tranmission to meet ``rate_limit_max_bitrate``
+
+   Refer to :ref:`Rate Limiter Section<rate_limiter_section>` for more details
+
+.. _param_rate_limit_max_bitrate:
+
+.. attribute:: rate_limit_max_bitrate
+   :annotation: (int)
+
+   **default: 10000000 b/s**
+
+   Defines the target bitrate in Bits/seconds that the TranportLayer object should try to respect. This rate limiter only apply to the data of the output messages. 
+
+   Refer to :ref:`Rate Limiter Section<rate_limiter_section>` for more details
+
+
+.. _param_rate_limit_window_size:
+
+.. attribute:: rate_limit_window_size
+   :annotation: (float)
+
+   **default: 0.2 sec**
+
+   Time window used to compute the rate limit. The rate limiter algorithm works with a sliding time window. This parameter defines the width of the window.
+   The rate limiter ensure that no more than N bits is sent within the moving window where N=(rate_limit_max_bitrate*rate_limit_window_size).
+
+   This value should be at least 50 msec for reliable behavior.
+
+   Refer to :ref:`Rate Limiter Section<rate_limiter_section>` for more details
+
+
+-----
+
+.. _rate_limiter_section:
+
+Rate Limiter
+------------
+
+The :class:`isotp.TransportLayer<isotp.TransportLayer>` transmission rate limiter is a feature that allows to do some throttling on the output data rate. It works with a simple sliding window and
+keeps the total amount of bits sent during that time window below the maximum allowed.
+
+.. image:: assets/rate_limiter.png
+    :width: 600px
+    :align: center
+
+The maximum of bits allowed during the moving time window is defined by the product of ``rate_limit_max_bitrate`` and ``rate_limit_window_size``. 
+For example, if the target bitrate is 1000b/s and the window size is 0.1sec, then the rate limiter will keep to total amount of bits during a window of 0.1 sec below 100bits.
+
+It is important to understand that this product also defines the maximum burst size that the :class:`isotp.TransportLayer<isotp.TransportLayer>` object will output, and this is actually the original problem the
+rate limiter is intended to fix (See `issue #61 <https://github.com/pylessard/python-can-isotp/issues/61>`_). Consider the case where a big payload of 10000 bytes must be transmitted, 
+after the transmission of the FirstFrame, the receiving party sends a FlowControl message with BlockSize=0 and STMin=0. In that situation, the whole payload can be sent immediately
+but writing 10000 bytes in a single burst might be too much for the CAN driver to handle and may overflow its internal buffer.  In
+ this situation, it is useful to use the rate limiter to reduces the strain on the driver internal buffer.
+
+In the above scenario, having a bitrate of 80000 bps and a window size of 0.1 sec would make the :class:`isotp.TransportLayer<isotp.TransportLayer>` output a burst of 8000 bits (1000 bytes) every 0.1 seconds.
+
+.. warning:: The bitrate defined by :ref:`rate_limit_max_bitrate<param_rate_limit_max_bitrate>` represent the bitrate of the CAN payload that goes out of the :class:`isotp.TransportLayer<isotp.TransportLayer>` object only, 
+    the CAN layer overhead is exluded. 
+    Knowing the a classical CAN message with 11bits ID and a payload of 64 bits usually have 111 bits, the extra 47 bits of overhead will not be considered by the rate limiter. This means
+    that even if the rate limiter is requested to keep a steady 10kbps, depending on the CAN layer configuration, the effective hardware bitrate measured might be much more significant, from 1 to 1.5x more.
+
+.. warning::    Bitrate is achieved by adding extra wait states which normally translate into OS calls to ``Sleep()``. 
+    Because an OS scheduler has a time resolution, bitrate accuracy will be poor if the specified bitrate is very low or if the window size is very small.
+
 -----
 
 Usage
