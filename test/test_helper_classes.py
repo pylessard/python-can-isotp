@@ -505,8 +505,8 @@ class TestRateLimiter(unittest.TestCase):
 
         measured_bitrate = total/dt*8
         
-        self.assertGreater(measured_bitrate, bitrate * 0.95)
-        self.assertLess(measured_bitrate, bitrate * 1.05)
+        self.assertGreater(measured_bitrate, bitrate * 0.85)
+        self.assertLess(measured_bitrate, bitrate * 1.15)
 
         # Now make sure that the buffer wan'T overloaded
         buffer_estimation = []
