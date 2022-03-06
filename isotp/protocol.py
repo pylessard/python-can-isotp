@@ -300,7 +300,7 @@ class TransportLayer:
         __slots__ = (   'stmin', 'blocksize', 'squash_stmin_requirement', 'rx_flowcontrol_timeout', 
                         'rx_consecutive_frame_timeout', 'tx_padding', 'wftmax', 'tx_data_length', 'tx_data_min_length', 
                         'max_frame_size', 'can_fd', 'bitrate_switch', 'default_target_address_type',
-                        'rate_limit_max_bitrate', 'rate_limit_window_size', 'rate_limit_enable'
+                        'rate_limit_max_bitrate', 'rate_limit_window_size', 'rate_limit_enable', 'listen_mode'
                         )
 
         def __init__(self):
@@ -320,6 +320,7 @@ class TransportLayer:
             self.rate_limit_max_bitrate         = 100000000
             self.rate_limit_window_size         = 0.2
             self.rate_limit_enable              = False
+            self.listen_mode                    = False
 
         def set(self, key, val, validate=True):
             param_alias = {
@@ -425,6 +426,8 @@ class TransportLayer:
             if self.rate_limit_max_bitrate * self.rate_limit_window_size < self.tx_data_length * 8:
                 raise ValueError('Rate limiter is so restrictive that a SingleFrame cannot be sent. Please, allow a higher bitrate or increase the window size. (tx_data_length = %d)' % self.tx_data_length)
 
+            if not isinstance(self.listen_mode, bool):
+                raise ValueError('listen_mode must be a boolean value')
 
     class Timer:
         def __init__(self, timeout):
@@ -695,7 +698,9 @@ class TransportLayer:
             self.pending_flow_control_tx = False
             if self.pending_flowcontrol_status == PDU.FlowStatus.ContinueToSend:
                 self.start_rx_cf_timer()    # We tell the sending party that it can continue to send data, so we start checking the timeout again
-            return self.make_flow_control(flow_status=self.pending_flowcontrol_status);	# No need to wait.
+
+            if not self.params.listen_mode: # Inhibit Flow Control in listen mode.
+                return self.make_flow_control(flow_status=self.pending_flowcontrol_status);	# No need to wait.
 
         # Handle flow control reception
         flow_control_frame = self.last_flow_control_frame	# Reads the last message received and clears it. (Dequeue message)

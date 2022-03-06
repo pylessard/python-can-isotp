@@ -211,6 +211,17 @@ The transport layer ``params`` parameter must be a dictionary with the following
    Refer to :ref:`Rate Limiter Section<rate_limiter_section>` for more details
 
 
+.. _param_listen_mode:
+
+.. attribute:: listen_mode
+   :annotation: (bool)
+
+   **default: False**
+
+   When Listen Mode is enabled, the :class:`TransportLayer<isotp.TransportLayer>` will correctly receive and transmit ISO-TP Frame, but will not send Flow Control
+   message when receiving a frame. This mode of operation is usefull to listen to a transmission between two third-party devices without interferring. 
+
+
 -----
 
 .. _rate_limiter_section:
@@ -232,7 +243,7 @@ It is important to understand that this product also defines the maximum burst s
 rate limiter is intended to fix (See `issue #61 <https://github.com/pylessard/python-can-isotp/issues/61>`_). Consider the case where a big payload of 10000 bytes must be transmitted, 
 after the transmission of the FirstFrame, the receiving party sends a FlowControl message with BlockSize=0 and STMin=0. In that situation, the whole payload can be sent immediately
 but writing 10000 bytes in a single burst might be too much for the CAN driver to handle and may overflow its internal buffer.  In
- this situation, it is useful to use the rate limiter to reduces the strain on the driver internal buffer.
+this situation, it is useful to use the rate limiter to reduces the strain on the driver internal buffer.
 
 In the above scenario, having a bitrate of 80000 bps and a window size of 0.1 sec would make the :class:`isotp.TransportLayer<isotp.TransportLayer>` output a burst of 8000 bits (1000 bytes) every 0.1 seconds.
 

@@ -35,6 +35,7 @@ class TransportLayer:
         max_frame_size: int
         can_fd: bool
         bitrate_switch: bool
+        listen_mode: bool
         target_address_type: Optional[TargetAddressType]
         def __init__(self) -> None: ...
         def set(self,
