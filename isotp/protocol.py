@@ -631,11 +631,7 @@ class TransportLayer:
         # Process Flow Control message
         if pdu.type == PDU.Type.FLOW_CONTROL:
             self.last_flow_control_frame = pdu 	 # Given to process_tx method. Queue of 1 message depth
-
-            if self.rx_state == self.RxState.WAIT_CF:
-                if pdu.flow_status == PDU.FlowStatus.Wait or pdu.flow_status == PDU.FlowStatus.ContinueToSend:
-                    self.start_rx_cf_timer()
-            return # Nothing else to be done with FlowControl. Return and wait for next message
+            return  # Nothing else to be done with FlowControl. Return and wait for next message
 
         if pdu.type == PDU.Type.SINGLE_FRAME:
             if pdu.can_dl > 8 and pdu.escape_sequence == False:
@@ -684,8 +680,8 @@ class TransportLayer:
                     else:
                         self.rx_block_counter += 1
                         if self.params.blocksize > 0 and (self.rx_block_counter % self.params.blocksize) == 0:
-                            self.request_tx_flowcontrol()  	 # Sets a flag to 1. process_tx will send it for use.
-                            self.timer_rx_cf.stop() 		 # Deactivate that timer while we wait for flow control
+                            self.request_tx_flowcontrol(PDU.FlowStatus.ContinueToSend)  	 # Sets a flag to 1. process_tx will send it for use.
+                            self.timer_rx_cf.stop()         # We stop the timer until the flow control message is gone. This timer is reactivated in the process_tx().
                 else:
                     self.stop_receiving()
                     self.trigger_error(isotp.errors.WrongSequenceNumberError('Received a ConsecutiveFrame with wrong SequenceNumber. Expecting 0x%X, Received 0x%X' % (expected_seqnum, pdu.seqnum)))
@@ -697,6 +693,8 @@ class TransportLayer:
         # Sends flow control if process_rx requested it
         if self.pending_flow_control_tx:
             self.pending_flow_control_tx = False
+            if self.pending_flowcontrol_status == PDU.FlowStatus.ContinueToSend:
+                self.start_rx_cf_timer()    # We tell the sending party that it can continue to send data, so we start checking the timeout again
             return self.make_flow_control(flow_status=self.pending_flowcontrol_status);	# No need to wait.
 
         # Handle flow control reception
@@ -737,6 +735,7 @@ class TransportLayer:
                         pass
 
                     self.tx_state = self.TxState.TRANSMIT_CF
+
 
         # ======= Timeouts ======
         if self.timer_rx_fc.is_timed_out():
@@ -1010,8 +1009,8 @@ class TransportLayer:
             self.rx_frame_length = pdu.length
             self.append_rx_data(pdu.data)
             self.request_tx_flowcontrol(PDU.FlowStatus.ContinueToSend)
+            self.start_rx_cf_timer()
 
-        self.start_rx_cf_timer()
         self.last_seqnum = 0
         self.rx_block_counter = 0
 

@@ -247,6 +247,25 @@ class TestTransportLayer(TransportLayerBaseTest):
         self.assertIsNone(self.rx_isotp_frame())    # No message received indeed
         self.assert_error_triggered(isotp.ConsecutiveFrameTimeoutError)
 
+    def test_receive_timeout_consecutive_frame_after_2nd_flow_control(self):
+        self.stack.params.set('rx_consecutive_frame_timeout', 200)
+        self.stack.params.set('blocksize', 2) 
+        self.stack.params.set('stmin', 0)
+
+        payload_size = 50
+        payload = self.make_payload(payload_size)
+        self.simulate_rx(data = [0x10, payload_size] + payload[0:6])
+        self.stack.process()
+        self.assert_sent_flow_control(stmin=0, blocksize=2)
+        self.simulate_rx(data = [0x21] + payload[6:13])
+        self.simulate_rx(data = [0x22] + payload[13:20])
+        self.stack.process()
+        self.assert_sent_flow_control(stmin=0, blocksize=2)
+        time.sleep(0.2) # Should stop receivving after 200 msec
+        self.stack.process()
+        self.assertIsNone(self.rx_isotp_frame())    # No message received indeed
+        self.assert_error_triggered(isotp.ConsecutiveFrameTimeoutError)
+
     def test_receive_timeout_consecutive_frame_after_first_frame(self):
         self.stack.params.set('rx_consecutive_frame_timeout', 200)
 
