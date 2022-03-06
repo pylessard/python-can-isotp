@@ -120,6 +120,23 @@ class TestTransportLayer(TransportLayerBaseTest):
         self.assertEqual(data, bytearray(payload))
         self.assertIsNone(self.rx_isotp_frame())
 
+    def test_receive_multiframe_check_no_flowcontrol_listen_mode(self):
+        self.stack.params.set('stmin', 0x02)
+        self.stack.params.set('blocksize', 0x05)
+        self.stack.params.set('listen_mode', True)
+
+        payload_size = 10
+        payload = self.make_payload(payload_size)
+        self.simulate_rx(data = [0x10, payload_size] + payload[0:6])
+        self.stack.process()
+        self.assertIsNone(self.get_tx_can_msg())    # No Flow Control here. We are in listen mode
+        self.assertIsNone(self.rx_isotp_frame())
+        self.simulate_rx(data = [0x21] + payload[6:10])
+        self.stack.process()
+        data = self.rx_isotp_frame()
+        self.assertEqual(data, bytearray(payload))
+        self.assertIsNone(self.rx_isotp_frame())
+
     def test_receive_overflow_handling(self):
         self.stack.params.set('stmin', 0)
         self.stack.params.set('blocksize', 0)
