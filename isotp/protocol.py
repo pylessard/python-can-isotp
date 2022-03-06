@@ -941,7 +941,7 @@ class TransportLayer:
         elif fdlen == 32: return 13
         elif fdlen == 48: return 14
         elif fdlen == 64: return 15
-        raise ValueError("Impossible DLC size for payload of %d bytes with tx_data_length of %d" % (len(data)))
+        raise ValueError("Impossible DLC size for payload of %d bytes with tx_data_length of %d" % (len(data), self.params.tx_data_length))
 
 
 
