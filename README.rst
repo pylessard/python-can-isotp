@@ -1,8 +1,8 @@
 python-can-isotp
 ################
 
-.. image:: https://travis-ci.com/pylessard/python-can-isotp.svg?branch=master
-    :target: https://travis-ci.com/pylessard/python-can-isotp
+.. image:: https://app.travis-ci.com/pylessard/python-can-isotp.svg?branch=master
+    :target: https://app.travis-ci.com/github/pylessard/python-can-isotp
 
 This project is a Python package meant to provide support for IsoTP (ISO-15765) protocol written in Python 3. The code is published under MIT license on GitHub (`pylessard/python-can-isotp <https://github.com/pylessard/python-can-isotp>`_).
 
