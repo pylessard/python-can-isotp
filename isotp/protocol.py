@@ -1086,11 +1086,11 @@ class CanStack(TransportLayer):
         self.bus.send(can.Message(arbitration_id=msg.arbitration_id, data = msg.data, extended_id=msg.is_extended_id, is_fd=msg.is_fd, bitrate_switch=msg.bitrate_switch))
 
     def rx_canbus(self):
-        msg = self.bus.recv(0)
+        msg = self.bus.recv(self.timeout)
         if msg is not None:
             return CanMessage(arbitration_id=msg.arbitration_id, data=msg.data, extended_id=msg.is_extended_id, is_fd=msg.is_fd, bitrate_switch=msg.bitrate_switch)
 
-    def __init__(self, bus, *args, **kwargs):
+    def __init__(self, bus, timeout=0.0, *args, **kwargs):
         global can
         import can
 
@@ -1102,6 +1102,7 @@ class CanStack(TransportLayer):
             self.tx_canbus = self._tx_canbus_3minus
 
         self.set_bus(bus)
+        self.timeout = timeout
         TransportLayer.__init__(self, rxfn=self.rx_canbus, txfn=self.tx_canbus, *args, **kwargs)
 
     def set_bus(self, bus):
