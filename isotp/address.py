@@ -57,7 +57,7 @@ class Address:
     :type address_extension: int or None
     """
 
-    def __init__(self, addressing_mode = AddressingMode.Normal_11bits, txid=None, rxid=None, target_address=None, source_address=None, address_extension=None, **kwargs):
+    def __init__(self, addressing_mode = AddressingMode.Normal_11bits, txid=None, rxid=None, functional_address=None, target_address=None, source_address=None, address_extension=None, **kwargs):
 
         self.addressing_mode    = addressing_mode
         self.target_address     = target_address
@@ -65,6 +65,7 @@ class Address:
         self.address_extension  = address_extension
         self.txid               = txid
         self.rxid               = rxid
+        self.functional_address = functional_address
         self.is_29bits          = True if self.addressing_mode in [ AddressingMode.Normal_29bits, AddressingMode.NormalFixed_29bits, AddressingMode.Extended_29bits, AddressingMode.Mixed_29bits] else False
 
         self.validate()
@@ -183,6 +184,8 @@ class Address:
 
     def _get_tx_arbitraton_id(self, address_type):
         if self.addressing_mode == AddressingMode.Normal_11bits:
+            if address_type == TargetAddressType.Functional:
+                return self.functional_address
             return self.txid
         elif self.addressing_mode == AddressingMode.Normal_29bits:
             return self.txid
