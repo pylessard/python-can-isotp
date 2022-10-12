@@ -122,7 +122,7 @@ The transport layer ``params`` parameter must be a dictionary with the following
    The single-byte Wait Frame Max to include in the flow control message that the layer will send when receiving data. 
    When this limits is reached, reception will stop and trigger a :class:`MaximumWaitFrameReachedError<isotp.MaximumWaitFrameReachedError>`
 
-   A value of 0 that wait frames are not supported and none shall be sent.
+   A value of 0 means that wait frames are not supported and none shall be sent.
 
 .. _param_max_frame_size:
 
