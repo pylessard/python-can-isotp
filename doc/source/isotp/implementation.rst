@@ -45,7 +45,7 @@ The transport layer ``params`` parameter must be a dictionary with the following
    **default: 8**
 
    The single-byte Block Size to include in the flow control message that the layer will send when receiving data.
-   Represents to number of consecutive frame that a sender should send before expecting the layer to send a flow control message. 0 Means infinitely large block size (implying no flow control message)
+   Represents the number of consecutive frames that a sender should send before expecting the layer to send a flow control message. 0 means infinitely large block size (implying no flow control message)
 
 .. _param_tx_data_length:
 
