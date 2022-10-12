@@ -818,7 +818,9 @@ class TransportLayer:
 
                     if self.tx_state == self.TxState.TRANSMIT_FF_STANDBY:
                         self.start_rx_fc_timer()
-                    self.tx_state = self.TxState.IDLE
+                        self.tx_state = self.TxState.WAIT_FC    # After a first frame, we wait for flow control
+                    else:
+                        self.tx_state = self.TxState.IDLE   # After a single frame, there's nothing to do
 
 
 
