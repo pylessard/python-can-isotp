@@ -53,11 +53,17 @@ class Address:
     :param source_address: Source address (N_SA) used in ``NormalFixed_29bits`` and ``Mixed_29bits`` addressing mode.
     :type source_address: int or None
 
+    :param physical_id: The CAN ID for physical (unicast) messages. Only bits 28-16 are used. Used for these addressing modes: ``NormalFixed_29bits``, ``Mixed_29bits``. Set to standard mandated value if None.
+    :type: int or None
+
+    :param functional_id: The CAN ID for functional (multicast) messages. Only bits 28-16 are used. Used for these addressing modes: ``NormalFixed_29bits``, ``Mixed_29bits``. Set to standard mandated value if None.
+    :type: int or None
+
     :param address_extension: Address extension (N_AE) used in ``Mixed_11bits``, ``Mixed_29bits`` addressing mode
     :type address_extension: int or None
     """
 
-    def __init__(self, addressing_mode = AddressingMode.Normal_11bits, txid=None, rxid=None, target_address=None, source_address=None, address_extension=None, **kwargs):
+    def __init__(self, addressing_mode = AddressingMode.Normal_11bits, txid=None, rxid=None, target_address=None, source_address=None, physical_id=None, functional_id=None, address_extension=None, **kwargs):
 
         self.addressing_mode    = addressing_mode
         self.target_address     = target_address
@@ -66,6 +72,14 @@ class Address:
         self.txid               = txid
         self.rxid               = rxid
         self.is_29bits          = True if self.addressing_mode in [ AddressingMode.Normal_29bits, AddressingMode.NormalFixed_29bits, AddressingMode.Extended_29bits, AddressingMode.Mixed_29bits] else False
+
+        if self.addressing_mode == AddressingMode.NormalFixed_29bits:
+            self.physical_id   = 0x18DA0000 if physical_id   is None else physical_id   & 0x1FFF0000
+            self.functional_id = 0x18DB0000 if functional_id is None else functional_id & 0x1FFF0000
+
+        if self.addressing_mode == AddressingMode.Mixed_29bits:
+            self.physical_id   = 0x18CE0000 if physical_id   is None else physical_id   & 0x1FFF0000
+            self.functional_id = 0x18CD0000 if functional_id is None else functional_id & 0x1FFF0000
 
         self.validate()
 
@@ -85,12 +99,6 @@ class Address:
         elif self.addressing_mode in [AddressingMode.Mixed_11bits, AddressingMode.Mixed_29bits]:
             self.tx_payload_prefix.extend(bytearray([self.address_extension]))
             self.rx_prefix_size = 1
-
-        self.rxmask = None
-        if self.addressing_mode == AddressingMode.NormalFixed_29bits:
-            self.rxmask = 0x18DA0000    # This should ignore variant between Physical and Functional addressing
-        elif self.addressing_mode == AddressingMode.Mixed_29bits:
-            self.rxmask = 0x18CD0000    # This should ignore variant between Physical and Functional addressing
 
         if self.addressing_mode in [AddressingMode.Normal_11bits, AddressingMode.Normal_29bits]:
             self.is_for_me = self._is_for_me_normal
@@ -186,36 +194,30 @@ class Address:
             return self.txid
         elif self.addressing_mode == AddressingMode.Normal_29bits:
             return self.txid
-        elif self.addressing_mode == AddressingMode.NormalFixed_29bits:
-            bits23_16 = 0xDA0000 if address_type==TargetAddressType.Physical else 0xDB0000
-            return 0x18000000 | bits23_16 | (self.target_address << 8) | self.source_address
         elif self.addressing_mode == AddressingMode.Extended_11bits:
             return self.txid
         elif self.addressing_mode == AddressingMode.Extended_29bits:
             return self.txid
         elif self.addressing_mode == AddressingMode.Mixed_11bits:
             return self.txid
-        elif self.addressing_mode == AddressingMode.Mixed_29bits:
-            bits23_16 = 0xCE0000 if address_type==TargetAddressType.Physical else 0xCD0000
-            return 0x18000000 | bits23_16 | (self.target_address << 8) | self.source_address
+        elif self.addressing_mode in [AddressingMode.Mixed_29bits, AddressingMode.NormalFixed_29bits]:
+            bits28_16 = self.physical_id if address_type==TargetAddressType.Physical else self.functional_id
+            return bits28_16 | (self.target_address << 8) | self.source_address
 
     def _get_rx_arbitration_id(self, address_type=TargetAddressType.Physical):
         if self.addressing_mode == AddressingMode.Normal_11bits:
             return self.rxid
         elif self.addressing_mode == AddressingMode.Normal_29bits:
             return self.rxid
-        elif self.addressing_mode == AddressingMode.NormalFixed_29bits:
-            bits23_16 = 0xDA0000 if address_type==TargetAddressType.Physical else 0xDB0000
-            return 0x18000000 | bits23_16 | (self.source_address << 8) | self.target_address
         elif self.addressing_mode == AddressingMode.Extended_11bits:
             return self.rxid
         elif self.addressing_mode == AddressingMode.Extended_29bits:
             return self.rxid
         elif self.addressing_mode == AddressingMode.Mixed_11bits:
             return self.rxid
-        elif self.addressing_mode == AddressingMode.Mixed_29bits:
-            bits23_16 = 0xCE0000 if address_type==TargetAddressType.Physical else 0xCD0000
-            return 0x18000000 | bits23_16 | (self.source_address << 8) | self.target_address
+        elif self.addressing_mode in [AddressingMode.Mixed_29bits, AddressingMode.NormalFixed_29bits]:
+            bits28_16 = self.physical_id if address_type==TargetAddressType.Physical else self.functional_id
+            return bits28_16 | (self.source_address << 8) | self.target_address
 
     def _is_for_me_normal(self, msg):
         if self.is_29bits == msg.is_extended_id:
@@ -230,7 +232,7 @@ class Address:
 
     def _is_for_me_normalfixed(self, msg):
         if self.is_29bits == msg.is_extended_id:
-            return ((msg.arbitration_id >> 16) & 0xFF) in [218,219] and (msg.arbitration_id & 0xFF00) >> 8 == self.source_address and msg.arbitration_id & 0xFF == self.target_address
+            return (msg.arbitration_id & 0x1FFF0000 in [self.physical_id, self.functional_id]) and (msg.arbitration_id & 0xFF00) >> 8 == self.source_address and msg.arbitration_id & 0xFF == self.target_address
         return False
 
     def _is_for_me_mixed_11bits(self, msg):
@@ -242,7 +244,7 @@ class Address:
     def _is_for_me_mixed_29bits(self, msg):
         if self.is_29bits == msg.is_extended_id:
             if msg.data is not None and len(msg.data) > 0:
-                return ((msg.arbitration_id >> 16) & 0xFF) in [205,206] and (msg.arbitration_id & 0xFF00) >> 8 == self.source_address and msg.arbitration_id & 0xFF == self.target_address and int(msg.data[0]) == self.address_extension
+                return (msg.arbitration_id & 0x1FFF0000) in [self.physical_id, self.functional_id] and (msg.arbitration_id & 0xFF00) >> 8 == self.source_address and msg.arbitration_id & 0xFF == self.target_address and int(msg.data[0]) == self.address_extension
         return False
 
     def requires_extension_byte(self):

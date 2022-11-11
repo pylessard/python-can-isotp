@@ -31,7 +31,6 @@ class Address:
     rx_arbitration_id_functional: Optional[int]
     tx_payload_prefix: bytearray
     rx_prefix_size: int
-    rxmask: Optional[int]
     is_for_me: bool
     def __init__(self,
                  addressing_mode: int=...,
