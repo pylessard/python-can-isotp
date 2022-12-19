@@ -3,8 +3,8 @@ Examples
 
 .. _example_transmit_no_thread_can_stack:
 
-Basic transmission with python-can
-----------------------------------
+Basic transmission with python-can-isotp
+----------------------------------------
 
 .. code-block:: python
    
@@ -35,8 +35,8 @@ Basic transmission with python-can
 
 .. _example_receive_threaded_can_stack:
 
-Threaded reception with python-can
-----------------------------------
+Threaded reception with python-can-isotp
+----------------------------------------
 
 .. code-block:: python
    
