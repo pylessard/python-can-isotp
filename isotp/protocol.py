@@ -717,7 +717,7 @@ class TransportLayer:
             else:
                 if flow_control_frame.flow_status == PDU.FlowStatus.Wait:
                     if self.params.wftmax == 0:
-                        self.trigger_error(isotp.errors.UnsuportedWaitFrameError('Received a FlowControl requesting to wait, but fwtmax is set to 0'))
+                        self.trigger_error(isotp.errors.UnsuportedWaitFrameError('Received a FlowControl requesting to wait, but wftmax is set to 0'))
                     elif self.wft_counter >= self.params.wftmax:
                         self.trigger_error(isotp.errors.MaximumWaitFrameReachedError('Received %d wait frame which is the maximum set in params.wftmax' % (self.wft_counter)))
                         self.stop_sending()
