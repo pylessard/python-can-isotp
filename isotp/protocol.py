@@ -1064,7 +1064,7 @@ class TransportLayer:
 
 class CanStack(TransportLayer):
     """
-    The IsoTP transport using `python-can <https://python-can.readthedocs.io>`_ as CAN layer. python-can must be installed in order to use this class.
+    The IsoTP transport using `python-can <https://python-can.readthedocs.io>`__ as CAN layer. python-can must be installed in order to use this class.
     All parameters except the ``bus`` parameter will be given to the :class:`TransportLayer<isotp.TransportLayer>` constructor
 
     :param bus: A python-can bus object implementing ``recv`` and ``send``

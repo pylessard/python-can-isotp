@@ -2,49 +2,53 @@ import socket as socket_module
 import os
 import isotp.address
 
-mtu=4095
+mtu = 4095
+
 
 def check_support():
     if not hasattr(socket_module, 'CAN_ISOTP'):
         if os.name == 'nt':
             raise NotImplementedError("This module cannot be used on Windows")
         else:
-            raise NotImplementedError("Your version of Python does not offer support for CAN ISO-TP protocol. Support have been added since Python 3.7 on Linux build > 2.6.15.")
+            raise NotImplementedError(
+                "Your version of Python does not offer support for CAN ISO-TP protocol. Support have been added since Python 3.7 on Linux build > 2.6.15.")
+
 
 class flags:
 
-    LISTEN_MODE     = 0x001
+    LISTEN_MODE = 0x001
     """Puts the socket in Listen mode, which prevents transmission of data"""
 
-    EXTEND_ADDR     = 0x002
+    EXTEND_ADDR = 0x002
     """When set, an address extension byte (set in socket general options) will be added to each payload sent. Unless RX_EXT_ADDR is also set, this value will be expected for reception as well"""
 
-    TX_PADDING      = 0x004
+    TX_PADDING = 0x004
     """Enables padding of transmitted data with a byte set in the socket general options"""
 
-    RX_PADDING      = 0x008
+    RX_PADDING = 0x008
     """ Indicates that data padding is possible in reception. Must be set for CHK_PAD_LEN and CHK_PAD_DATA to have an effect"""
 
-    CHK_PAD_LEN     = 0x010
+    CHK_PAD_LEN = 0x010
     """ Makes the socket validate the padding length of the CAN message"""
 
-    CHK_PAD_DATA    = 0x020
+    CHK_PAD_DATA = 0x020
     """ Makes the socket validate the padding bytes of the CAN message"""
 
-    HALF_DUPLEX     = 0x040
+    HALF_DUPLEX = 0x040
     """ Sets the socket in half duplex mode, forcing transmission and reception to happen sequentially """
 
-    FORCE_TXSTMIN   = 0x080
+    FORCE_TXSTMIN = 0x080
     """Forces the socket to use the separation time sets in general options, overriding stmin value received in flow control frames."""
 
-    FORCE_RXSTMIN   = 0x100
+    FORCE_RXSTMIN = 0x100
     """ Forces the socket to ignore any message received faster than stmin given in the flow control frame"""
 
-    RX_EXT_ADDR     = 0x200
+    RX_EXT_ADDR = 0x200
     """ When sets, a different extended address can be used for reception than for transmission."""
 
-    WAIT_TX_DONE     = 0x400
+    WAIT_TX_DONE = 0x400
     """ When set, we wait for tx completion to make sure the PDU is completely passed to the CAN netdevice queue."""
+
 
 class LinkLayerProtocol:
     CAN = 16
@@ -52,6 +56,7 @@ class LinkLayerProtocol:
 
     CAN_FD = 72
     """ Internal structure size of a CAN FD frame"""
+
 
 class socket:
     """
@@ -64,7 +69,7 @@ class socket:
 
     # We want that syntax isotp.socket.flags and isotp.socket.mtu
     # This is a workaround for sphinx autodoc that fails to load docstring for nested-class members
-    flags = flags   
+    flags = flags
     LinkLayerProtocol = LinkLayerProtocol
 
     def __init__(self, timeout=0.1):
@@ -75,7 +80,7 @@ class socket:
         self.bound = False
         self.closed = False
         self._socket = socket_module.socket(socket_module.AF_CAN, socket_module.SOCK_DGRAM, socket_module.CAN_ISOTP)
-        if timeout is not None and timeout>0:
+        if timeout is not None and timeout > 0:
             self._socket.settimeout(timeout)
 
     def send(self, *args, **kwargs):
@@ -128,7 +133,7 @@ class socket:
         :param address: The address to bind to. 
         :type: :class:`isotp.Address<isotp.Address>`
         """
-        self.interface=interface
+        self.interface = interface
 
         # == This is for syntax flexibility and also backward compatibility
         address = None
@@ -142,7 +147,7 @@ class socket:
 
         if address is None:
             address = isotp.address.Address(*args, **kwargs)
-        # == 
+        # ==
         self.address = address
 
         # IsoTP sockets doesn't provide an interface to modify the target address type. We asusme physical.
@@ -163,10 +168,10 @@ class socket:
         if self.address.requires_extension_byte():
             o = self.get_opts()
             o.optflag |= self.flags.EXTEND_ADDR | self.flags.RX_EXT_ADDR
-            self.set_opts(optflag = o.optflag, ext_address = self.address.get_tx_extension_byte(), rx_ext_address=self.address.get_rx_extension_byte())
+            self.set_opts(optflag=o.optflag, ext_address=self.address.get_tx_extension_byte(), rx_ext_address=self.address.get_rx_extension_byte())
 
         self._socket.bind((interface, rxid, txid))
-        self.bound=True
+        self.bound = True
 
     def fileno(self):
         return self._socket.fileno()
