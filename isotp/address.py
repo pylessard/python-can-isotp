@@ -26,9 +26,11 @@ class AddressingMode:
 
         return 'Unknown'
 
+
 class TargetAddressType:
     Physical = 0        # 1 to 1 communication
     Functional = 1      # 1 to n communication
+
 
 class Address:
     """
@@ -63,32 +65,33 @@ class Address:
     :type address_extension: int or None
     """
 
-    def __init__(self, addressing_mode = AddressingMode.Normal_11bits, txid=None, rxid=None, target_address=None, source_address=None, physical_id=None, functional_id=None, address_extension=None, **kwargs):
+    def __init__(self, addressing_mode=AddressingMode.Normal_11bits, txid=None, rxid=None, target_address=None, source_address=None, physical_id=None, functional_id=None, address_extension=None, **kwargs):
 
-        self.addressing_mode    = addressing_mode
-        self.target_address     = target_address
-        self.source_address     = source_address
-        self.address_extension  = address_extension
-        self.txid               = txid
-        self.rxid               = rxid
-        self.is_29bits          = True if self.addressing_mode in [ AddressingMode.Normal_29bits, AddressingMode.NormalFixed_29bits, AddressingMode.Extended_29bits, AddressingMode.Mixed_29bits] else False
+        self.addressing_mode = addressing_mode
+        self.target_address = target_address
+        self.source_address = source_address
+        self.address_extension = address_extension
+        self.txid = txid
+        self.rxid = rxid
+        self.is_29bits = True if self.addressing_mode in [
+            AddressingMode.Normal_29bits, AddressingMode.NormalFixed_29bits, AddressingMode.Extended_29bits, AddressingMode.Mixed_29bits] else False
 
         if self.addressing_mode == AddressingMode.NormalFixed_29bits:
-            self.physical_id   = 0x18DA0000 if physical_id   is None else physical_id   & 0x1FFF0000
+            self.physical_id = 0x18DA0000 if physical_id is None else physical_id & 0x1FFF0000
             self.functional_id = 0x18DB0000 if functional_id is None else functional_id & 0x1FFF0000
 
         if self.addressing_mode == AddressingMode.Mixed_29bits:
-            self.physical_id   = 0x18CE0000 if physical_id   is None else physical_id   & 0x1FFF0000
+            self.physical_id = 0x18CE0000 if physical_id is None else physical_id & 0x1FFF0000
             self.functional_id = 0x18CD0000 if functional_id is None else functional_id & 0x1FFF0000
 
         self.validate()
 
         # From here, input is good. Do some precomputing for speed optimization without bothering about types or values
-        self.tx_arbitration_id_physical     = self._get_tx_arbitraton_id(TargetAddressType.Physical)
-        self.tx_arbitration_id_functional   = self._get_tx_arbitraton_id(TargetAddressType.Functional)
+        self.tx_arbitration_id_physical = self._get_tx_arbitraton_id(TargetAddressType.Physical)
+        self.tx_arbitration_id_functional = self._get_tx_arbitraton_id(TargetAddressType.Functional)
 
-        self.rx_arbitration_id_physical     = self._get_rx_arbitration_id(TargetAddressType.Physical)
-        self.rx_arbitration_id_functional   = self._get_rx_arbitration_id(TargetAddressType.Functional)
+        self.rx_arbitration_id_physical = self._get_rx_arbitration_id(TargetAddressType.Physical)
+        self.rx_arbitration_id_functional = self._get_rx_arbitration_id(TargetAddressType.Functional)
 
         self.tx_payload_prefix = bytearray()
         self.rx_prefix_size = 0
@@ -114,7 +117,7 @@ class Address:
             raise RuntimeError('This exception should never be raised.')
 
     def validate(self):
-        if self.addressing_mode not in [AddressingMode.Normal_11bits,AddressingMode.Normal_29bits,AddressingMode.NormalFixed_29bits,AddressingMode.Extended_11bits,AddressingMode.Extended_29bits,AddressingMode.Mixed_11bits,AddressingMode.Mixed_29bits]:
+        if self.addressing_mode not in [AddressingMode.Normal_11bits, AddressingMode.Normal_29bits, AddressingMode.NormalFixed_29bits, AddressingMode.Extended_11bits, AddressingMode.Extended_29bits, AddressingMode.Mixed_11bits, AddressingMode.Mixed_29bits]:
             raise ValueError('Addressing mode is not valid')
 
         if self.addressing_mode in [AddressingMode.Normal_11bits, AddressingMode.Normal_29bits]:
@@ -201,7 +204,7 @@ class Address:
         elif self.addressing_mode == AddressingMode.Mixed_11bits:
             return self.txid
         elif self.addressing_mode in [AddressingMode.Mixed_29bits, AddressingMode.NormalFixed_29bits]:
-            bits28_16 = self.physical_id if address_type==TargetAddressType.Physical else self.functional_id
+            bits28_16 = self.physical_id if address_type == TargetAddressType.Physical else self.functional_id
             return bits28_16 | (self.target_address << 8) | self.source_address
 
     def _get_rx_arbitration_id(self, address_type=TargetAddressType.Physical):
@@ -216,7 +219,7 @@ class Address:
         elif self.addressing_mode == AddressingMode.Mixed_11bits:
             return self.rxid
         elif self.addressing_mode in [AddressingMode.Mixed_29bits, AddressingMode.NormalFixed_29bits]:
-            bits28_16 = self.physical_id if address_type==TargetAddressType.Physical else self.functional_id
+            bits28_16 = self.physical_id if address_type == TargetAddressType.Physical else self.functional_id
             return bits28_16 | (self.source_address << 8) | self.target_address
 
     def _is_for_me_normal(self, msg):
@@ -253,7 +256,7 @@ class Address:
     def get_tx_extension_byte(self):
         if self.addressing_mode in [AddressingMode.Extended_11bits, AddressingMode.Extended_29bits]:
             return self.target_address
-        if self.addressing_mode in [ AddressingMode.Mixed_11bits, AddressingMode.Mixed_29bits]:
+        if self.addressing_mode in [AddressingMode.Mixed_11bits, AddressingMode.Mixed_29bits]:
             return self.address_extension
 
     def get_rx_extension_byte(self):
@@ -264,12 +267,12 @@ class Address:
 
     def get_content_str(self):
         val_dict = {}
-        keys =  ['target_address', 'source_address', 'address_extension', 'txid', 'rxid']
+        keys = ['target_address', 'source_address', 'address_extension', 'txid', 'rxid']
         for key in keys:
             val = getattr(self, key)
             if val is not None:
                 val_dict[key] = val
-        vals_str = ', '.join(['%s:0x%02x' % (k,val_dict[k]) for k in val_dict])
+        vals_str = ', '.join(['%s:0x%02x' % (k, val_dict[k]) for k in val_dict])
         return '[%s - %s]' % (AddressingMode.get_name(self.addressing_mode), vals_str)
 
     def __repr__(self):
