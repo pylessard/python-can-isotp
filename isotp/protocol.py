@@ -1085,7 +1085,7 @@ class CanStack(TransportLayer):
         self.bus.send(can.Message(arbitration_id=msg.arbitration_id, data = msg.data, is_extended_id=msg.is_extended_id, is_fd=msg.is_fd, bitrate_switch=msg.bitrate_switch))
 
     def _tx_canbus_3minus(self, msg):
-        self.bus.send(can.Message(arbitration_id=msg.arbitration_id, data = msg.data, extended_id=msg.is_extended_id, is_fd=msg.is_fd, bitrate_switch=msg.bitrate_switch))
+        self.bus.send(can.Message(arbitration_id=msg.arbitration_id, data = msg.data, is_extended_id=msg.is_extended_id, is_fd=msg.is_fd, bitrate_switch=msg.bitrate_switch))
 
     def rx_canbus(self):
         msg = self.bus.recv(self.timeout)
