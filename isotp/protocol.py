@@ -7,6 +7,8 @@ import isotp.address
 import isotp.errors
 import math
 import enum
+import can
+
 
 class CanMessage:
     """
@@ -36,6 +38,7 @@ class CanMessage:
         self.is_extended_id = extended_id
         self.is_fd = is_fd
         self.bitrate_switch = bitrate_switch
+
 
 class PDU:
     """
@@ -170,6 +173,7 @@ class PDU:
         else:
             return "Reserved"
 
+
 class RateLimiter:
 
     TIME_SLOT_LENGTH = 0.005
@@ -228,7 +232,6 @@ class RateLimiter:
        self.bit_total = 0
        self.window_bit_max = self.mean_bitrate*self.window_size_sec
 
-
     def update(self):
         if not self.enabled:
            self.reset()
@@ -244,7 +247,6 @@ class RateLimiter:
                 self.bit_total -= n_to_remove
             else:
                 break
-
 
     def allowed_bytes(self):
         no_limit = 0xFFFFFFFF
@@ -331,7 +333,6 @@ class TransportLayer:
             setattr(self, key, val)
             if validate:
                 self.validate()
-
 
         def validate(self):
             if not isinstance(self.rx_flowcontrol_timeout, int):
@@ -429,6 +430,7 @@ class TransportLayer:
             if not isinstance(self.listen_mode, bool):
                 raise ValueError('listen_mode must be a boolean value')
 
+
     class Timer:
         def __init__(self, timeout):
             self.set_timeout(timeout)
@@ -460,9 +462,11 @@ class TransportLayer:
         def is_stopped(self):
             return self.start_time == None
 
+
     class RxState(enum.Enum):
         IDLE = 0
         WAIT_CF = 1
+
 
     class TxState(enum.Enum):
         IDLE = 0
@@ -470,6 +474,7 @@ class TransportLayer:
         TRANSMIT_CF = 2
         TRANSMIT_SF_STANDBY = 3
         TRANSMIT_FF_STANDBY = 4
+
 
     def __init__(self, rxfn, txfn, address=None, error_handler=None, params=None):
         self.params = self.Params()
@@ -528,8 +533,6 @@ class TransportLayer:
         if self.params.rate_limit_enable:
             self.rate_limiter.enable()
 
-
-
     def send(self, data, target_address_type=None):
         """
         Enqueue an IsoTP frame to be sent over CAN network
@@ -544,7 +547,6 @@ class TransportLayer:
         :raises ValueError: Input parameter is not a bytearray or not convertible to bytearray
         :raises RuntimeError: Transmit queue is full
         """	
-
         if target_address_type is None:
             target_address_type = self.params.default_target_address_type
 
@@ -564,10 +566,10 @@ class TransportLayer:
             if len(data) > maxlen:
                 raise ValueError('Cannot send multipacket frame with Functional TargetAddressType')
 
-        self.tx_queue.put( {'data':data, 'target_address_type':target_address_type})	# frame is always an IsoTPFrame here
+        self.tx_queue.put({'data':data, 'target_address_type':target_address_type})	# frame is always an IsoTPFrame here
 
     # Receive an IsoTP frame. Output of the layer
-    def recv(self):
+    def recv(self,block=True,timeout=None):
         """
         Dequeue an IsoTP frame from the reception queue if available.
 
@@ -594,7 +596,6 @@ class TransportLayer:
         Function to be called periodically, as fast as possible. 
         This function is non-blocking.
         """	
-
         self.check_timeouts_rx()
         self.rate_limiter.update()
 
@@ -741,12 +742,10 @@ class TransportLayer:
 
                     self.tx_state = self.TxState.TRANSMIT_CF
 
-
         # ======= Timeouts ======
         if self.timer_rx_fc.is_timed_out():
             self.trigger_error(isotp.errors.FlowControlTimeoutError('Reception of FlowControl timed out. Stopping transmission'))
             self.stop_sending()
-
 
         # ======= FSM ======
         # Check this first as we may have another isotp frame to send and we need to handle it right away without waiting for next "process()" call
@@ -754,57 +753,53 @@ class TransportLayer:
             self.stop_sending()	
         
         if self.tx_state == self.TxState.IDLE:
-            read_tx_queue = True	# Read until we get non-empty frame to send
-            while read_tx_queue:
-                read_tx_queue = False
-                if not self.tx_queue.empty():
-                    popped_object = self.tx_queue.get()
-                    if len(popped_object['data']) == 0:
-                        read_tx_queue = True	# Read another frame from tx_queue
-                    else:
-                        self.tx_buffer = bytearray(popped_object['data'])
-                        size_on_first_byte = (len(self.tx_buffer) + len(self.address.tx_payload_prefix)) <= 7
-                        size_offset = 1 if size_on_first_byte else 2
+            while not self.tx_queue.empty():        # Read until we get non-empty frame to send
+                popped_object = self.tx_queue.get()
+                if len(popped_object['data']) == 0:
+                    pass	                        # Read another frame from tx_queue
+                else:
+                    self.tx_buffer = bytearray(popped_object['data'])
+                    size_on_first_byte = (len(self.tx_buffer) + len(self.address.tx_payload_prefix)) <= 7
+                    size_offset = 1 if size_on_first_byte else 2
 
-                        # Single frame
-                        if len(self.tx_buffer) <= self.params.tx_data_length-size_offset-len(self.address.tx_payload_prefix):	
-                            if size_on_first_byte:
-                                msg_data 	= self.address.tx_payload_prefix + bytearray([0x0 | len(self.tx_buffer)]) + self.tx_buffer
-                            else:
-                                msg_data 	= self.address.tx_payload_prefix + bytearray([0x0, len(self.tx_buffer)]) + self.tx_buffer
+                    # Single frame
+                    if len(self.tx_buffer) <= self.params.tx_data_length-size_offset-len(self.address.tx_payload_prefix):	
+                        if size_on_first_byte:
+                            msg_data 	= self.address.tx_payload_prefix + bytearray([0x0 | len(self.tx_buffer)]) + self.tx_buffer
+                        else:
+                            msg_data 	= self.address.tx_payload_prefix + bytearray([0x0, len(self.tx_buffer)]) + self.tx_buffer
 
-                            arbitration_id  = self.address.get_tx_arbitraton_id(popped_object['target_address_type'])
-                            msg_temp = self.make_tx_msg(arbitration_id, msg_data)
+                        arbitration_id  = self.address.get_tx_arbitraton_id(popped_object['target_address_type'])
+                        msg_temp = self.make_tx_msg(arbitration_id, msg_data)
 
-                            if len(msg_data) > allowed_bytes:
-                                self.tx_standby_msg = msg_temp
-                                self.tx_state = self.TxState.TRANSMIT_SF_STANDBY
-                            else:
-                                output_msg		= msg_temp
+                        if len(msg_data) > allowed_bytes:
+                            self.tx_standby_msg = msg_temp
+                            self.tx_state = self.TxState.TRANSMIT_SF_STANDBY
+                        else:
+                            output_msg		= msg_temp
 
-                        # Multi frame - First Frame
-                        else:							
-                            self.tx_frame_length = len(self.tx_buffer)
-                            encode_length_on_2_first_bytes = True if self.tx_frame_length <= 0xFFF else False
-                            if encode_length_on_2_first_bytes:
-                                data_length = self.params.tx_data_length-2-len(self.address.tx_payload_prefix)
-                                msg_data 	= self.address.tx_payload_prefix + bytearray([0x10|((self.tx_frame_length >> 8) & 0xF), self.tx_frame_length&0xFF]) + self.tx_buffer[:data_length]
-                            else:
-                                data_length = self.params.tx_data_length-6-len(self.address.tx_payload_prefix)
-                                msg_data 	= self.address.tx_payload_prefix + bytearray([0x10, 0x00, (self.tx_frame_length>>24) & 0xFF, (self.tx_frame_length>>16) & 0xFF, (self.tx_frame_length>>8) & 0xFF, (self.tx_frame_length>>0) & 0xFF]) + self.tx_buffer[:data_length]
+                    # Multi frame - First Frame
+                    else:							
+                        self.tx_frame_length = len(self.tx_buffer)
+                        encode_length_on_2_first_bytes = True if self.tx_frame_length <= 0xFFF else False
+                        if encode_length_on_2_first_bytes:
+                            data_length = self.params.tx_data_length-2-len(self.address.tx_payload_prefix)
+                            msg_data 	= self.address.tx_payload_prefix + bytearray([0x10|((self.tx_frame_length >> 8) & 0xF), self.tx_frame_length&0xFF]) + self.tx_buffer[:data_length]
+                        else:
+                            data_length = self.params.tx_data_length-6-len(self.address.tx_payload_prefix)
+                            msg_data 	= self.address.tx_payload_prefix + bytearray([0x10, 0x00, (self.tx_frame_length>>24) & 0xFF, (self.tx_frame_length>>16) & 0xFF, (self.tx_frame_length>>8) & 0xFF, (self.tx_frame_length>>0) & 0xFF]) + self.tx_buffer[:data_length]
 
-                            arbitration_id  = self.address.get_tx_arbitraton_id()
-                            self.tx_buffer 	= self.tx_buffer[data_length:]
-                            self.tx_seqnum 	= 1
-                            msg_temp = self.make_tx_msg(arbitration_id, msg_data)
-                            if len(msg_data) <= allowed_bytes:
-                                output_msg = msg_temp
-                                self.tx_state   = self.TxState.WAIT_FC
-                                self.start_rx_fc_timer()
-                            else:
-                                self.tx_standby_msg = msg_temp
-                                self.tx_state = self.TxState.TRANSMIT_FF_STANDBY
-
+                        arbitration_id  = self.address.get_tx_arbitraton_id()
+                        self.tx_buffer 	= self.tx_buffer[data_length:]
+                        self.tx_seqnum 	= 1
+                        msg_temp = self.make_tx_msg(arbitration_id, msg_data)
+                        if len(msg_data) <= allowed_bytes:
+                            output_msg = msg_temp
+                            self.tx_state   = self.TxState.WAIT_FC
+                            self.start_rx_fc_timer()
+                        else:
+                            self.tx_standby_msg = msg_temp
+                            self.tx_state = self.TxState.TRANSMIT_FF_STANDBY
 
         elif self.tx_state in [self.TxState.TRANSMIT_SF_STANDBY, self.TxState.TRANSMIT_FF_STANDBY]:
             # This states serves if the rate limiter prevent from starting a new transmission.
@@ -822,8 +817,6 @@ class TransportLayer:
                     else:
                         self.tx_state = self.TxState.IDLE   # After a single frame, there's nothing to do
 
-
-
         elif self.tx_state == self.TxState.WAIT_FC:
             pass # Nothing to do. Flow control will make the FSM switch state by calling init_tx_consecutive_frame
 
@@ -838,11 +831,10 @@ class TransportLayer:
                     self.tx_buffer = self.tx_buffer[data_length:]
                     self.tx_seqnum = (self.tx_seqnum + 1 ) & 0xF
                     self.timer_tx_stmin.start()
-                    self.tx_block_counter+=1
+                    self.tx_block_counter += 1
             
-            if (len(self.tx_buffer) == 0):
+            if len(self.tx_buffer) == 0:
                 self.stop_sending()
-
             elif self.remote_blocksize != 0 and self.tx_block_counter >= self.remote_blocksize:
                 self.tx_state = self.TxState.WAIT_FC
                 self.start_rx_fc_timer()
@@ -888,7 +880,6 @@ class TransportLayer:
                     target_length = 8
                 else:   # ISO-15765:2016 - 10.4.2.2
                     pass  
-
             else:       # issue #27
                 must_pad = True
                 target_length = self.params.tx_data_min_length
@@ -950,8 +941,6 @@ class TransportLayer:
         elif fdlen == 64: return 15
         raise ValueError("Impossible DLC size for payload of %d bytes with tx_data_length of %d" % (len(data), self.params.tx_data_length))
 
-
-
     def get_nearest_can_fd_size(self, size):
         if size <= 8:
             return size
@@ -989,7 +978,6 @@ class TransportLayer:
         self.wft_counter = 0
         self.tx_standby_msg = None
 
-
     def stop_receiving(self):
         self.actual_rxdl = None
         self.rx_state = self.RxState.IDLE
@@ -1020,7 +1008,6 @@ class TransportLayer:
 
         self.last_seqnum = 0
         self.rx_block_counter = 0
-
 
     def trigger_error(self, error):
         if self.error_handler is not None:
@@ -1054,11 +1041,9 @@ class TransportLayer:
 
         The value will change according to the internal state machine state, sleeping longer while idle and shorter when active.
         """
-
         key = (self.rx_state, self.tx_state)
         if key in self.timings:
             return self.timings[key]
-
         else:
             return 0.001
 
@@ -1080,34 +1065,103 @@ class CanStack(TransportLayer):
     :type params: dict
 
     """
-
-    def _tx_canbus_3plus(self, msg):
-        self.bus.send(can.Message(arbitration_id=msg.arbitration_id, data = msg.data, is_extended_id=msg.is_extended_id, is_fd=msg.is_fd, bitrate_switch=msg.bitrate_switch))
-
-    def _tx_canbus_3minus(self, msg):
-        self.bus.send(can.Message(arbitration_id=msg.arbitration_id, data = msg.data, extended_id=msg.is_extended_id, is_fd=msg.is_fd, bitrate_switch=msg.bitrate_switch))
-
-    def rx_canbus(self):
-        msg = self.bus.recv(self.timeout)
-        if msg is not None:
-            return CanMessage(arbitration_id=msg.arbitration_id, data=msg.data, extended_id=msg.is_extended_id, is_fd=msg.is_fd, bitrate_switch=msg.bitrate_switch)
-
-    def __init__(self, bus, timeout=0.0, *args, **kwargs):
-        global can
-        import can
-
+    def __init__(self, bus, timeout=0.0, notifier=None, *args, **kwargs):
         # Backward compatibility stuff.
-        message_input_args =  can.Message.__init__.__code__.co_varnames[:can.Message.__init__.__code__.co_argcount]
-        if 'is_extended_id' in message_input_args:
-            self.tx_canbus = self._tx_canbus_3plus
-        else:
-            self.tx_canbus = self._tx_canbus_3minus
+        self.input_args = can.Message.__init__.__code__.co_varnames
 
         self.set_bus(bus)
+        self.set_notifier(notifier)
         self.timeout = timeout
+        
         TransportLayer.__init__(self, rxfn=self.rx_canbus, txfn=self.tx_canbus, *args, **kwargs)
+    
+    def set_notifier(self, notifier):
+        if not isinstance(notifier, can.Notifier):
+            raise ValueError('notifier must be a python-can Notifier object')
+        self.notifier = notifier
+        self.buffer = self.IsoTpRx()
+        self.notifier.add_listener(self.buffer)
 
     def set_bus(self, bus):
         if not isinstance(bus, can.BusABC):
             raise ValueError('bus must be a python-can BusABC object')
         self.bus=bus
+
+    def tx_canbus(self, msg):
+        if 'is_extended_id' in self.input_args:
+            self.bus.send(can.Message(arbitration_id=msg.arbitration_id, data=msg.data, is_extended_id=msg.is_extended_id, is_fd=msg.is_fd, bitrate_switch=msg.bitrate_switch), timeout=0.0)
+        else:
+            self.bus.send(can.Message(arbitration_id=msg.arbitration_id, data=msg.data, extended_id=msg.is_extended_id, is_fd=msg.is_fd, bitrate_switch=msg.bitrate_switch), timeout=0.0)
+
+    def rx_canbus(self):
+        msg = self.buffer.get_message(timeout=self.timeout)
+        if msg is not None:
+            return CanMessage(arbitration_id=msg.arbitration_id, data=msg.data, extended_id=msg.is_extended_id, is_fd=msg.is_fd, bitrate_switch=msg.bitrate_switch)
+        else:
+            return None
+
+
+    class IsoTpRx(can.Listener):  # pylint: disable=abstract-method
+        """
+        A BufferedReader is a subclass of :class:`~can.Listener` which implements a
+        **message buffer**: that is, when the :class:`can.BufferedReader` instance is
+        notified of a new message it pushes it into a queue of messages waiting to
+        be serviced. The messages can then be fetched with
+        :meth:`~can.BufferedReader.get_message`.
+
+        Putting in messages after :meth:`~can.BufferedReader.stop` has been called will raise
+        an exception, see :meth:`~can.BufferedReader.on_message_received`.
+
+        :attr is_stopped: ``True`` if the reader has been stopped
+        """
+        from typing import Any, Optional
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            # set to "infinite" size
+            self.buffer: queue.SimpleQueue[can.Message] = queue.SimpleQueue()
+            self.is_stopped: bool = False
+
+        def on_message_received(self, msg: can.Message) -> None:
+            """
+            Append a message to the buffer.
+
+            :raises: BufferError
+                if the reader has already been stopped
+            """
+            if self.is_stopped:
+                raise RuntimeError("buffer has already been stopped")
+            else:
+                if msg.is_error_frame or msg.is_remote_frame:
+                    return
+                
+                self.buffer.put(msg)
+
+        def clear_buffer(self) -> None:
+            while not self.buffer.empty():
+                self.buffer.get()
+
+        def is_empty(self):
+            return self.buffer.empty()
+        
+        def get_message(self, timeout: float = 0.5) -> Optional[can.Message]:
+            """
+            Attempts to retrieve the message that has been in the queue for the longest amount
+            of time (FIFO). If no message is available, it blocks for given timeout or until a
+            message is received (whichever is shorter), or else returns None. This method does
+            not block after :meth:`can.BufferedReader.stop` has been called.
+
+            :param timeout: The number of seconds to wait for a new message.
+            :return: the received :class:`can.Message` or `None`, if the queue is empty.
+            """
+
+            try:
+                # if self.is_stopped:
+                return self.buffer.get(block=False)
+                # else:
+                    # return self.buffer.get(block=True, timeout=timeout)
+            except queue.Empty:
+                return None
+
+        def stop(self) -> None:
+            """Prohibits any more additions to this reader."""
+            self.is_stopped = True
