@@ -61,7 +61,6 @@ class PDU:
         Overflow = 2
 
     def __init__(self, msg = None, start_of_data=0):
-
         self.type = None
         self.length = None
         self.data = None
@@ -569,7 +568,7 @@ class TransportLayer:
         self.tx_queue.put({'data':data, 'target_address_type':target_address_type})	# frame is always an IsoTPFrame here
 
     # Receive an IsoTP frame. Output of the layer
-    def recv(self,block=True,timeout=None):
+    def recv(self):
         """
         Dequeue an IsoTP frame from the reception queue if available.
 
@@ -1153,7 +1152,6 @@ class CanStack(TransportLayer):
             :param timeout: The number of seconds to wait for a new message.
             :return: the received :class:`can.Message` or `None`, if the queue is empty.
             """
-
             try:
                 # if self.is_stopped:
                 return self.buffer.get(block=False)
