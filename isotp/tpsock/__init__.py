@@ -1,6 +1,12 @@
 import socket as socket_module
 import os
+
+from typing import TYPE_CHECKING, Optional
+
 import isotp.address
+
+if TYPE_CHECKING:
+    from . import opts
 
 mtu = 4095
 
@@ -72,9 +78,15 @@ class socket:
     flags = flags
     LinkLayerProtocol = LinkLayerProtocol
 
+    interface: Optional[str]
+    address: Optional["isotp.address.Address"]
+    bound: bool
+    closed: bool
+    _socket: socket_module.socket
+
     def __init__(self, timeout=0.1):
         check_support()
-        from . import opts
+        from . import opts  # import only if required.
         self.interface = None
         self.address = None
         self.bound = False
@@ -88,7 +100,7 @@ class socket:
             raise RuntimeError("bind() must be called before using the socket")
         return self._socket.send(*args, **kwargs)
 
-    def recv(self, n=mtu):
+    def recv(self, n=mtu) -> Optional[bytes]:
         if not self.bound:
             raise RuntimeError("bind() must be called before using the socket")
         try:
@@ -98,31 +110,31 @@ class socket:
         except:
             raise
 
-    def set_ll_opts(self, *args, **kwargs):
+    def set_ll_opts(self, *args, **kwargs) -> "opts.linklayer":
         if self.bound:
             raise RuntimeError("Options must be set before calling bind()")
         return opts.linklayer.write(self._socket, *args, **kwargs)
 
-    def set_opts(self, *args, **kwargs):
+    def set_opts(self, *args, **kwargs) -> "opts.general":
         if self.bound:
             raise RuntimeError("Options must be set before calling bind()")
         return opts.general.write(self._socket, *args, **kwargs)
 
-    def set_fc_opts(self, *args, **kwargs):
+    def set_fc_opts(self, *args, **kwargs) -> "opts.flowcontrol":
         if self.bound:
             raise RuntimeError("Options must be set before calling bind()")
         return opts.flowcontrol.write(self._socket, *args, **kwargs)
 
-    def get_ll_opts(self, *args, **kwargs):
+    def get_ll_opts(self, *args, **kwargs) -> "opts.linklayer":
         return opts.linklayer.read(self._socket, *args, **kwargs)
 
-    def get_opts(self, *args, **kwargs):
+    def get_opts(self, *args, **kwargs) -> "opts.general":
         return opts.general.read(self._socket, *args, **kwargs)
 
-    def get_fc_opts(self, *args, **kwargs):
+    def get_fc_opts(self, *args, **kwargs) -> "opts.flowcontrol":
         return opts.flowcontrol.read(self._socket, *args, **kwargs)
 
-    def bind(self, interface, *args, **kwargs):
+    def bind(self, interface: str, *args, **kwargs) -> None:
         """
         Binds the socket to an address. 
         If no address is provided, all additional parameters will be used to create an address. This is mainly to allow a syntax such as ``sock.bind('vcan0', rxid=0x123, txid=0x456)`` for backward compatibility.
@@ -167,24 +179,24 @@ class socket:
 
         if self.address.requires_extension_byte():
             o = self.get_opts()
+            assert o.optflag is not None
             o.optflag |= self.flags.EXTEND_ADDR | self.flags.RX_EXT_ADDR
             self.set_opts(optflag=o.optflag, ext_address=self.address.get_tx_extension_byte(), rx_ext_address=self.address.get_rx_extension_byte())
 
         self._socket.bind((interface, rxid, txid))
         self.bound = True
 
-    def fileno(self):
+    def fileno(self) -> int:
         return self._socket.fileno()
 
-    def close(self, *args, **kwargs):
-        v = self._socket.close(*args, **kwargs)
+    def close(self, *args, **kwargs) -> None:
+        self._socket.close(*args, **kwargs)
         self.bound = False
         self.closed = True
         self.address = None
-        return v
 
     def __delete__(self):
-        if isinstance(_socket, socket_module.socket):
+        if isinstance(self._socket, socket_module.socket):
             self._socket.close()
             self._socket = None
 

@@ -1,4 +1,7 @@
 
+__all__ = ['CanMessage']
+
+
 class CanMessage:
     """
     Represent a CAN message (ISO-11898)
