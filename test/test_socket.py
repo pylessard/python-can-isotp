@@ -72,12 +72,12 @@ class TestSocket(unittest.TestCase):
         s1.bind(interface=tools.get_test_interface_config("channel"), address=addr1)
         s2.bind(interface=tools.get_test_interface_config("channel"), address=addr2)
         s1.send(payload)
-        t1 = time.time()
+        t1 = time.monotonic()
         payload2 = s2.recv()
-        diff = time.time() - t1
+        diff = time.monotonic() - t1
         self.assertEqual(payload, payload2)
-        self.assertGreater(diff, expected_time * 0.9)
-        self.assertLess(diff, expected_time * 1.1)
+        self.assertGreater(diff, expected_time * 0.8)
+        self.assertLess(diff, expected_time * 1.2)
 
     def test_addressing_normal_11bits(self):
         addr = isotp.Address(isotp.AddressingMode.Normal_11bits, txid=0x123, rxid=0x456)

@@ -1,9 +1,9 @@
 import socket as socket_module
 import os
+import isotp.address
 
 from typing import TYPE_CHECKING, Optional
 
-import isotp.address
 
 if TYPE_CHECKING:
     from . import opts
@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 mtu = 4095
 
 
-def check_support():
+def check_support() -> None:
     if not hasattr(socket_module, 'CAN_ISOTP'):
         if os.name == 'nt':
             raise NotImplementedError("This module cannot be used on Windows")
@@ -79,7 +79,7 @@ class socket:
     LinkLayerProtocol = LinkLayerProtocol
 
     interface: Optional[str]
-    address: Optional["isotp.address.Address"]
+    address: Optional[isotp.address.Address]
     bound: bool
     closed: bool
     _socket: socket_module.socket
