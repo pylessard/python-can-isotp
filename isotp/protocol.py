@@ -1142,7 +1142,7 @@ class TransportLayer:
         self.rate_limiter.reset()
 
     # Gives a time to pass to time.sleep() based on the state of the FSM. Avoid using too much CPU
-    def sleep_time(self):
+    def sleep_time(self) -> float:
         """
         Returns a value in seconds that can be passed to ``time.sleep()`` when the stack is processed in a different thread.
 
