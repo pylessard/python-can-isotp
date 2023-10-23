@@ -174,25 +174,7 @@ class TestLayerAgainstSocket(ThreadableTest):
     def _test_receive_tx_data_length_64_8(self):
         return self.do_test_tx_dl_receive_client(tx_data_length=64)
 
-
-#    def do_test_tx_dl_receive_server(self, remote_tx_data_length=8):
-#        s = self.make_socket(tx_data_length=remote_tx_data_length, can_fd=True)
-#        s.bind(tools.get_test_interface_config("channel"), txid=self.stack_rxid, rxid=self.stack_txid)
-#        self.socket_ready.set()
-#        self.wait_allow_send(timeout=2)  # Recreating the stack may take some time.
-#        s.send(b'a' * 100)
-#        self.wait_reception_complete()
-#
-#    def do_test_tx_dl_receive_client(self, tx_data_length=8):
-#        self.wait_socket_ready()
-#        self.clientSetUp(socketcan_fd=True, tx_data_length=tx_data_length)
-#        self.allow_send.set()
-#        frame = self.process_stack_receive()
-#        self.assertEqual(frame, b'a' * 100)
-
-
     def do_test_tx_dl_transmit_server(self, remote_tx_data_length=8):
-
         s = self.make_socket(tx_data_length=remote_tx_data_length, can_fd=True)
         s.bind(tools.get_test_interface_config("channel"), txid=self.stack_rxid, rxid=self.stack_txid)
         self.socket_ready.set()
