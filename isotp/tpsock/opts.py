@@ -25,7 +25,7 @@ CAN_ISOTP_RX_STMIN = 4
 CAN_ISOTP_LL_OPTS = 5
 
 
-class general:
+class GeneralOpts:
     struct_size = 4 + 4 + 1 + 1 + 1 + 1
 
     optflag: Optional[int]
@@ -44,7 +44,7 @@ class general:
         self.rx_ext_address = None
 
     @classmethod
-    def read(cls, s: socket_module.socket) -> "general":
+    def read(cls, s: socket_module.socket) -> "GeneralOpts":
         assert_is_socket(s)
         o = cls()
         opt = s.getsockopt(SOL_CAN_ISOTP, CAN_ISOTP_OPTS, cls.struct_size)
@@ -62,7 +62,7 @@ class general:
               rxpad: Optional[int] = None,
               rx_ext_address: Optional[int] = None,
               tx_stmin: Optional[int] = None
-              ) -> "general":
+              ) -> "GeneralOpts":
         assert_is_socket(s)
         o = cls.read(s)
         assert o.optflag is not None
@@ -122,10 +122,10 @@ class general:
         rxpad_str = '[undefined]' if self.rxpad is None else '0x%02x' % (self.rxpad)
         rx_ext_address_str = '[undefined]' if self.rx_ext_address is None else '0x%02x' % (self.rx_ext_address)
 
-        return "<OPTS_GENERAL: optflag=%s, frame_txtime=%s, ext_address=%s, txpad=%s, rxpad=%s, rx_ext_address=%s>" % (optflag_str, frame_txtime_str, ext_address_str, txpad_str, rxpad_str, rx_ext_address_str)
+        return "<GeneralOpts: optflag=%s, frame_txtime=%s, ext_address=%s, txpad=%s, rxpad=%s, rx_ext_address=%s>" % (optflag_str, frame_txtime_str, ext_address_str, txpad_str, rxpad_str, rx_ext_address_str)
 
 
-class flowcontrol:
+class FlowControlOpts:
     struct_size = 3
 
     stmin: Optional[int]
@@ -138,7 +138,7 @@ class flowcontrol:
         self.wftmax = None
 
     @classmethod
-    def read(cls, s: socket_module.socket) -> "flowcontrol":
+    def read(cls, s: socket_module.socket) -> "FlowControlOpts":
         assert_is_socket(s)
         o = cls()
         opt = s.getsockopt(SOL_CAN_ISOTP, CAN_ISOTP_RECV_FC, cls.struct_size)
@@ -152,22 +152,22 @@ class flowcontrol:
               bs: Optional[int] = None,
               stmin: Optional[int] = None,
               wftmax: Optional[int] = None
-              ) -> "flowcontrol":
+              ) -> "FlowControlOpts":
         assert_is_socket(s)
         o = cls.read(s)
         if bs != None:
             if not isinstance(bs, int) or bs < 0 or bs > 0xFF:
-                raise ValueError("bs must be a valid interger between 0 and FF")
+                raise ValueError("bs (block size) must be a valid interger between 0 and FF")
             o.bs = bs
 
         if stmin != None:
             if not isinstance(stmin, int) or stmin < 0 or stmin > 0xFF:
-                raise ValueError("stmin must be a valid interger between 0 and FF")
+                raise ValueError("stmin (separation time) must be a valid interger between 0 and FF")
             o.stmin = stmin
 
         if wftmax != None:
             if not isinstance(wftmax, int) or wftmax < 0 or wftmax > 0xFF:
-                raise ValueError("wftmax must be a valid interger between 0 and FF")
+                raise ValueError("wftmax (wait frame max) must be a valid interger between 0 and FF")
             o.wftmax = wftmax
 
         opt = struct.pack("=BBB", o.bs, o.stmin, o.wftmax)
@@ -178,10 +178,10 @@ class flowcontrol:
         bs_str = '[undefined]' if self.bs is None else '0x%02x' % (self.bs)
         stmin_str = '[undefined]' if self.stmin is None else '0x%02x' % (self.stmin)
         wftmax_str = '[undefined]' if self.wftmax is None else '0x%02x' % (self.wftmax)
-        return "<OPTS_RECV_FC: bs=%s, stmin=%s, wftmax=%s>" % (bs_str, stmin_str, wftmax_str)
+        return "<FlowControlOpts: bs=%s, stmin=%s, wftmax=%s>" % (bs_str, stmin_str, wftmax_str)
 
 
-class linklayer:
+class LinkLayerOpts:
     struct_size = 3
 
     mtu: Optional[int]
@@ -194,7 +194,7 @@ class linklayer:
         self.tx_flags = None
 
     @classmethod
-    def read(cls, s: socket_module.socket) -> "linklayer":
+    def read(cls, s: socket_module.socket) -> "LinkLayerOpts":
         assert_is_socket(s)
         o = cls()
         opt = s.getsockopt(SOL_CAN_ISOTP, CAN_ISOTP_LL_OPTS, cls.struct_size)
@@ -208,7 +208,7 @@ class linklayer:
               mtu: Optional[int] = None,
               tx_dl: Optional[int] = None,
               tx_flags: Optional[int] = None
-              ) -> "linklayer":
+              ) -> "LinkLayerOpts":
         assert_is_socket(s)
         o = cls.read(s)
         if mtu != None:
@@ -234,4 +234,4 @@ class linklayer:
         mtu_str = '[undefined]' if self.mtu is None else '0x%02x' % (self.mtu)
         tx_dl_str = '[undefined]' if self.tx_dl is None else '0x%02x' % (self.tx_dl)
         tx_flags_str = '[undefined]' if self.tx_flags is None else '0x%02x' % (self.tx_flags)
-        return "<OPTS_LL: mtu=%s, tx_dl=%s, tx_flags=%s>" % (mtu_str, tx_dl_str, tx_flags_str)
+        return "<LinkLayerOpts: mtu=%s, tx_dl=%s, tx_flags=%s>" % (mtu_str, tx_dl_str, tx_flags_str)

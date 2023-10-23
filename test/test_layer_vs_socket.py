@@ -133,7 +133,7 @@ class TestLayerAgainstSocket(ThreadableTest):
 
     def do_test_tx_dl_receive_server(self, remote_tx_data_length=8):
         s = self.make_socket(tx_data_length=remote_tx_data_length, can_fd=True)
-        s.bind(tools.get_test_interface_config("channel"), txid=self.stack_rxid, rxid=self.stack_txid)
+        s.bind(tools.get_test_interface_config("channel"), isotp.Address(txid=self.stack_rxid, rxid=self.stack_txid))
         self.socket_ready.set()
         self.wait_allow_send(timeout=2)  # Recreating the stack may take some time.
         s.send(b'a' * 100)
@@ -176,7 +176,7 @@ class TestLayerAgainstSocket(ThreadableTest):
 
     def do_test_tx_dl_transmit_server(self, remote_tx_data_length=8):
         s = self.make_socket(tx_data_length=remote_tx_data_length, can_fd=True)
-        s.bind(tools.get_test_interface_config("channel"), txid=self.stack_rxid, rxid=self.stack_txid)
+        s.bind(tools.get_test_interface_config("channel"), isotp.Address(txid=self.stack_rxid, rxid=self.stack_txid))
         self.socket_ready.set()
         self.wait_transmission_complete(2)  # Creating the stack may take some time as we delete the previous and create a new one
         frame = s.recv()
@@ -219,7 +219,7 @@ class TestLayerAgainstSocket(ThreadableTest):
     def test_transmit_long_stmin(self):
         s = self.make_socket()
         s.set_fc_opts(stmin=100)
-        s.bind(tools.get_test_interface_config("channel"), txid=self.stack_rxid, rxid=self.stack_txid)
+        s.bind(tools.get_test_interface_config("channel"), isotp.Address(txid=self.stack_rxid, rxid=self.stack_txid))
         self.socket_ready.set()
         self.wait_transmission_complete(5)
         frame = s.recv()
@@ -238,7 +238,7 @@ class TestLayerAgainstSocket(ThreadableTest):
 
     def test_receive_long_stmin(self):
         s = self.make_socket()
-        s.bind(tools.get_test_interface_config("channel"), txid=self.stack_rxid, rxid=self.stack_txid)
+        s.bind(tools.get_test_interface_config("channel"), isotp.Address(txid=self.stack_rxid, rxid=self.stack_txid))
         self.socket_ready.set()
         s.send(b'a' * 150)
         self.wait_reception_complete(timeout=5)

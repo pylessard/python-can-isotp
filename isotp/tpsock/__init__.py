@@ -84,7 +84,7 @@ class socket:
     closed: bool
     _socket: socket_module.socket
 
-    def __init__(self, timeout=0.1):
+    def __init__(self, timeout=None):
         check_support()
         from . import opts  # import only if required.
         self.interface = None
@@ -93,51 +93,85 @@ class socket:
         self.closed = False
         self._socket = socket_module.socket(socket_module.AF_CAN, socket_module.SOCK_DGRAM, socket_module.CAN_ISOTP)
         if timeout is not None and timeout > 0:
-            self._socket.settimeout(timeout)
+            self.settimeout(timeout)
 
-    def send(self, *args, **kwargs):
+    def settimeout(self, value: Optional[float]) -> None:
+        self._socket.settimeout(value)
+
+    def gettimeout(self) -> Optional[float]:
+        return self._socket.gettimeout()
+
+    def send(self, data: bytes, flags: int = 0) -> int:
         if not self.bound:
             raise RuntimeError("bind() must be called before using the socket")
-        return self._socket.send(*args, **kwargs)
 
-    def recv(self, n=mtu) -> Optional[bytes]:
+        return self._socket.send(data, flags)
+
+    def recv(self, bufsize: int = mtu, flags: int = 0) -> bytes:
         if not self.bound:
             raise RuntimeError("bind() must be called before using the socket")
-        try:
-            return self._socket.recv(n)
-        except socket_module.timeout:
-            return None
-        except:
-            raise
+        return self._socket.recv(bufsize, flags)
 
-    def set_ll_opts(self, *args, **kwargs) -> "opts.linklayer":
+    def set_ll_opts(self,
+                    mtu: Optional[int] = None,
+                    tx_dl: Optional[int] = None,
+                    tx_flags: Optional[int] = None
+                    ) -> "opts.LinkLayerOpts":
+
         if self.bound:
             raise RuntimeError("Options must be set before calling bind()")
-        return opts.linklayer.write(self._socket, *args, **kwargs)
 
-    def set_opts(self, *args, **kwargs) -> "opts.general":
+        return opts.LinkLayerOpts.write(self._socket,
+                                        mtu=mtu,
+                                        tx_dl=tx_dl,
+                                        tx_flags=tx_flags)
+
+    def set_opts(self,
+                 optflag: Optional[int] = None,
+                 frame_txtime: Optional[int] = None,
+                 ext_address: Optional[int] = None,
+                 txpad: Optional[int] = None,
+                 rxpad: Optional[int] = None,
+                 rx_ext_address: Optional[int] = None,
+                 tx_stmin: Optional[int] = None) -> "opts.GeneralOpts":
+
         if self.bound:
             raise RuntimeError("Options must be set before calling bind()")
-        return opts.general.write(self._socket, *args, **kwargs)
 
-    def set_fc_opts(self, *args, **kwargs) -> "opts.flowcontrol":
+        return opts.GeneralOpts.write(self._socket,
+                                      optflag=optflag,
+                                      frame_txtime=frame_txtime,
+                                      ext_address=ext_address,
+                                      txpad=txpad,
+                                      rxpad=rxpad,
+                                      rx_ext_address=rx_ext_address,
+                                      tx_stmin=tx_stmin
+                                      )
+
+    def set_fc_opts(self, bs: Optional[int] = None, stmin: Optional[int] = None, wftmax: Optional[int] = None) -> "opts.FlowControlOpts":
+        """Sets the socket flow control options
+
+        :param bs: BlockSize - Number of consecutive that the sender should send before waiting for a flow control message from us. A value of 0 means 
+        "never waits" and all consecutive frames can be send without interruption.
+
+
+        """
         if self.bound:
             raise RuntimeError("Options must be set before calling bind()")
-        return opts.flowcontrol.write(self._socket, *args, **kwargs)
+        return opts.FlowControlOpts.write(self._socket, bs=bs, stmin=stmin, wftmax=wftmax)
 
-    def get_ll_opts(self, *args, **kwargs) -> "opts.linklayer":
-        return opts.linklayer.read(self._socket, *args, **kwargs)
+    def get_ll_opts(self) -> "opts.LinkLayerOpts":
+        return opts.LinkLayerOpts.read(self._socket)
 
-    def get_opts(self, *args, **kwargs) -> "opts.general":
-        return opts.general.read(self._socket, *args, **kwargs)
+    def get_opts(self) -> "opts.GeneralOpts":
+        return opts.GeneralOpts.read(self._socket)
 
-    def get_fc_opts(self, *args, **kwargs) -> "opts.flowcontrol":
-        return opts.flowcontrol.read(self._socket, *args, **kwargs)
+    def get_fc_opts(self) -> "opts.FlowControlOpts":
+        return opts.FlowControlOpts.read(self._socket)
 
-    def bind(self, interface: str, *args, **kwargs) -> None:
+    def bind(self, interface: str, address: isotp.Address) -> None:
         """
         Binds the socket to an address. 
-        If no address is provided, all additional parameters will be used to create an address. This is mainly to allow a syntax such as ``sock.bind('vcan0', rxid=0x123, txid=0x456)`` for backward compatibility.
 
         :param interface: The network interface to use
         :type interface: string
@@ -145,21 +179,14 @@ class socket:
         :param address: The address to bind to. 
         :type: :class:`isotp.Address<isotp.Address>`
         """
+
+        if not isinstance(interface, str):
+            raise ValueError("interface must be a string")
+
+        if not isinstance(address, isotp.Address):
+            raise ValueError("address and instance of isotp.Address")
+
         self.interface = interface
-
-        # == This is for syntax flexibility and also backward compatibility
-        address = None
-        if 'address' in kwargs:
-            address = kwargs['address']
-
-        for arg in args:
-            if isinstance(arg, isotp.address.Address) and address is None:
-                address = arg
-                break
-
-        if address is None:
-            address = isotp.address.Address(*args, **kwargs)
-        # ==
         self.address = address
 
         # IsoTP sockets doesn't provide an interface to modify the target address type. We asusme physical.
@@ -187,10 +214,16 @@ class socket:
         self.bound = True
 
     def fileno(self) -> int:
+        """Returns the socket file descriptor"""
         return self._socket.fileno()
 
-    def close(self, *args, **kwargs) -> None:
-        self._socket.close(*args, **kwargs)
+    def real_socket(self) -> socket_module.socket:
+        """Return the real socket object hidden by the fake isotp socket object"""
+        return self._socket
+
+    def close(self) -> None:
+        """Closes the socket"""
+        self._socket.close()
         self.bound = False
         self.closed = True
         self.address = None
