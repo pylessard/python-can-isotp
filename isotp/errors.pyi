@@ -1,9 +1,11 @@
 from typing import Tuple, Dict, Any
 
+
 class IsoTpError(Exception):
     def __init__(self,
                  *args: Tuple[Any],
                  **kwargs: Dict[Any, Any]) -> None: ...
+
 
 class FlowControlTimeoutError(IsoTpError): ...
 class ConsecutiveFrameTimeoutError(IsoTpError): ...
