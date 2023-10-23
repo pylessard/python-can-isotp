@@ -1,4 +1,12 @@
-class AddressingMode:
+__all__ = ['AddressingMode', 'TargetAddressType', 'Address']
+
+from enum import Enum
+from isotp import CanMessage
+
+from typing import Optional, Any, List, Callable, Dict, Tuple, Union
+
+
+class AddressingMode(Enum):
     Normal_11bits = 0
     Normal_29bits = 1
     NormalFixed_29bits = 2
@@ -9,25 +17,10 @@ class AddressingMode:
 
     @classmethod
     def get_name(cls, num):
-        if num == cls.Normal_11bits:
-            return 'Normal_11bits'
-        if num == cls.Normal_29bits:
-            return 'Normal_29bits'
-        if num == cls.NormalFixed_29bits:
-            return 'NormalFixed_29bits'
-        if num == cls.Extended_11bits:
-            return 'Extended_11bits'
-        if num == cls.Extended_29bits:
-            return 'Extended_29bits'
-        if num == cls.Mixed_11bits:
-            return 'Mixed_11bits'
-        if num == cls.Mixed_29bits:
-            return 'Mixed_29bits'
-
-        return 'Unknown'
+        return cls(num).name
 
 
-class TargetAddressType:
+class TargetAddressType(Enum):
     Physical = 0        # 1 to 1 communication
     Functional = 1      # 1 to n communication
 
@@ -65,7 +58,32 @@ class Address:
     :type address_extension: int or None
     """
 
-    def __init__(self, addressing_mode=AddressingMode.Normal_11bits, txid=None, rxid=None, target_address=None, source_address=None, physical_id=None, functional_id=None, address_extension=None, **kwargs):
+    addressing_mode: AddressingMode
+    target_address: Optional[int]
+    source_address: Optional[int]
+    address_extension: Optional[int]
+    txid: Optional[int]
+    rxid: Optional[int]
+    is_29bits: bool
+    tx_arbitration_id_physical: int
+    tx_arbitration_id_functional: int
+    rx_arbitration_id_physical: int
+    rx_arbitration_id_functional: int
+    tx_payload_prefix: bytes
+    rx_prefix_size: int
+    is_for_me: Callable[[CanMessage], bool]
+
+    def __init__(self,
+                 addressing_mode: AddressingMode = AddressingMode.Normal_11bits,
+                 txid: Optional[int] = None,
+                 rxid: Optional[int] = None,
+                 target_address: Optional[int] = None,
+                 source_address: Optional[int] = None,
+                 physical_id: Optional[int] = None,
+                 functional_id: Optional[int] = None,
+                 address_extension: Optional[int] = None,
+                 **kwargs
+                 ):
 
         self.addressing_mode = addressing_mode
         self.target_address = target_address
@@ -93,14 +111,16 @@ class Address:
         self.rx_arbitration_id_physical = self._get_rx_arbitration_id(TargetAddressType.Physical)
         self.rx_arbitration_id_functional = self._get_rx_arbitration_id(TargetAddressType.Functional)
 
-        self.tx_payload_prefix = bytearray()
+        self.tx_payload_prefix = bytes()
         self.rx_prefix_size = 0
 
         if self.addressing_mode in [AddressingMode.Extended_11bits, AddressingMode.Extended_29bits]:
-            self.tx_payload_prefix.extend(bytearray([self.target_address]))
+            assert self.target_address is not None
+            self.tx_payload_prefix = bytes([self.target_address])
             self.rx_prefix_size = 1
         elif self.addressing_mode in [AddressingMode.Mixed_11bits, AddressingMode.Mixed_29bits]:
-            self.tx_payload_prefix.extend(bytearray([self.address_extension]))
+            assert self.address_extension is not None
+            self.tx_payload_prefix = bytes([self.address_extension])
             self.rx_prefix_size = 1
 
         if self.addressing_mode in [AddressingMode.Normal_11bits, AddressingMode.Normal_29bits]:
@@ -180,92 +200,94 @@ class Address:
                 if self.rxid > 0x7FF:
                     raise ValueError('rxid must be smaller than 0x7FF for 11 bits identifier')
 
-    def get_tx_arbitraton_id(self, address_type=TargetAddressType.Physical):
+    def get_tx_arbitraton_id(self, address_type: TargetAddressType = TargetAddressType.Physical) -> int:
         if address_type == TargetAddressType.Physical:
             return self.tx_arbitration_id_physical
         else:
             return self.tx_arbitration_id_functional
 
-    def get_rx_arbitraton_id(self, address_type=TargetAddressType.Physical):
+    def get_rx_arbitraton_id(self, address_type: TargetAddressType = TargetAddressType.Physical) -> int:
         if address_type == TargetAddressType.Physical:
             return self.rx_arbitration_id_physical
         else:
             return self.rx_arbitration_id_functional
 
-    def _get_tx_arbitraton_id(self, address_type):
-        if self.addressing_mode == AddressingMode.Normal_11bits:
-            return self.txid
-        elif self.addressing_mode == AddressingMode.Normal_29bits:
-            return self.txid
-        elif self.addressing_mode == AddressingMode.Extended_11bits:
-            return self.txid
-        elif self.addressing_mode == AddressingMode.Extended_29bits:
-            return self.txid
-        elif self.addressing_mode == AddressingMode.Mixed_11bits:
+    def _get_tx_arbitraton_id(self, address_type: TargetAddressType) -> int:
+        if self.addressing_mode in (AddressingMode.Normal_11bits,
+                                    AddressingMode.Normal_29bits,
+                                    AddressingMode.Extended_11bits,
+                                    AddressingMode.Extended_29bits,
+                                    AddressingMode.Mixed_11bits):
+            assert self.txid is not None
             return self.txid
         elif self.addressing_mode in [AddressingMode.Mixed_29bits, AddressingMode.NormalFixed_29bits]:
+            assert self.target_address is not None
+            assert self.source_address is not None
             bits28_16 = self.physical_id if address_type == TargetAddressType.Physical else self.functional_id
             return bits28_16 | (self.target_address << 8) | self.source_address
+        raise ValueError("Unsupported addressing mode")
 
-    def _get_rx_arbitration_id(self, address_type=TargetAddressType.Physical):
-        if self.addressing_mode == AddressingMode.Normal_11bits:
-            return self.rxid
-        elif self.addressing_mode == AddressingMode.Normal_29bits:
-            return self.rxid
-        elif self.addressing_mode == AddressingMode.Extended_11bits:
-            return self.rxid
-        elif self.addressing_mode == AddressingMode.Extended_29bits:
-            return self.rxid
-        elif self.addressing_mode == AddressingMode.Mixed_11bits:
+    def _get_rx_arbitration_id(self, address_type: TargetAddressType = TargetAddressType.Physical) -> int:
+        if self.addressing_mode in (AddressingMode.Normal_11bits,
+                                    AddressingMode.Normal_29bits,
+                                    AddressingMode.Extended_11bits,
+                                    AddressingMode.Extended_29bits,
+                                    AddressingMode.Mixed_11bits):
+            assert self.rxid is not None
             return self.rxid
         elif self.addressing_mode in [AddressingMode.Mixed_29bits, AddressingMode.NormalFixed_29bits]:
+            assert self.target_address is not None
+            assert self.source_address is not None
             bits28_16 = self.physical_id if address_type == TargetAddressType.Physical else self.functional_id
             return bits28_16 | (self.source_address << 8) | self.target_address
+        raise ValueError("Unsupported addressing mode")
 
-    def _is_for_me_normal(self, msg):
+    def _is_for_me_normal(self, msg: CanMessage) -> bool:
         if self.is_29bits == msg.is_extended_id:
             return msg.arbitration_id == self.rxid
         return False
 
-    def _is_for_me_extended(self, msg):
+    def _is_for_me_extended(self, msg: CanMessage) -> bool:
         if self.is_29bits == msg.is_extended_id:
             if msg.data is not None and len(msg.data) > 0:
                 return msg.arbitration_id == self.rxid and int(msg.data[0]) == self.source_address
         return False
 
-    def _is_for_me_normalfixed(self, msg):
+    def _is_for_me_normalfixed(self, msg: CanMessage) -> bool:
         if self.is_29bits == msg.is_extended_id:
             return (msg.arbitration_id & 0x1FFF0000 in [self.physical_id, self.functional_id]) and (msg.arbitration_id & 0xFF00) >> 8 == self.source_address and msg.arbitration_id & 0xFF == self.target_address
         return False
 
-    def _is_for_me_mixed_11bits(self, msg):
+    def _is_for_me_mixed_11bits(self, msg: CanMessage) -> bool:
         if self.is_29bits == msg.is_extended_id:
             if msg.data is not None and len(msg.data) > 0:
                 return msg.arbitration_id == self.rxid and int(msg.data[0]) == self.address_extension
         return False
 
-    def _is_for_me_mixed_29bits(self, msg):
+    def _is_for_me_mixed_29bits(self, msg: CanMessage) -> bool:
         if self.is_29bits == msg.is_extended_id:
             if msg.data is not None and len(msg.data) > 0:
                 return (msg.arbitration_id & 0x1FFF0000) in [self.physical_id, self.functional_id] and (msg.arbitration_id & 0xFF00) >> 8 == self.source_address and msg.arbitration_id & 0xFF == self.target_address and int(msg.data[0]) == self.address_extension
         return False
 
-    def requires_extension_byte(self):
+    def requires_extension_byte(self) -> bool:
         return True if self.addressing_mode in [AddressingMode.Extended_11bits, AddressingMode.Extended_29bits, AddressingMode.Mixed_11bits, AddressingMode.Mixed_29bits] else False
 
-    def get_tx_extension_byte(self):
+    def get_tx_extension_byte(self) -> Optional[int]:
         if self.addressing_mode in [AddressingMode.Extended_11bits, AddressingMode.Extended_29bits]:
             return self.target_address
         if self.addressing_mode in [AddressingMode.Mixed_11bits, AddressingMode.Mixed_29bits]:
             return self.address_extension
+        return None
 
-    def get_rx_extension_byte(self):
+    def get_rx_extension_byte(self) -> Optional[int]:
         if self.addressing_mode in [AddressingMode.Extended_11bits, AddressingMode.Extended_29bits]:
             return self.source_address
         if self.addressing_mode in [AddressingMode.Mixed_11bits, AddressingMode.Mixed_29bits]:
             return self.address_extension
+        return None
 
-    def get_content_str(self):
+    def get_content_str(self) -> str:
         val_dict = {}
         keys = ['target_address', 'source_address', 'address_extension', 'txid', 'rxid']
         for key in keys:

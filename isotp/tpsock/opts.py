@@ -2,19 +2,22 @@ import socket as socket_module
 import struct
 from . import socket
 from . import check_support
+
+from typing import Optional
+
+# opts cannot be imported when an isotp socket can't be created.
 check_support()
 
 flags = socket.flags
 
 
-def assert_is_socket(s):
+def assert_is_socket(s: socket_module.socket) -> None:
     if not isinstance(s, socket_module.socket):
         raise ValueError("Given value is not a socket.")
 
 
 SOL_CAN_BASE = socket_module.SOL_CAN_BASE if hasattr(socket_module, 'SOL_CAN_BASE') else 100
-# Allow importing the module without python 3.7
-SOL_CAN_ISOTP = SOL_CAN_BASE + socket_module.CAN_ISOTP if hasattr(socket_module, 'CAN_ISOTP') else None
+SOL_CAN_ISOTP = SOL_CAN_BASE + socket_module.CAN_ISOTP
 CAN_ISOTP_OPTS = 1
 CAN_ISOTP_RECV_FC = 2
 CAN_ISOTP_TX_STMIN = 3
@@ -25,6 +28,13 @@ CAN_ISOTP_LL_OPTS = 5
 class general:
     struct_size = 4 + 4 + 1 + 1 + 1 + 1
 
+    optflag: Optional[int]
+    frame_txtime: Optional[int]
+    ext_address: Optional[int]
+    txpad: Optional[int]
+    rxpad: Optional[int]
+    rx_ext_address: Optional[int]
+
     def __init__(self):
         self.optflag = None
         self.frame_txtime = None
@@ -34,7 +44,7 @@ class general:
         self.rx_ext_address = None
 
     @classmethod
-    def read(cls, s):
+    def read(cls, s: socket_module.socket) -> "general":
         assert_is_socket(s)
         o = cls()
         opt = s.getsockopt(SOL_CAN_ISOTP, CAN_ISOTP_OPTS, cls.struct_size)
@@ -43,45 +53,55 @@ class general:
         return o
 
     @classmethod
-    def write(cls, s, optflag=None, frame_txtime=None, ext_address=None, txpad=None, rxpad=None, rx_ext_address=None, tx_stmin=None):
+    def write(cls,
+              s: socket_module.socket,
+              optflag: Optional[int] = None,
+              frame_txtime: Optional[int] = None,
+              ext_address: Optional[int] = None,
+              txpad: Optional[int] = None,
+              rxpad: Optional[int] = None,
+              rx_ext_address: Optional[int] = None,
+              tx_stmin: Optional[int] = None
+              ) -> "general":
         assert_is_socket(s)
         o = cls.read(s)
+        assert o.optflag is not None
 
-        if optflag != None:
+        if optflag is not None:
             if not isinstance(optflag, int) or optflag < 0 or optflag > 0xFFFFFFFF:
                 raise ValueError("optflag must be a valid 32 unsigned integer")
             o.optflag = optflag
 
-        if frame_txtime != None:
+        if frame_txtime is not None:
             if not isinstance(frame_txtime, int) or frame_txtime < 0 or frame_txtime > 0xFFFFFFFF:
                 raise ValueError("frame_txtime must be a valid 32 unsigned integer")
             o.frame_txtime = frame_txtime
 
-        if ext_address != None:
+        if ext_address is not None:
             if not isinstance(ext_address, int) or ext_address < 0 or ext_address > 0xFF:
                 raise ValueError("ext_address must be a an integer between 0 and FF")
             o.ext_address = ext_address
             o.optflag |= flags.EXTEND_ADDR
 
-        if txpad != None:
+        if txpad is not None:
             if not isinstance(txpad, int) or txpad < 0 or txpad > 0xFF:
                 raise ValueError("txpad must be a an integer between 0 and FF")
             o.txpad = txpad
             o.optflag |= flags.TX_PADDING
 
-        if rxpad != None:
+        if rxpad is not None:
             if not isinstance(rxpad, int) or rxpad < 0 or rxpad > 0xFF:
                 raise ValueError("rxpad must be a an integer between 0 and FF")
             o.rxpad = rxpad
             o.optflag |= flags.RX_PADDING
 
-        if rx_ext_address != None:
+        if rx_ext_address is not None:
             if not isinstance(rx_ext_address, int) or rx_ext_address < 0 or rx_ext_address > 0xFF:
                 raise ValueError("rx_ext_address must be a an integer between 0 and FF")
             o.rx_ext_address = rx_ext_address
             o.optflag |= flags.RX_EXT_ADDR
 
-        if tx_stmin != None:
+        if tx_stmin is not None:
             if not isinstance(tx_stmin, int) or tx_stmin < 0 or tx_stmin > 0xFFFFFFFF:
                 raise ValueError("tx_stmin must be a valid 32 unsigned integer")
             o.optflag |= flags.FORCE_TXSTMIN
@@ -95,12 +115,12 @@ class general:
         return o
 
     def __repr__(self):
-        optflag_str = '[undefined]' if self.optflag is None else '0x%x' % (self.optflag)
-        frame_txtime_str = '[undefined]' if self.frame_txtime is None else '0x%x' % (self.frame_txtime)
-        ext_address_str = '[undefined]' if self.ext_address is None else '0x%x' % (self.ext_address)
-        txpad_str = '[undefined]' if self.txpad is None else '0x%x' % (self.txpad)
-        rxpad_str = '[undefined]' if self.rxpad is None else '0x%x' % (self.rxpad)
-        rx_ext_address_str = '[undefined]' if self.rx_ext_address is None else '0x%x' % (self.rx_ext_address)
+        optflag_str = '[undefined]' if self.optflag is None else '0x%08x' % (self.optflag)
+        frame_txtime_str = '[undefined]' if self.frame_txtime is None else '0x%08x' % (self.frame_txtime)
+        ext_address_str = '[undefined]' if self.ext_address is None else '0x%02x' % (self.ext_address)
+        txpad_str = '[undefined]' if self.txpad is None else '0x%02x' % (self.txpad)
+        rxpad_str = '[undefined]' if self.rxpad is None else '0x%02x' % (self.rxpad)
+        rx_ext_address_str = '[undefined]' if self.rx_ext_address is None else '0x%02x' % (self.rx_ext_address)
 
         return "<OPTS_GENERAL: optflag=%s, frame_txtime=%s, ext_address=%s, txpad=%s, rxpad=%s, rx_ext_address=%s>" % (optflag_str, frame_txtime_str, ext_address_str, txpad_str, rxpad_str, rx_ext_address_str)
 
@@ -108,13 +128,17 @@ class general:
 class flowcontrol:
     struct_size = 3
 
+    stmin: Optional[int]
+    bs: Optional[int]
+    wftmax: Optional[int]
+
     def __init__(self):
-        self.stmin = None;
-        self.bs = None;
-        self.wftmax = None;
+        self.stmin = None
+        self.bs = None
+        self.wftmax = None
 
     @classmethod
-    def read(cls, s):
+    def read(cls, s: socket_module.socket) -> "flowcontrol":
         assert_is_socket(s)
         o = cls()
         opt = s.getsockopt(SOL_CAN_ISOTP, CAN_ISOTP_RECV_FC, cls.struct_size)
@@ -123,9 +147,14 @@ class flowcontrol:
         return o
 
     @classmethod
-    def write(cls, s, bs=None, stmin=None, wftmax=None):
+    def write(cls,
+              s: socket_module.socket,
+              bs: Optional[int] = None,
+              stmin: Optional[int] = None,
+              wftmax: Optional[int] = None
+              ) -> "flowcontrol":
         assert_is_socket(s)
-        o = cls.read(s);
+        o = cls.read(s)
         if bs != None:
             if not isinstance(bs, int) or bs < 0 or bs > 0xFF:
                 raise ValueError("bs must be a valid interger between 0 and FF")
@@ -146,22 +175,26 @@ class flowcontrol:
         return o
 
     def __repr__(self):
-        bs_str = '[undefined]' if self.bs is None else '0x%x' % (self.bs)
-        stmin_str = '[undefined]' if self.stmin is None else '0x%x' % (self.stmin)
-        wftmax_str = '[undefined]' if self.wftmax is None else '0x%x' % (self.wftmax)
+        bs_str = '[undefined]' if self.bs is None else '0x%02x' % (self.bs)
+        stmin_str = '[undefined]' if self.stmin is None else '0x%02x' % (self.stmin)
+        wftmax_str = '[undefined]' if self.wftmax is None else '0x%02x' % (self.wftmax)
         return "<OPTS_RECV_FC: bs=%s, stmin=%s, wftmax=%s>" % (bs_str, stmin_str, wftmax_str)
 
 
 class linklayer:
     struct_size = 3
 
+    mtu: Optional[int]
+    tx_dl: Optional[int]
+    tx_flags: Optional[int]
+
     def __init__(self):
-        self.mtu = None;
-        self.tx_dl = None;
-        self.tx_flags = None;
+        self.mtu = None
+        self.tx_dl = None
+        self.tx_flags = None
 
     @classmethod
-    def read(cls, s):
+    def read(cls, s: socket_module.socket) -> "linklayer":
         assert_is_socket(s)
         o = cls()
         opt = s.getsockopt(SOL_CAN_ISOTP, CAN_ISOTP_LL_OPTS, cls.struct_size)
@@ -170,9 +203,14 @@ class linklayer:
         return o
 
     @classmethod
-    def write(cls, s, mtu=None, tx_dl=None, tx_flags=None):
+    def write(cls,
+              s: socket_module.socket,
+              mtu: Optional[int] = None,
+              tx_dl: Optional[int] = None,
+              tx_flags: Optional[int] = None
+              ) -> "linklayer":
         assert_is_socket(s)
-        o = cls.read(s);
+        o = cls.read(s)
         if mtu != None:
             if not isinstance(mtu, int) or mtu < 0 or mtu > 0xFF:
                 raise ValueError("mtu must be a valid interger between 0 and FF")
@@ -193,7 +231,7 @@ class linklayer:
         return o
 
     def __repr__(self):
-        mtu_str = '[undefined]' if self.mtu is None else '0x%x' % (self.mtu)
-        tx_dl_str = '[undefined]' if self.tx_dl is None else '0x%x' % (self.tx_dl)
-        tx_flags_str = '[undefined]' if self.tx_flags is None else '0x%x' % (self.tx_flags)
+        mtu_str = '[undefined]' if self.mtu is None else '0x%02x' % (self.mtu)
+        tx_dl_str = '[undefined]' if self.tx_dl is None else '0x%02x' % (self.tx_dl)
+        tx_flags_str = '[undefined]' if self.tx_flags is None else '0x%02x' % (self.tx_flags)
         return "<OPTS_LL: mtu=%s, tx_dl=%s, tx_flags=%s>" % (mtu_str, tx_dl_str, tx_flags_str)
