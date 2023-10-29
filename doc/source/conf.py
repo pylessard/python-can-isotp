@@ -221,6 +221,8 @@ html_context = {
 # Output file base name for HTML help builder.
 htmlhelp_basename = 'canisotpdoc'
 
+autodoc_typehints = 'description'
+
 # -- Options for LaTeX output ---------------------------------------------
 
 latex_elements = {
