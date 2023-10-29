@@ -10,12 +10,12 @@ This package contains a Python implementation of the protocol that works in the 
 Documentation
 -------------
 
-The documentation is available here :   http://can-isotp.readthedocs.io
+The documentation is available here :   https://can-isotp.readthedocs.io/en/v1.x/
 
 Requirements
 ------------
 
- - Python 3+
+ - Python 3.7+
 
 Installation
 ------------
