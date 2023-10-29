@@ -235,3 +235,9 @@ class LinkLayerOpts:
         tx_dl_str = '[undefined]' if self.tx_dl is None else '0x%02x' % (self.tx_dl)
         tx_flags_str = '[undefined]' if self.tx_flags is None else '0x%02x' % (self.tx_flags)
         return "<LinkLayerOpts: mtu=%s, tx_dl=%s, tx_flags=%s>" % (mtu_str, tx_dl_str, tx_flags_str)
+
+
+# Backward compatibility with v1.x
+general = GeneralOpts
+flowcontrol = FlowControlOpts
+linklayer = LinkLayerOpts

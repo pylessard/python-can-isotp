@@ -82,58 +82,10 @@ Usage
 
 To configure a socket, few methods are available 
 
-.. py:method:: socket.set_opts(optflag=None, frame_txtime=None, ext_address=None, txpad=None, rxpad=None, rx_ext_address=None, tx_stmin=None)
+.. automethod:: isotp.socket.set_opts
+.. automethod:: isotp.socket.set_fc_opts
+.. automethod:: isotp.socket.set_ll_opts
    
-   Sets the general options of the socket
-
-   :param optflag: A list of flags modifying the protocol behaviour. Refer to :class:`socket.flags<isotp.socket.flags>`
-   :type optflag: int
-
-   :param frame_txtime: Frame transmission time (N_As/N_Ar) in nanoseconds.
-   :type frame_txtime: int
-
-   :param ext_address: The extended address to use. If not None, flags.EXTEND_ADDR will be set.
-   :type ext_address: int
-
-   :param txpad: The byte to use to pad the transmitted CAN messages. If not None, flags.TX_PADDING will be set
-   :type txpad: int
-
-   :param rxpad: The byte to use to pad the transmitted CAN messages. If not None, flags.RX_PADDING will be set
-   :type rxpad: int
-
-   :param rx_ext_address: The extended address to use in reception. If not None, flags.RX_EXT_ADDR will be set
-   :type rx_ext_address: int
-
-   :param tx_stmin: Sets the transmit separation time (time between consecutive frame) in nanoseconds. This value will override the value received through FlowControl frame. If not None, flags.FORCE_TXSTMIN will be set
-   :type tx_stmin: int
-
-
-.. py:method:: socket.set_fc_opts(bs=None, stmin=None, wftmax=None)
-   
-   Sets the flow control options of the socket
-
-   :param bs: The block size sent in the flow control message. Indicates the number of consecutive frame a sender can send before the socket sends a new flow control. A block size of 0 means that no additional flow control message will be sent (block size of infinity)
-   :type bs: int
-
-   :param stmin: The minimum separation time sent in the flow control message. Indicates the amount of time to wait between 2 consecutive frame. This value will be sent as is over CAN. Values from 1 to 127 means milliseconds. Values from 0xF1 to 0xF9 means 100us to 900us. 0 Means no timing requirements
-   :type stmin: int
-
-   :param wftmax: Maximum number of wait frame (flow control message with flow status=1) allowed before dropping a message. 0 means that wait frame are not allowed
-   :type wftmax: int
-
-.. py:method:: socket.set_ll_opts(mtu=None, tx_dl=None, tx_flags=None)
-   
-   Sets the link layer options. Default values are set to work with CAN 2.0. Link layer may be configure to work in CAN FD.
-
-   :param mtu: The internal CAN frame structure size. Possible values are defined in :class:`isotp.socket.LinkLayerProtocol<isotp.socket.LinkLayerProtocol>`
-   :type mtu: int
-
-   :param tx_dl: The CAN message payload length. For CAN 2.0, this value should be 8. For CAN FD, possible values are 8,12,16,20,24,32,48,64
-   :type tx_dl: int
-
-   :param tx_flags: Link layer flags.
-   :type tx_flags: int
-
 -----
 
 .. autoclass:: isotp.socket.flags

@@ -37,25 +37,25 @@ class Address:
     :type addressing_mode: int
 
     :param txid: The CAN ID for transmission. Used for these addressing mode: ``Normal_11bits``, ``Normal_29bits``, ``Extended_11bits``, ``Extended_29bits``, ``Mixed_11bits``
-    :type txid: int or None
+    :type txid: int | None
 
     :param rxid: The CAN ID for reception. Used for these addressing mode: ``Normal_11bits``, ``Normal_29bits``, ``Extended_11bits``, ``Extended_29bits``, ``Mixed_11bits``
-    :type rxid: int or None
+    :type rxid: int | None
 
     :param target_address: Target address (N_TA) used in ``NormalFixed_29bits`` and ``Mixed_29bits`` addressing mode.
-    :type target_address: int or None
+    :type target_address: int | None
 
     :param source_address: Source address (N_SA) used in ``NormalFixed_29bits`` and ``Mixed_29bits`` addressing mode.
-    :type source_address: int or None
+    :type source_address: int | None
 
     :param physical_id: The CAN ID for physical (unicast) messages. Only bits 28-16 are used. Used for these addressing modes: ``NormalFixed_29bits``, ``Mixed_29bits``. Set to standard mandated value if None.
-    :type: int or None
+    :type physical_id: int | None
 
     :param functional_id: The CAN ID for functional (multicast) messages. Only bits 28-16 are used. Used for these addressing modes: ``NormalFixed_29bits``, ``Mixed_29bits``. Set to standard mandated value if None.
-    :type: int or None
+    :type functional_id: int | None
 
     :param address_extension: Address extension (N_AE) used in ``Mixed_11bits``, ``Mixed_29bits`` addressing mode
-    :type address_extension: int or None
+    :type address_extension: int | None
     """
 
     addressing_mode: AddressingMode

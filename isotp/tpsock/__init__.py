@@ -68,8 +68,8 @@ class socket:
     """
     A IsoTP socket wrapper for easy configuration
 
-    :param timeout: The underlying socket timeout set with ``settimeout``. Makes the reception thread sleep
-    :type timeout: int
+    :param timeout: Passed down to the socket ``settimeout`` method. Control the blocking/non-blocking behavior of the socket 
+    :type timeout: int | None
 
     """
 
@@ -117,7 +117,22 @@ class socket:
                     tx_dl: Optional[int] = None,
                     tx_flags: Optional[int] = None
                     ) -> "opts.LinkLayerOpts":
+        """ 
+        Sets the link layer options. Default values are set to work with CAN 2.0. Link layer may be configure to work in CAN FD.
+        Values of `None` will leave the parameter unchanged
 
+        :param mtu: The internal CAN frame structure size. Possible values are defined in :class:`isotp.socket.LinkLayerProtocol<isotp.socket.LinkLayerProtocol>`
+        :type mtu: int
+
+        :param tx_dl: The CAN message payload length. For CAN 2.0, this value should be 8. For CAN FD, possible values are 8,12,16,20,24,32,48,64
+        :type tx_dl: int
+
+        :param tx_flags: Link layer flags.
+        :type tx_flags: int
+
+        :rtype: :class:`isotp.opts.LinkLayerOpts<isotp.opts.LinkLayerOpts>`
+
+        """
         if self.bound:
             raise RuntimeError("Options must be set before calling bind()")
 
@@ -134,6 +149,34 @@ class socket:
                  rxpad: Optional[int] = None,
                  rx_ext_address: Optional[int] = None,
                  tx_stmin: Optional[int] = None) -> "opts.GeneralOpts":
+        """
+
+        Sets the general options of the socket. Values of `None` will leave the parameter unchanged
+
+        :param optflag: A list of flags modifying the protocol behaviour. Refer to :class:`socket.flags<isotp.socket.flags>`
+        :type optflag: int
+
+        :param frame_txtime: Frame transmission time (N_As/N_Ar) in nanoseconds.
+        :type frame_txtime: int
+
+        :param ext_address: The extended address to use. If not None, flags.EXTEND_ADDR will be set.
+        :type ext_address: int
+
+        :param txpad: The byte to use to pad the transmitted CAN messages. If not None, flags.TX_PADDING will be set
+        :type txpad: int
+
+        :param rxpad: The byte to use to pad the transmitted CAN messages. If not None, flags.RX_PADDING will be set
+        :type rxpad: int
+
+        :param rx_ext_address: The extended address to use in reception. If not None, flags.RX_EXT_ADDR will be set
+        :type rx_ext_address: int
+
+        :param tx_stmin: Sets the transmit separation time (time between consecutive frame) in nanoseconds. This value will override the value received through FlowControl frame. If not None, flags.FORCE_TXSTMIN will be set
+        :type tx_stmin: int
+
+        :rtype: :class:`isotp.opts.GeneralOpts<isotp.opts.GeneralOpts>`
+
+        """
 
         if self.bound:
             raise RuntimeError("Options must be set before calling bind()")
@@ -149,12 +192,19 @@ class socket:
                                       )
 
     def set_fc_opts(self, bs: Optional[int] = None, stmin: Optional[int] = None, wftmax: Optional[int] = None) -> "opts.FlowControlOpts":
-        """Sets the socket flow control options
+        """   
+        Sets the flow control options of the socket. Values of `None` will leave the parameter unchanged
 
-        :param bs: BlockSize - Number of consecutive that the sender should send before waiting for a flow control message from us. A value of 0 means 
-        "never waits" and all consecutive frames can be send without interruption.
+        :param bs: The block size sent in the flow control message. Indicates the number of consecutive frame a sender can send before the socket sends a new flow control. A block size of 0 means that no additional flow control message will be sent (block size of infinity)
+        :type bs: int
 
+        :param stmin: The minimum separation time sent in the flow control message. Indicates the amount of time to wait between 2 consecutive frame. This value will be sent as is over CAN. Values from 1 to 127 means milliseconds. Values from 0xF1 to 0xF9 means 100us to 900us. 0 Means no timing requirements
+        :type stmin: int
 
+        :param wftmax: Maximum number of wait frame (flow control message with flow status=1) allowed before dropping a message. 0 means that wait frame are not allowed
+        :type wftmax: int
+
+        :rtype: :class:`isotp.opts.FlowControlOpts<isotp.opts.FlowControlOpts>`
         """
         if self.bound:
             raise RuntimeError("Options must be set before calling bind()")
@@ -177,7 +227,7 @@ class socket:
         :type interface: string
 
         :param address: The address to bind to. 
-        :type: :class:`isotp.Address<isotp.Address>`
+        :type address: :class:`isotp.Address<isotp.Address>`
         """
 
         if not isinstance(interface, str):
