@@ -1,5 +1,6 @@
 import unittest
 import isotp
+import isotp.tools
 import time
 from . import unittest_logging
 from isotp.protocol import RateLimiter
@@ -12,7 +13,7 @@ Message = isotp.CanMessage
 class testTimer(unittest.TestCase):
     def test_timer(self):
         timeout = 0.2
-        t = isotp.TransportLayer.Timer(timeout=timeout)
+        t = isotp.tools.Timer(timeout=timeout)
         self.assertFalse(t.is_timed_out())
         self.assertEqual(t.elapsed(), 0)
         t.start()

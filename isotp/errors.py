@@ -5,6 +5,14 @@ class IsoTpError(Exception):
         Exception.__init__(self, *args, **kwargs)
 
 
+class BlockingSendFailure(IsoTpError):
+    pass
+
+
+class BlockingSendTimeout(BlockingSendFailure):
+    pass
+
+
 class FlowControlTimeoutError(IsoTpError):
     """
     Happens when the senders fails to sends a Flow Control message in time. 

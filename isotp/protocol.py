@@ -17,12 +17,15 @@ import math
 import enum
 from dataclasses import dataclass
 import threading
-
+from isotp.tools import Timer
 
 from typing import Optional, Any, List, Callable, Dict, Tuple, Union, TYPE_CHECKING
 
-if TYPE_CHECKING:
+try:
     import can
+    _can_available = True
+except ImportError:
+    _can_available = False
 
 
 class PDU:
@@ -171,7 +174,6 @@ class PDU:
 
 
 class RateLimiter:
-
     TIME_SLOT_LENGTH = 0.005
 
     enabled: bool
@@ -307,7 +309,8 @@ class TransportLayer:
         __slots__ = ('stmin', 'blocksize', 'squash_stmin_requirement', 'rx_flowcontrol_timeout',
                      'rx_consecutive_frame_timeout', 'tx_padding', 'wftmax', 'tx_data_length', 'tx_data_min_length',
                      'max_frame_size', 'can_fd', 'bitrate_switch', 'default_target_address_type',
-                     'rate_limit_max_bitrate', 'rate_limit_window_size', 'rate_limit_enable', 'listen_mode'
+                     'rate_limit_max_bitrate', 'rate_limit_window_size', 'rate_limit_enable', 'listen_mode',
+                     'blocking_send'
                      )
 
         stmin: int
@@ -327,6 +330,7 @@ class TransportLayer:
         rate_limit_window_size: float
         rate_limit_enable: bool
         listen_mode: bool
+        blocking_send: bool
 
         def __init__(self):
             self.stmin = 0
@@ -346,6 +350,7 @@ class TransportLayer:
             self.rate_limit_window_size = 0.2
             self.rate_limit_enable = False
             self.listen_mode = False
+            self.blocking_send = False
 
         def set(self, key: str, val: Any, validate: bool = True) -> None:
             param_alias = {
@@ -458,39 +463,8 @@ class TransportLayer:
             if not isinstance(self.listen_mode, bool):
                 raise ValueError('listen_mode must be a boolean value')
 
-    class Timer:
-        start_time: Optional[float]
-        timeout: float
-
-        def __init__(self, timeout: float):
-            self.set_timeout(timeout)
-            self.start_time = None
-
-        def set_timeout(self, timeout: float) -> None:
-            self.timeout = timeout
-
-        def start(self, timeout=None) -> None:
-            if timeout is not None:
-                self.set_timeout(timeout)
-            self.start_time = time.monotonic()
-
-        def stop(self) -> None:
-            self.start_time = None
-
-        def elapsed(self) -> float:
-            if self.start_time is not None:
-                return time.monotonic() - self.start_time
-            else:
-                return 0
-
-        def is_timed_out(self) -> bool:
-            if self.is_stopped():
-                return False
-            else:
-                return self.elapsed() > self.timeout or self.timeout == 0
-
-        def is_stopped(self) -> bool:
-            return self.start_time == None
+            if not isinstance(self.blocking_send, bool):
+                raise ValueError('blocking_send must be a boolean value')
 
     class RxState(enum.Enum):
         IDLE = 0
@@ -504,9 +478,21 @@ class TransportLayer:
         TRANSMIT_FF_STANDBY = 4
 
     @dataclass
-    class DataTATPair:
+    class SendRequest:
         data: bytearray
         target_address_type: isotp.address.TargetAddressType
+        complete_event: threading.Event
+        success: bool
+
+        def __init__(self, data: Union[bytearray, bytes], target_address_type: isotp.address.TargetAddressType):
+            self.data = bytearray(data)
+            self.target_address_type = target_address_type
+            self.complete_event = threading.Event()
+            self.success = False
+
+        def complete(self, success: bool) -> None:
+            self.success = success
+            self.complete_event.set()
 
     @dataclass(slots=True)
     class ProcessStats:
@@ -526,7 +512,7 @@ class TransportLayer:
     remote_blocksize: Optional[int]
     rxfn: RxFn
     txfn: TxFn
-    tx_queue: "queue.Queue[DataTATPair]"
+    tx_queue: "queue.Queue[SendRequest]"
     rx_queue: "queue.Queue[bytearray]"
     tx_standby_msg: Optional[CanMessage]
     rx_state: RxState
@@ -544,6 +530,7 @@ class TransportLayer:
     error_handler: Optional[ErrorHandler]
     actual_rxdl: Optional[int]
     timings: Dict[Tuple[RxState, TxState], float]
+    active_send_request: Optional[SendRequest]
     tx_buffer: bytearray
     rx_buffer: bytearray
     address: isotp.Address
@@ -580,7 +567,8 @@ class TransportLayer:
 
         self.tx_queue = queue.Queue()			# Layer Input queue for IsoTP frame
         self.rx_queue = queue.Queue()			# Layer Output queue for IsoTP frame
-        self.tx_standby_msg = None
+        self.tx_standby_msg = None              # Pending message when throttling is active
+        self.active_send_request = None         # The user request for sending. Contains a synchronizing event for blocking send
 
         self.rx_state = self.RxState.IDLE		# State of the reception FSM
         self.tx_state = self.TxState.IDLE		# State of the transmission FSM
@@ -598,7 +586,7 @@ class TransportLayer:
         self.empty_rx_buffer()
         self.empty_tx_buffer()
 
-        self.timer_tx_stmin = self.Timer(timeout=0)
+        self.timer_tx_stmin = Timer(timeout=0)
 
         self.error_handler = error_handler
         self.actual_rxdl = None
@@ -612,14 +600,17 @@ class TransportLayer:
 
     def load_params(self) -> None:
         self.params.validate()
-        self.timer_rx_fc = self.Timer(timeout=float(self.params.rx_flowcontrol_timeout) / 1000)
-        self.timer_rx_cf = self.Timer(timeout=float(self.params.rx_consecutive_frame_timeout) / 1000)
+        self.timer_rx_fc = Timer(timeout=float(self.params.rx_flowcontrol_timeout) / 1000)
+        self.timer_rx_cf = Timer(timeout=float(self.params.rx_consecutive_frame_timeout) / 1000)
 
         self.rate_limiter = RateLimiter(mean_bitrate=self.params.rate_limit_max_bitrate, window_size_sec=self.params.rate_limit_window_size)
         if self.params.rate_limit_enable:
             self.rate_limiter.enable()
 
-    def send(self, data: Union[bytes, bytearray], target_address_type: Optional[Union[isotp.address.TargetAddressType, int]] = None):
+    def send(self,
+             data: Union[bytes, bytearray],
+             target_address_type: Optional[Union[isotp.address.TargetAddressType, int]] = None,
+             send_timeout: float = 0):
         """
         Enqueue an IsoTP frame to be sent over CAN network
 
@@ -655,9 +646,22 @@ class TransportLayer:
             if len(data) > maxlen:
                 raise ValueError('Cannot send multipacket frame with Functional TargetAddressType')
 
-        self.tx_queue.put(self.DataTATPair(data=data, target_address_type=target_address_type))  # frame is always an IsoTPFrame here
+        send_request = self.SendRequest(data=data, target_address_type=target_address_type)
+        if self.params.blocking_send:
+            send_request.complete_event.clear()
+
+        self.tx_queue.put(send_request)
+
+        if self.params.blocking_send:
+            send_request.complete_event.wait(send_timeout)
+            if not send_request.complete_event.is_set():
+                raise isotp.errors.BlockingSendTimeout("Failed to send IsoTP frame in time")
+            else:
+                if not send_request.success:
+                    isotp.errors.BlockingSendFailure("Error while sending IsoTP frame")
 
     # Receive an IsoTP frame. Output of the layer
+
     def recv(self, block: bool = False, timeout: Optional[float] = None) -> Optional[bytearray]:
         """
         Dequeue an IsoTP frame from the reception queue if available.
@@ -685,7 +689,7 @@ class TransportLayer:
     def process(self, rx_timeout: float = 0.0) -> ProcessStats:
         """
         Function to be called periodically, as fast as possible. 
-        This function is non-blocking.
+        This function is expected to block only if the given rxfn performs a blocking read.
         """
         run_process = True
         msg_received = 0
@@ -844,7 +848,7 @@ class TransportLayer:
 
         if flow_control_frame is not None:
             if flow_control_frame.flow_status == PDU.FlowStatus.Overflow: 	# Needs to stop sending.
-                self.stop_sending()
+                self.stop_sending(success=False)
                 self.trigger_error(isotp.errors.OverflowError('Received a FlowControl PDU indicating an Overflow. Stopping transmission.'))
                 return None, False
 
@@ -857,7 +861,7 @@ class TransportLayer:
                     elif self.wft_counter >= self.params.wftmax:
                         self.trigger_error(isotp.errors.MaximumWaitFrameReachedError(
                             'Received %d wait frame which is the maximum set in params.wftmax' % (self.wft_counter)))
-                        self.stop_sending()
+                        self.stop_sending(success=False)
                     else:
                         self.wft_counter += 1
                         if self.tx_state in [self.TxState.WAIT_FC, self.TxState.TRANSMIT_CF]:
@@ -882,12 +886,12 @@ class TransportLayer:
         # ======= Timeouts ======
         if self.timer_rx_fc.is_timed_out():
             self.trigger_error(isotp.errors.FlowControlTimeoutError('Reception of FlowControl timed out. Stopping transmission'))
-            self.stop_sending()
+            self.stop_sending(success=False)
 
         # ======= FSM ======
         # Check this first as we may have another isotp frame to send and we need to handle it right away without waiting for next "process()" call
         if self.tx_state != self.TxState.IDLE and len(self.tx_buffer) == 0:
-            self.stop_sending()
+            self.stop_sending(success=True)
 
         immediate_rx_msg_required = False
         if self.tx_state == self.TxState.IDLE:
@@ -895,11 +899,12 @@ class TransportLayer:
             while read_tx_queue:
                 read_tx_queue = False
                 if not self.tx_queue.empty():
-                    data_tat_pair = self.tx_queue.get()
-                    if len(data_tat_pair.data) == 0:
+                    self.active_send_request = self.tx_queue.get()
+                    if len(self.active_send_request.data) == 0:
                         read_tx_queue = True  # Read another frame from tx_queue
+                        self.active_send_request.complete(True)
                     else:
-                        self.tx_buffer = bytearray(data_tat_pair.data)
+                        self.tx_buffer = bytearray(self.active_send_request.data)
                         size_on_first_byte = (len(self.tx_buffer) + len(self.address.tx_payload_prefix)) <= 7
                         size_offset = 1 if size_on_first_byte else 2
 
@@ -910,7 +915,7 @@ class TransportLayer:
                             else:
                                 msg_data = self.address.tx_payload_prefix + bytearray([0x0, len(self.tx_buffer)]) + self.tx_buffer
 
-                            arbitration_id = self.address.get_tx_arbitraton_id(data_tat_pair.target_address_type)
+                            arbitration_id = self.address.get_tx_arbitraton_id(self.active_send_request.target_address_type)
                             msg_temp = self.make_tx_msg(arbitration_id, msg_data)
 
                             if len(msg_data) > allowed_bytes:
@@ -978,7 +983,7 @@ class TransportLayer:
                     self.tx_block_counter += 1
 
             if (len(self.tx_buffer) == 0):
-                self.stop_sending()
+                self.stop_sending(success=True)
 
             elif self.remote_blocksize != 0 and self.tx_block_counter >= self.remote_blocksize:
                 self.tx_state = self.TxState.WAIT_FC
@@ -1051,11 +1056,11 @@ class TransportLayer:
         self.tx_buffer = bytearray()
 
     def start_rx_fc_timer(self) -> None:
-        self.timer_rx_fc = self.Timer(timeout=float(self.params.rx_flowcontrol_timeout) / 1000)
+        self.timer_rx_fc = Timer(timeout=float(self.params.rx_flowcontrol_timeout) / 1000)
         self.timer_rx_fc.start()
 
     def start_rx_cf_timer(self) -> None:
-        self.timer_rx_cf = self.Timer(timeout=float(self.params.rx_consecutive_frame_timeout) / 1000)
+        self.timer_rx_cf = Timer(timeout=float(self.params.rx_consecutive_frame_timeout) / 1000)
         self.timer_rx_cf.start()
 
     def append_rx_data(self, data) -> None:
@@ -1123,7 +1128,10 @@ class TransportLayer:
     def request_wait_flow_control(self):
         self.must_wait_for_flow_control = True
 
-    def stop_sending(self) -> None:
+    def stop_sending(self, success) -> None:
+        if self.active_send_request is not None:
+            self.active_send_request.complete(success)
+            self.active_send_request = None
         self.empty_tx_buffer()
         self.tx_state = self.TxState.IDLE
         self.tx_frame_length = 0
@@ -1201,7 +1209,7 @@ class TransportLayer:
         while not self.rx_queue.empty():
             self.rx_queue.get()
 
-        self.stop_sending()
+        self.stop_sending(success=False)
         self.stop_receiving()
 
         self.rate_limiter.reset()
@@ -1332,7 +1340,8 @@ class CanStack(TransportLayer):
             return CanMessage(arbitration_id=msg.arbitration_id, data=msg.data, extended_id=msg.is_extended_id, is_fd=msg.is_fd, bitrate_switch=msg.bitrate_switch)
 
     def __init__(self, bus, read_timeout=0.0, *args, **kwargs):
-        import can
+        if not _can_available:
+            raise RuntimeError(f"python-can is not installed in this environment and is required for the {self.__class__.__name__} object.")
 
         # Backward compatibility stuff.
         message_input_args = can.Message.__init__.__code__.co_varnames[:can.Message.__init__.__code__.co_argcount]
@@ -1368,7 +1377,8 @@ class ThreadedCanStack(ThreadedTransportLayer):
             return CanMessage(arbitration_id=msg.arbitration_id, data=msg.data, extended_id=msg.is_extended_id, is_fd=msg.is_fd, bitrate_switch=msg.bitrate_switch)
 
     def __init__(self, bus, *args, **kwargs):
-        import can
+        if not _can_available:
+            raise RuntimeError(f"python-can is not installed in this environment and is required for the {self.__class__.__name__} object.")
 
         # Backward compatibility stuff.
         message_input_args = can.Message.__init__.__code__.co_varnames[:can.Message.__init__.__code__.co_argcount]
