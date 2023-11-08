@@ -770,7 +770,8 @@ class TransportLayer:
                     self.rx_queue.put(bytearray(pdu.data))
 
             elif pdu.type == PDU.Type.FIRST_FRAME:
-                self.start_reception_after_first_frame_if_valid(pdu)
+                started = self.start_reception_after_first_frame_if_valid(pdu)
+                immediate_tx_msg_required = immediate_tx_msg_required or started
             elif pdu.type == PDU.Type.CONSECUTIVE_FRAME:
                 self.trigger_error(isotp.errors.UnexpectedConsecutiveFrameError('Received a ConsecutiveFrame while reception was idle. Ignoring'))
 
@@ -783,7 +784,8 @@ class TransportLayer:
                         'Reception of IsoTP frame interrupted with a new SingleFrame'))
 
             elif pdu.type == PDU.Type.FIRST_FRAME:
-                self.start_reception_after_first_frame_if_valid(pdu)
+                started = self.start_reception_after_first_frame_if_valid(pdu)
+                immediate_tx_msg_required = immediate_tx_msg_required or started
                 self.trigger_error(isotp.errors.ReceptionInterruptedWithFirstFrameError('Reception of IsoTP frame interrupted with a new FirstFrame'))
 
             elif pdu.type == PDU.Type.CONSECUTIVE_FRAME:
@@ -815,6 +817,9 @@ class TransportLayer:
                         received = "0x%02X" % pdu.seqnum
                     self.trigger_error(isotp.errors.WrongSequenceNumberError(
                         'Received a ConsecutiveFrame with wrong SequenceNumber. Expecting 0x%02X, Received %s' % (expected_seqnum, received)))
+
+        if self.pending_flow_control_tx:
+            immediate_tx_msg_required = True
 
         return immediate_tx_msg_required
 
@@ -1146,17 +1151,18 @@ class TransportLayer:
             self.tx_queue.get_nowait()
 
     # Init the reception of a multi-pdu frame.
-    def start_reception_after_first_frame_if_valid(self, pdu: PDU) -> None:
+    def start_reception_after_first_frame_if_valid(self, pdu: PDU) -> bool:
         assert pdu.length is not None
         self.empty_rx_buffer()
         if pdu.rx_dl not in [8, 12, 16, 20, 24, 32, 48, 64]:
             self.trigger_error(isotp.errors.InvalidCanFdFirstFrameRXDL(
                 "Received a FirstFrame with a RX_DL value of %d which is invalid according to ISO-15765-2" % (pdu.rx_dl)))
             self.stop_receiving()
-            return
+            return False
 
         self.actual_rxdl = pdu.rx_dl
 
+        started = False
         if pdu.length > self.params.max_frame_size:
             self.trigger_error(isotp.errors.FrameTooLongError(
                 "Received a Frist Frame with a length of %d bytes, but params.max_frame_size is set to %d bytes. Ignoring" % (pdu.length, self.params.max_frame_size)))
@@ -1168,9 +1174,12 @@ class TransportLayer:
             self.append_rx_data(pdu.data)
             self.request_tx_flowcontrol(PDU.FlowStatus.ContinueToSend)
             self.start_rx_cf_timer()
+            started = True
 
         self.last_seqnum = 0
         self.rx_block_counter = 0
+
+        return started
 
     def trigger_error(self, error: isotp.errors.IsoTpError) -> None:
         if self.error_handler is not None:
@@ -1208,7 +1217,6 @@ class TransportLayer:
         key = (self.rx_state, self.tx_state)
         if key in self.timings:
             return self.timings[key]
-
         else:
             return 0.001
 
@@ -1222,13 +1230,15 @@ class ThreadedTransportLayer(TransportLayer):
     worker_thread: Optional[threading.Thread]
     thread_ready: threading.Event
     stop_requested: threading.Event
+    default_read_timeout: float
 
     def __init__(self,
                  rxfn: TransportLayer.RxFn,
                  txfn: TransportLayer.TxFn,
                  address: isotp.Address,
                  error_handler: Optional[TransportLayer.ErrorHandler] = None,
-                 params: Optional[Dict[str, Any]] = None):
+                 params: Optional[Dict[str, Any]] = None,
+                 read_timeout=0.05):
         super().__init__(rxfn, txfn, address, error_handler, params)
 
         self.started = False
@@ -1236,6 +1246,7 @@ class ThreadedTransportLayer(TransportLayer):
 
         self.thread_ready = threading.Event()
         self.stop_requested = threading.Event()
+        self.default_read_timeout = read_timeout
 
     def start(self) -> None:
         self.logger.debug(f"Starting {self.__class__}")
@@ -1274,7 +1285,7 @@ class ThreadedTransportLayer(TransportLayer):
         self.thread_ready.set()
         try:
             while not self.stop_requested.is_set():
-                rx_timeout = 0.0 if self.is_tx_throttled() else 0.1
+                rx_timeout = 0.0 if self.is_tx_throttled() else self.default_read_timeout
                 t1 = time.monotonic()
                 count_stats = self.process(rx_timeout=rx_timeout)
                 diff = time.monotonic() - t1
@@ -1305,7 +1316,7 @@ class CanStack(TransportLayer):
     """
 
     bus: "can.BusABC"
-    timeout: float
+    default_read_timeout: float
 
     def _tx_canbus_3plus(self, msg):
         self.bus.send(can.Message(arbitration_id=msg.arbitration_id, data=msg.data,
@@ -1316,12 +1327,11 @@ class CanStack(TransportLayer):
                       extended_id=msg.is_extended_id, is_fd=msg.is_fd, bitrate_switch=msg.bitrate_switch))
 
     def rx_canbus(self):
-        msg = self.bus.recv(self.timeout)
+        msg = self.bus.recv(self.default_read_timeout)
         if msg is not None:
             return CanMessage(arbitration_id=msg.arbitration_id, data=msg.data, extended_id=msg.is_extended_id, is_fd=msg.is_fd, bitrate_switch=msg.bitrate_switch)
 
-    def __init__(self, bus, timeout=0.0, *args, **kwargs):
-        global can
+    def __init__(self, bus, read_timeout=0.0, *args, **kwargs):
         import can
 
         # Backward compatibility stuff.
@@ -1332,8 +1342,8 @@ class CanStack(TransportLayer):
             self.tx_canbus = self._tx_canbus_3minus
 
         self.set_bus(bus)
-        self.timeout = timeout
-        TransportLayer.__init__(self, rxfn=self.rx_canbus, txfn=self.tx_canbus, *args, **kwargs)
+        self.default_read_timeout = read_timeout
+        super().__init__(rxfn=self.rx_canbus, txfn=self.tx_canbus, *args, **kwargs)
 
     def set_bus(self, bus):
         if not isinstance(bus, can.BusABC):
@@ -1342,6 +1352,7 @@ class CanStack(TransportLayer):
 
 
 class ThreadedCanStack(ThreadedTransportLayer):
+    bus: "can.BusABC"
 
     def _tx_canbus_3plus(self, msg):
         self.bus.send(can.Message(arbitration_id=msg.arbitration_id, data=msg.data,
@@ -1357,7 +1368,6 @@ class ThreadedCanStack(ThreadedTransportLayer):
             return CanMessage(arbitration_id=msg.arbitration_id, data=msg.data, extended_id=msg.is_extended_id, is_fd=msg.is_fd, bitrate_switch=msg.bitrate_switch)
 
     def __init__(self, bus, *args, **kwargs):
-        global can
         import can
 
         # Backward compatibility stuff.
@@ -1368,7 +1378,7 @@ class ThreadedCanStack(ThreadedTransportLayer):
             self.tx_canbus = self._tx_canbus_3minus
 
         self.set_bus(bus)
-        TransportLayer.__init__(self, rxfn=self.rx_canbus, txfn=self.tx_canbus, *args, **kwargs)
+        super().__init__(rxfn=self.rx_canbus, txfn=self.tx_canbus, *args, **kwargs)
 
     def set_bus(self, bus):
         if not isinstance(bus, can.BusABC):

@@ -236,9 +236,12 @@ class TestTransportLayer(TransportLayerBaseTest):
         self.assertIsNone(self.rx_isotp_frame())
 
     def test_receive_multiframe_bad_seqnum(self):
+        self.stack.params.set('blocksize', 1)
         payload_size = 10
         payload = self.make_payload(payload_size)
         self.simulate_rx(data=[0x10, payload_size] + payload[0:6])
+        self.stack.process()
+        self.assertIsNotNone(self.get_tx_can_msg())  # Send flow control
         self.simulate_rx(data=[0x22] + payload[6:10])		# Bad Sequence number
         self.stack.process()
         self.assertIsNone(self.rx_isotp_frame())
