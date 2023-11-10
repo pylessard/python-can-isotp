@@ -715,6 +715,8 @@ class TransportLayerLogic:
                     run_process = True
                     break
 
+            self.logger.debug(f"TxState={self.tx_state} - RxState={self.rx_state}")
+
         return self.ProcessStats(received=msg_received, received_processed=msg_received_processed, sent=msg_sent)
 
     def check_timeouts_rx(self) -> None:
@@ -1234,11 +1236,22 @@ class TransportLayer(TransportLayerLogic):
 
     """
 
+    class Events:
+        thread_ready: threading.Event
+        stop_requested: threading.Event
+        reset_tx: threading.Event
+        reset_rx: threading.Event
+
+        def __init__(self):
+            self.thread_ready = threading.Event()
+            self.stop_requested = threading.Event()
+            self.reset_tx = threading.Event()
+            self.reset_rx = threading.Event()
+
     started: bool
     worker_thread: Optional[threading.Thread]
-    thread_ready: threading.Event
-    stop_requested: threading.Event
     default_read_timeout: float
+    events: Events
 
     def __init__(self,
                  rxfn: TransportLayerLogic.RxFn,
@@ -1246,67 +1259,92 @@ class TransportLayer(TransportLayerLogic):
                  address: isotp.Address,
                  error_handler: Optional[TransportLayerLogic.ErrorHandler] = None,
                  params: Optional[Dict[str, Any]] = None,
-                 read_timeout=0.05):
+                 read_timeout=0.01):
         super().__init__(rxfn, txfn, address, error_handler, params)
 
         self.started = False
         self.worker_thread = None
-
-        self.thread_ready = threading.Event()
-        self.stop_requested = threading.Event()
         self.default_read_timeout = read_timeout
+        self.events = self.Events()
 
     def start(self) -> None:
         self.logger.debug(f"Starting {self.__class__}")
         if self.started:
             raise RuntimeError("Transport Layer is already started")
 
-        self.worker_thread = threading.Thread(target=self.worker_thread_fn)
+        self.worker_thread = threading.Thread(target=self._worker_thread_fn)
 
-        self.thread_ready.clear()
-        self.stop_requested.clear()
+        self.events.thread_ready.clear()
+        self.events.stop_requested.clear()
+        self.events.reset_tx.clear()
+        self.events.reset_rx.clear()
 
         self.worker_thread.start()
 
-        if not self.thread_ready.is_set():
+        if not self.events.thread_ready.is_set():
             self.stop()
             raise RuntimeError("Failed to start the Transport Layer")
 
         self.started = True
 
     def stop(self) -> None:
-        self.logger.debug(f"Stopping {self.__class__}")
-        self.stop_requested.set()
+        self.logger.debug(f"Stopping {self.__class__.__name__}")
+        self.events.stop_requested.set()
 
         if self.worker_thread is not None:
             if self.worker_thread.is_alive():
                 self.worker_thread.join()
             self.worker_thread = None
 
-        self.thread_ready.clear()
-        self.stop_requested.clear()
+        self.events.thread_ready.clear()
+        self.events.stop_requested.clear()
+        self.events.reset_tx.clear()
+        self.events.reset_rx.clear()
 
         self.reset()
         self.started = False
+        self.logger.debug(f"{self.__class__.__name__} Stopped")
 
-    def worker_thread_fn(self) -> None:
-        self.thread_ready.set()
+    def _worker_thread_fn(self) -> None:
+        self.events.thread_ready.set()
         try:
-            while not self.stop_requested.is_set():
+            while not self.events.stop_requested.is_set():
                 rx_timeout = 0.0 if self.is_tx_throttled() else self.default_read_timeout
                 t1 = time.monotonic()
                 count_stats = self.process(rx_timeout=rx_timeout)
                 diff = time.monotonic() - t1
-                if count_stats.received > 0 and not self.stop_requested.is_set():
+                if count_stats.received > 0 and not self.events.stop_requested.is_set():
                     if diff < rx_timeout * 0.5:  # rxfn is not controlling the cpu usage.
                         time.sleep(min(self.sleep_time(), max(0, rx_timeout - diff)))
+
+                if self.events.reset_tx.is_set():
+                    self.stop_sending(success=False)
+                    self.events.reset_tx.clear()
+
+                if self.events.reset_rx.is_set():
+                    self.stop_receiving()
+                    self.events.reset_rx.clear()
         finally:
             self.reset()
+
+    def stop_sending_threadsafe(self):
+        if not self.events.stop_requested.is_set():
+            if self.worker_thread is not None and self.worker_thread.is_alive():
+                self.events.reset_tx.set()
+                while self.events.reset_tx.is_set():
+                    time.sleep(0.05)
+
+    def stop_receiving_threadsafe(self):
+        if not self.events.stop_requested.is_set():
+            if self.worker_thread is not None and self.worker_thread.is_alive():
+                self.events.reset_rx.set()
+                while self.events.reset_rx.is_set():
+                    time.sleep(0.05)
 
 
 class CanStack(TransportLayer):
     """
-    The IsoTP transport using `python-can <https://python-can.readthedocs.io>`__ as CAN layer. python-can must be installed in order to use this class.
+    The IsoTP transport layer preconfigured to use `python-can <https://python-can.readthedocs.io>`__ as CAN layer. python-can must be installed in order to use this class.
     All parameters except the ``bus`` parameter will be given to the :class:`TransportLayer<isotp.TransportLayer>` constructor
 
     :param bus: A python-can bus object implementing ``recv`` and ``send``
@@ -1322,7 +1360,6 @@ class CanStack(TransportLayer):
     :type params: dict
 
     """
-
     bus: "can.BusABC"
     default_read_timeout: float
 
