@@ -71,7 +71,7 @@ class WrongSequenceNumberError(IsoTpError):
     pass
 
 
-class UnsuportedWaitFrameError(IsoTpError):
+class UnsupportedWaitFrameError(IsoTpError):
     """
     Happens when a Flow Control PDU with FlowStatus=Wait is received and :ref:`wftmax<param_wftmax>` is set to 0
     """

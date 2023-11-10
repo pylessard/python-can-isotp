@@ -7,4 +7,4 @@ h = logging.StreamHandler()
 h.setFormatter(formatter)
 logger.addHandler(h)
 logger.setLevel(level=logging.DEBUG)
-logger.disabled = False
+logger.disabled = True

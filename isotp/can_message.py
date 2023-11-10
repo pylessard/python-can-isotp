@@ -2,7 +2,6 @@
 __all__ = ['CanMessage']
 
 from binascii import hexlify
-import struct
 
 
 class CanMessage:
@@ -49,13 +48,13 @@ class CanMessage:
         self.bitrate_switch = bitrate_switch
 
     def __repr__(self) -> str:
-        datastr = hexlify(self.data[:64]).decode('ascii')
+        data_str = hexlify(self.data[:64]).decode('ascii')
         if len(self.data) > 64:
-            datastr += '...'
+            data_str += '...'
         if self.is_extended_id:
-            idstr = "%08x" % self.arbitration_id
+            id_str = "%08x" % self.arbitration_id
         else:
-            idstr = "%03x" % self.arbitration_id
+            id_str = "%03x" % self.arbitration_id
 
         addr = "0x%x" % id(self)
         flags = []
@@ -64,8 +63,8 @@ class CanMessage:
         if self.bitrate_switch:
             flags.append('bs')
 
-        flagstr = ','.join(flags)
-        if flagstr:
-            flagstr = f'({flagstr})'
+        flag_str = ','.join(flags)
+        if flag_str:
+            flag_str = f'({flag_str})'
 
-        return f'<{self.__class__.__name__} {idstr} [{self.dlc}] {flagstr} "{datastr}" at {addr}>'
+        return f'<{self.__class__.__name__} {id_str} [{self.dlc}] {flag_str} "{data_str}" at {addr}>'

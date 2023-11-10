@@ -153,7 +153,7 @@ class socket:
 
         Sets the general options of the socket. Values of `None` will leave the parameter unchanged
 
-        :param optflag: A list of flags modifying the protocol behaviour. Refer to :class:`socket.flags<isotp.socket.flags>`
+        :param optflag: A list of flags modifying the protocol behavior. Refer to :class:`socket.flags<isotp.socket.flags>`
         :type optflag: int
 
         :param frame_txtime: Frame transmission time (N_As/N_Ar) in nanoseconds.
@@ -241,8 +241,8 @@ class socket:
 
         # IsoTP sockets doesn't provide an interface to modify the target address type. We asusme physical.
         # If functional is required, it Ids can be manually crafted in Normal / extended mode
-        rxid = self.address.get_rx_arbitraton_id(isotp.TargetAddressType.Physical)
-        txid = self.address.get_tx_arbitraton_id(isotp.TargetAddressType.Physical)
+        rxid = self.address.get_rx_arbitration_id(isotp.TargetAddressType.Physical)
+        txid = self.address.get_tx_arbitration_id(isotp.TargetAddressType.Physical)
 
         if self.address.is_29bits == True:
             rxid = (rxid & socket_module.CAN_EFF_MASK) | socket_module.CAN_EFF_FLAG

@@ -75,10 +75,10 @@ class TestAddressingMode(TransportLayerBaseTest):
         self.assertFalse(address.is_for_me(Message(arbitration_id=rxid, extended_id=True)))
         self.assertFalse(address.is_for_me(Message(arbitration_id=rxid + 1)))
 
-        self.assertEqual(address.get_tx_arbitraton_id(isotp.TargetAddressType.Physical), txid)
-        self.assertEqual(address.get_tx_arbitraton_id(isotp.TargetAddressType.Functional), txid)
-        self.assertEqual(address.get_rx_arbitraton_id(isotp.TargetAddressType.Physical), rxid)
-        self.assertEqual(address.get_rx_arbitraton_id(isotp.TargetAddressType.Functional), rxid)
+        self.assertEqual(address.get_tx_arbitration_id(isotp.TargetAddressType.Physical), txid)
+        self.assertEqual(address.get_tx_arbitration_id(isotp.TargetAddressType.Functional), txid)
+        self.assertEqual(address.get_rx_arbitration_id(isotp.TargetAddressType.Physical), rxid)
+        self.assertEqual(address.get_rx_arbitration_id(isotp.TargetAddressType.Functional), rxid)
 
     def test_11bits_normal_through_layer(self):
         functional = isotp.TargetAddressType.Functional
@@ -169,10 +169,10 @@ class TestAddressingMode(TransportLayerBaseTest):
         self.assertFalse(address.is_for_me(Message(arbitration_id=rxid + 1, extended_id=True)))
         self.assertFalse(address.is_for_me(Message(arbitration_id=rxid + 1, extended_id=False)))
 
-        self.assertEqual(address.get_tx_arbitraton_id(isotp.TargetAddressType.Physical), txid)
-        self.assertEqual(address.get_tx_arbitraton_id(isotp.TargetAddressType.Functional), txid)
-        self.assertEqual(address.get_rx_arbitraton_id(isotp.TargetAddressType.Physical), rxid)
-        self.assertEqual(address.get_rx_arbitraton_id(isotp.TargetAddressType.Functional), rxid)
+        self.assertEqual(address.get_tx_arbitration_id(isotp.TargetAddressType.Physical), txid)
+        self.assertEqual(address.get_tx_arbitration_id(isotp.TargetAddressType.Functional), txid)
+        self.assertEqual(address.get_rx_arbitration_id(isotp.TargetAddressType.Physical), rxid)
+        self.assertEqual(address.get_rx_arbitration_id(isotp.TargetAddressType.Functional), rxid)
 
     def test_29bits_normal_through_layer(self):
         functional = isotp.TargetAddressType.Functional
@@ -254,10 +254,10 @@ class TestAddressingMode(TransportLayerBaseTest):
         self.assertFalse(address.is_for_me(Message(arbitration_id=rxid_physical + 1, extended_id=True)))
         self.assertFalse(address.is_for_me(Message(arbitration_id=(rxid_physical + 1) & 0x7FF, extended_id=False)))
 
-        self.assertEqual(address.get_tx_arbitraton_id(isotp.TargetAddressType.Physical), txid_physical)
-        self.assertEqual(address.get_tx_arbitraton_id(isotp.TargetAddressType.Functional), txid_functional)
-        self.assertEqual(address.get_rx_arbitraton_id(isotp.TargetAddressType.Physical), rxid_physical)
-        self.assertEqual(address.get_rx_arbitraton_id(isotp.TargetAddressType.Functional), rxid_functional)
+        self.assertEqual(address.get_tx_arbitration_id(isotp.TargetAddressType.Physical), txid_physical)
+        self.assertEqual(address.get_tx_arbitration_id(isotp.TargetAddressType.Functional), txid_functional)
+        self.assertEqual(address.get_rx_arbitration_id(isotp.TargetAddressType.Physical), rxid_physical)
+        self.assertEqual(address.get_rx_arbitration_id(isotp.TargetAddressType.Functional), rxid_functional)
 
     def test_29bits_normal_fixed_custom_id(self):
         ta = 0x55
@@ -280,10 +280,10 @@ class TestAddressingMode(TransportLayerBaseTest):
         self.assertFalse(address.is_for_me(Message(arbitration_id=rxid_physical + 1, extended_id=True)))
         self.assertFalse(address.is_for_me(Message(arbitration_id=(rxid_physical + 1) & 0x7FF, extended_id=False)))
 
-        self.assertEqual(address.get_tx_arbitraton_id(isotp.TargetAddressType.Physical), txid_physical)
-        self.assertEqual(address.get_tx_arbitraton_id(isotp.TargetAddressType.Functional), txid_functional)
-        self.assertEqual(address.get_rx_arbitraton_id(isotp.TargetAddressType.Physical), rxid_physical)
-        self.assertEqual(address.get_rx_arbitraton_id(isotp.TargetAddressType.Functional), rxid_functional)
+        self.assertEqual(address.get_tx_arbitration_id(isotp.TargetAddressType.Physical), txid_physical)
+        self.assertEqual(address.get_tx_arbitration_id(isotp.TargetAddressType.Functional), txid_functional)
+        self.assertEqual(address.get_rx_arbitration_id(isotp.TargetAddressType.Physical), rxid_physical)
+        self.assertEqual(address.get_rx_arbitration_id(isotp.TargetAddressType.Functional), rxid_functional)
 
     def test_29bits_normal_fixed_through_layer(self):
         functional = isotp.TargetAddressType.Functional
@@ -462,10 +462,10 @@ class TestAddressingMode(TransportLayerBaseTest):
         self.assertFalse(address.is_for_me(Message(rxid + 1, data=bytearray([sa]), extended_id=False)))
         self.assertFalse(address.is_for_me(Message(rxid, data=bytearray([sa + 1]), extended_id=False)))
 
-        self.assertEqual(address.get_tx_arbitraton_id(isotp.TargetAddressType.Physical), txid)
-        self.assertEqual(address.get_tx_arbitraton_id(isotp.TargetAddressType.Functional), txid)
-        self.assertEqual(address.get_rx_arbitraton_id(isotp.TargetAddressType.Physical), rxid)
-        self.assertEqual(address.get_rx_arbitraton_id(isotp.TargetAddressType.Functional), rxid)
+        self.assertEqual(address.get_tx_arbitration_id(isotp.TargetAddressType.Physical), txid)
+        self.assertEqual(address.get_tx_arbitration_id(isotp.TargetAddressType.Functional), txid)
+        self.assertEqual(address.get_rx_arbitration_id(isotp.TargetAddressType.Physical), rxid)
+        self.assertEqual(address.get_rx_arbitration_id(isotp.TargetAddressType.Functional), rxid)
 
     def test_11bits_extended_through_layer(self):
         functional = isotp.TargetAddressType.Functional
@@ -583,10 +583,10 @@ class TestAddressingMode(TransportLayerBaseTest):
         self.assertFalse(address.is_for_me(Message(rxid + 1, data=bytearray([sa]), extended_id=True)))
         self.assertFalse(address.is_for_me(Message(rxid, data=bytearray([sa + 1]), extended_id=True)))
 
-        self.assertEqual(address.get_tx_arbitraton_id(isotp.TargetAddressType.Physical), txid)
-        self.assertEqual(address.get_tx_arbitraton_id(isotp.TargetAddressType.Functional), txid)
-        self.assertEqual(address.get_rx_arbitraton_id(isotp.TargetAddressType.Physical), rxid)
-        self.assertEqual(address.get_rx_arbitraton_id(isotp.TargetAddressType.Functional), rxid)
+        self.assertEqual(address.get_tx_arbitration_id(isotp.TargetAddressType.Physical), txid)
+        self.assertEqual(address.get_tx_arbitration_id(isotp.TargetAddressType.Functional), txid)
+        self.assertEqual(address.get_rx_arbitration_id(isotp.TargetAddressType.Physical), rxid)
+        self.assertEqual(address.get_rx_arbitration_id(isotp.TargetAddressType.Functional), rxid)
 
     def test_29bits_extended_through_layer(self):
         functional = isotp.TargetAddressType.Functional
@@ -670,10 +670,10 @@ class TestAddressingMode(TransportLayerBaseTest):
         self.assertFalse(address.is_for_me(Message(rxid + 1, data=bytearray([ae]), extended_id=False)))
         self.assertFalse(address.is_for_me(Message(rxid, data=bytearray([ae + 1]), extended_id=False)))
 
-        self.assertEqual(address.get_tx_arbitraton_id(isotp.TargetAddressType.Physical), txid)
-        self.assertEqual(address.get_tx_arbitraton_id(isotp.TargetAddressType.Functional), txid)
-        self.assertEqual(address.get_rx_arbitraton_id(isotp.TargetAddressType.Physical), rxid)
-        self.assertEqual(address.get_rx_arbitraton_id(isotp.TargetAddressType.Functional), rxid)
+        self.assertEqual(address.get_tx_arbitration_id(isotp.TargetAddressType.Physical), txid)
+        self.assertEqual(address.get_tx_arbitration_id(isotp.TargetAddressType.Functional), txid)
+        self.assertEqual(address.get_rx_arbitration_id(isotp.TargetAddressType.Physical), rxid)
+        self.assertEqual(address.get_rx_arbitration_id(isotp.TargetAddressType.Functional), rxid)
 
     def test_11bits_mixed_through_layer(self):
         functional = isotp.TargetAddressType.Functional
@@ -765,10 +765,10 @@ class TestAddressingMode(TransportLayerBaseTest):
         self.assertFalse(address.is_for_me(Message(txid_physical, data=bytearray([ae]), extended_id=True)))
         self.assertFalse(address.is_for_me(Message(txid_functional, data=bytearray([ae]), extended_id=True)))
 
-        self.assertEqual(address.get_tx_arbitraton_id(isotp.TargetAddressType.Physical), txid_physical)
-        self.assertEqual(address.get_tx_arbitraton_id(isotp.TargetAddressType.Functional), txid_functional)
-        self.assertEqual(address.get_rx_arbitraton_id(isotp.TargetAddressType.Physical), rxid_physical)
-        self.assertEqual(address.get_rx_arbitraton_id(isotp.TargetAddressType.Functional), rxid_functional)
+        self.assertEqual(address.get_tx_arbitration_id(isotp.TargetAddressType.Physical), txid_physical)
+        self.assertEqual(address.get_tx_arbitration_id(isotp.TargetAddressType.Functional), txid_functional)
+        self.assertEqual(address.get_rx_arbitration_id(isotp.TargetAddressType.Physical), rxid_physical)
+        self.assertEqual(address.get_rx_arbitration_id(isotp.TargetAddressType.Functional), rxid_functional)
 
     def test_29bits_mixed_custom_id(self):
         ta = 0x55
@@ -797,10 +797,10 @@ class TestAddressingMode(TransportLayerBaseTest):
         self.assertFalse(address.is_for_me(Message(txid_physical, data=bytearray([ae]), extended_id=True)))
         self.assertFalse(address.is_for_me(Message(txid_functional, data=bytearray([ae]), extended_id=True)))
 
-        self.assertEqual(address.get_tx_arbitraton_id(isotp.TargetAddressType.Physical), txid_physical)
-        self.assertEqual(address.get_tx_arbitraton_id(isotp.TargetAddressType.Functional), txid_functional)
-        self.assertEqual(address.get_rx_arbitraton_id(isotp.TargetAddressType.Physical), rxid_physical)
-        self.assertEqual(address.get_rx_arbitraton_id(isotp.TargetAddressType.Functional), rxid_functional)
+        self.assertEqual(address.get_tx_arbitration_id(isotp.TargetAddressType.Physical), txid_physical)
+        self.assertEqual(address.get_tx_arbitration_id(isotp.TargetAddressType.Functional), txid_functional)
+        self.assertEqual(address.get_rx_arbitration_id(isotp.TargetAddressType.Physical), rxid_physical)
+        self.assertEqual(address.get_rx_arbitration_id(isotp.TargetAddressType.Functional), rxid_functional)
 
     def test_29bits_mixed_through_layer(self):
         functional = isotp.TargetAddressType.Functional

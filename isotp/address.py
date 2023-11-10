@@ -105,8 +105,8 @@ class Address:
         self.validate()
 
         # From here, input is good. Do some precomputing for speed optimization without bothering about types or values
-        self.tx_arbitration_id_physical = self._get_tx_arbitraton_id(TargetAddressType.Physical)
-        self.tx_arbitration_id_functional = self._get_tx_arbitraton_id(TargetAddressType.Functional)
+        self.tx_arbitration_id_physical = self._get_tx_arbitration_id(TargetAddressType.Physical)
+        self.tx_arbitration_id_functional = self._get_tx_arbitration_id(TargetAddressType.Functional)
 
         self.rx_arbitration_id_physical = self._get_rx_arbitration_id(TargetAddressType.Physical)
         self.rx_arbitration_id_functional = self._get_rx_arbitration_id(TargetAddressType.Functional)
@@ -128,7 +128,7 @@ class Address:
         elif self.addressing_mode in [AddressingMode.Extended_11bits, AddressingMode.Extended_29bits]:
             self.is_for_me = self._is_for_me_extended
         elif self.addressing_mode == AddressingMode.NormalFixed_29bits:
-            self.is_for_me = self._is_for_me_normalfixed
+            self.is_for_me = self._is_for_me_normal_fixed
         elif self.addressing_mode == AddressingMode.Mixed_11bits:
             self.is_for_me = self._is_for_me_mixed_11bits
         elif self.addressing_mode == AddressingMode.Mixed_29bits:
@@ -200,19 +200,19 @@ class Address:
                 if self.rxid > 0x7FF:
                     raise ValueError('rxid must be smaller than 0x7FF for 11 bits identifier')
 
-    def get_tx_arbitraton_id(self, address_type: TargetAddressType = TargetAddressType.Physical) -> int:
+    def get_tx_arbitration_id(self, address_type: TargetAddressType = TargetAddressType.Physical) -> int:
         if address_type == TargetAddressType.Physical:
             return self.tx_arbitration_id_physical
         else:
             return self.tx_arbitration_id_functional
 
-    def get_rx_arbitraton_id(self, address_type: TargetAddressType = TargetAddressType.Physical) -> int:
+    def get_rx_arbitration_id(self, address_type: TargetAddressType = TargetAddressType.Physical) -> int:
         if address_type == TargetAddressType.Physical:
             return self.rx_arbitration_id_physical
         else:
             return self.rx_arbitration_id_functional
 
-    def _get_tx_arbitraton_id(self, address_type: TargetAddressType) -> int:
+    def _get_tx_arbitration_id(self, address_type: TargetAddressType) -> int:
         if self.addressing_mode in (AddressingMode.Normal_11bits,
                                     AddressingMode.Normal_29bits,
                                     AddressingMode.Extended_11bits,
@@ -253,7 +253,7 @@ class Address:
                 return msg.arbitration_id == self.rxid and int(msg.data[0]) == self.source_address
         return False
 
-    def _is_for_me_normalfixed(self, msg: CanMessage) -> bool:
+    def _is_for_me_normal_fixed(self, msg: CanMessage) -> bool:
         if self.is_29bits == msg.is_extended_id:
             return (msg.arbitration_id & 0x1FFF0000 in [self.physical_id, self.functional_id]) and (msg.arbitration_id & 0xFF00) >> 8 == self.source_address and msg.arbitration_id & 0xFF == self.target_address
         return False

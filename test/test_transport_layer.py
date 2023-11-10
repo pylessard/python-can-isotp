@@ -822,7 +822,7 @@ class TestTransportLayer(TransportLayerBaseTest):
         time.sleep(0.01)
         self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=8)
         self.stack.process()
-        self.assert_error_triggered(isotp.UnsuportedWaitFrameError)
+        self.assert_error_triggered(isotp.UnsupportedWaitFrameError)
 
     def test_send_wait_frame_after_consecutive_frame_wftmax_0(self):
         self.stack.params.set('wftmax', 0)
@@ -836,7 +836,7 @@ class TestTransportLayer(TransportLayerBaseTest):
         self.stack.process()
         self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=1)
         self.stack.process()
-        self.assert_error_triggered(isotp.UnsuportedWaitFrameError)
+        self.assert_error_triggered(isotp.UnsupportedWaitFrameError)
 
     def test_send_wait_frame_after_first_frame_reach_max(self):
         self.stack.params.set('wftmax', 5)

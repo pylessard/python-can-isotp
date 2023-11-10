@@ -157,17 +157,17 @@ class FlowControlOpts:
         o = cls.read(s)
         if bs != None:
             if not isinstance(bs, int) or bs < 0 or bs > 0xFF:
-                raise ValueError("bs (block size) must be a valid interger between 0 and FF")
+                raise ValueError("bs (block size) must be a valid integer between 0 and FF")
             o.bs = bs
 
         if stmin != None:
             if not isinstance(stmin, int) or stmin < 0 or stmin > 0xFF:
-                raise ValueError("stmin (separation time) must be a valid interger between 0 and FF")
+                raise ValueError("stmin (separation time) must be a valid integer between 0 and FF")
             o.stmin = stmin
 
         if wftmax != None:
             if not isinstance(wftmax, int) or wftmax < 0 or wftmax > 0xFF:
-                raise ValueError("wftmax (wait frame max) must be a valid interger between 0 and FF")
+                raise ValueError("wftmax (wait frame max) must be a valid integer between 0 and FF")
             o.wftmax = wftmax
 
         opt = struct.pack("=BBB", o.bs, o.stmin, o.wftmax)
@@ -213,17 +213,17 @@ class LinkLayerOpts:
         o = cls.read(s)
         if mtu != None:
             if not isinstance(mtu, int) or mtu < 0 or mtu > 0xFF:
-                raise ValueError("mtu must be a valid interger between 0 and FF")
+                raise ValueError("mtu must be a valid integer between 0 and FF")
             o.mtu = mtu
 
         if tx_dl != None:
             if not isinstance(tx_dl, int) or tx_dl < 0 or tx_dl > 0xFF:
-                raise ValueError("tx_dl must be a valid interger between 0 and FF")
+                raise ValueError("tx_dl must be a valid integer between 0 and FF")
             o.tx_dl = tx_dl
 
         if tx_flags != None:
             if not isinstance(tx_flags, int) or tx_flags < 0 or tx_flags > 0xFF:
-                raise ValueError("tx_flags must be a valid interger between 0 and FF")
+                raise ValueError("tx_flags must be a valid integer between 0 and FF")
             o.tx_flags = tx_flags
 
         opt = struct.pack("=BBB", o.mtu, o.tx_dl, o.tx_flags)

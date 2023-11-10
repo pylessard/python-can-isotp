@@ -644,7 +644,7 @@ class TransportLayer:
             maxlen = self.params.tx_data_length - length_bytes - len(self.address.tx_payload_prefix)
 
             if len(data) > maxlen:
-                raise ValueError('Cannot send multipacket frame with Functional TargetAddressType')
+                raise ValueError('Cannot send multi packet frame with Functional TargetAddressType')
 
         send_request = self.SendRequest(data=data, target_address_type=target_address_type)
         if self.params.blocking_send:
@@ -828,7 +828,7 @@ class TransportLayer:
         return immediate_tx_msg_required
 
     def process_tx(self) -> Tuple[Optional[CanMessage], bool]:
-        output_msg = None 	 # Value outputed.  If None, no subsequent call to process_tx will be done.
+        output_msg = None 	 # Value outputted.  If None, no subsequent call to process_tx will be done.
         allowed_bytes = self.rate_limiter.allowed_bytes()
 
         # Sends flow control if process_rx requested it
@@ -857,7 +857,8 @@ class TransportLayer:
             else:
                 if flow_control_frame.flow_status == PDU.FlowStatus.Wait:
                     if self.params.wftmax == 0:
-                        self.trigger_error(isotp.errors.UnsuportedWaitFrameError('Received a FlowControl requesting to wait, but wftmax is set to 0'))
+                        self.trigger_error(isotp.errors.UnsupportedWaitFrameError(
+                            'Received a FlowControl requesting to wait, but wftmax is set to 0'))
                     elif self.wft_counter >= self.params.wftmax:
                         self.trigger_error(isotp.errors.MaximumWaitFrameReachedError(
                             'Received %d wait frame which is the maximum set in params.wftmax' % (self.wft_counter)))
@@ -915,7 +916,7 @@ class TransportLayer:
                             else:
                                 msg_data = self.address.tx_payload_prefix + bytearray([0x0, len(self.tx_buffer)]) + self.tx_buffer
 
-                            arbitration_id = self.address.get_tx_arbitraton_id(self.active_send_request.target_address_type)
+                            arbitration_id = self.address.get_tx_arbitration_id(self.active_send_request.target_address_type)
                             msg_temp = self.make_tx_msg(arbitration_id, msg_data)
 
                             if len(msg_data) > allowed_bytes:
@@ -937,7 +938,7 @@ class TransportLayer:
                                 msg_data = self.address.tx_payload_prefix + bytearray([0x10, 0x00, (self.tx_frame_length >> 24) & 0xFF, (self.tx_frame_length >> 16) & 0xFF, (
                                     self.tx_frame_length >> 8) & 0xFF, (self.tx_frame_length >> 0) & 0xFF]) + self.tx_buffer[:data_length]
 
-                            arbitration_id = self.address.get_tx_arbitraton_id()
+                            arbitration_id = self.address.get_tx_arbitration_id()
                             self.tx_buffer = self.tx_buffer[data_length:]
                             self.tx_seqnum = 1
                             msg_temp = self.make_tx_msg(arbitration_id, msg_data)
@@ -951,7 +952,7 @@ class TransportLayer:
 
         elif self.tx_state in [self.TxState.TRANSMIT_SF_STANDBY, self.TxState.TRANSMIT_FF_STANDBY]:
             # This states serves if the rate limiter prevent from starting a new transmission.
-            # We need to pop the isotp frame to know if the rate limiter must kick, but isnce the data is already popped,
+            # We need to pop the isotp frame to know if the rate limiter must kick, but since the data is already popped,
             # we can't stay in IDLE state. So we come here until the rate limiter gives us permission to proceed.
 
             if self.tx_standby_msg is not None:
@@ -973,7 +974,7 @@ class TransportLayer:
             if self.timer_tx_stmin.is_timed_out() or self.params.squash_stmin_requirement:
                 data_length = self.params.tx_data_length - 1 - len(self.address.tx_payload_prefix)
                 msg_data = self.address.tx_payload_prefix + bytearray([0x20 | self.tx_seqnum]) + self.tx_buffer[:data_length]
-                arbitration_id = self.address.get_tx_arbitraton_id()
+                arbitration_id = self.address.get_tx_arbitration_id()
                 msg_temp = self.make_tx_msg(arbitration_id, msg_data)
                 if len(msg_temp.data) <= allowed_bytes:
                     output_msg = msg_temp
@@ -1123,7 +1124,7 @@ class TransportLayer:
             stmin = self.params.stmin
         data = PDU.craft_flow_control_data(flow_status, blocksize, stmin)
 
-        return self.make_tx_msg(self.address.get_tx_arbitraton_id(), self.address.tx_payload_prefix + data)
+        return self.make_tx_msg(self.address.get_tx_arbitration_id(), self.address.tx_payload_prefix + data)
 
     def request_wait_flow_control(self):
         self.must_wait_for_flow_control = True
@@ -1173,7 +1174,7 @@ class TransportLayer:
         started = False
         if pdu.length > self.params.max_frame_size:
             self.trigger_error(isotp.errors.FrameTooLongError(
-                "Received a Frist Frame with a length of %d bytes, but params.max_frame_size is set to %d bytes. Ignoring" % (pdu.length, self.params.max_frame_size)))
+                "Received a First Frame with a length of %d bytes, but params.max_frame_size is set to %d bytes. Ignoring" % (pdu.length, self.params.max_frame_size)))
             self.request_tx_flowcontrol(PDU.FlowStatus.Overflow)
             self.rx_state = self.RxState.IDLE
         else:
