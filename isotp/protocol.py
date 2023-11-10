@@ -282,27 +282,7 @@ class RateLimiter:
                     self.burst_bitcount[-1] += bytelen
 
 
-class TransportLayer:
-    """
-    The IsoTP transport layer implementation
-
-    :param rxfn: Function to be called by the transport layer to read the CAN layer. Must return a :class:`isotp.CanMessage<isotp.CanMessage>` or None if no message has been received.
-    :type rxfn: Callable
-
-    :param txfn: Function to be called by the transport layer to send a message on the CAN layer. This function should receive a :class:`isotp.CanMessage<isotp.CanMessage>`
-    :type txfn: Callable
-
-    :param address: The address information of CAN messages. Includes the addressing mode, txid/rxid, source/target address and address extension. See :class:`isotp.Address<isotp.Address>` for more details.
-    :type address: isotp.Address
-
-    :param error_handler: A function to be called when an error has been detected. An :class:`isotp.IsoTpError<isotp.IsoTpError>` (inheriting Exception class) will be given as sole parameter. See the :ref:`Error section<Errors>`
-    :type error_handler: Callable
-
-    :param params: List of parameters for the transport layer
-    :type params: dict
-
-    """
-
+class TransportLayerLogic:
     LOGGER_NAME = 'isotp'
 
     class Params:
@@ -1233,7 +1213,26 @@ class TransportLayer:
         return self.tx_state in [self.TxState.TRANSMIT_SF_STANDBY, self.TxState.TRANSMIT_FF_STANDBY]
 
 
-class ThreadedTransportLayer(TransportLayer):
+class TransportLayer(TransportLayerLogic):
+    """
+    The IsoTP transport layer implementation
+
+    :param rxfn: Function to be called by the transport layer to read the CAN layer. Must return a :class:`isotp.CanMessage<isotp.CanMessage>` or None if no message has been received.
+    :type rxfn: Callable
+
+    :param txfn: Function to be called by the transport layer to send a message on the CAN layer. This function should receive a :class:`isotp.CanMessage<isotp.CanMessage>`
+    :type txfn: Callable
+
+    :param address: The address information of CAN messages. Includes the addressing mode, txid/rxid, source/target address and address extension. See :class:`isotp.Address<isotp.Address>` for more details.
+    :type address: isotp.Address
+
+    :param error_handler: A function to be called when an error has been detected. An :class:`isotp.IsoTpError<isotp.IsoTpError>` (inheriting Exception class) will be given as sole parameter. See the :ref:`Error section<Errors>`
+    :type error_handler: Callable
+
+    :param params: List of parameters for the transport layer
+    :type params: dict
+
+    """
 
     started: bool
     worker_thread: Optional[threading.Thread]
@@ -1242,10 +1241,10 @@ class ThreadedTransportLayer(TransportLayer):
     default_read_timeout: float
 
     def __init__(self,
-                 rxfn: TransportLayer.RxFn,
-                 txfn: TransportLayer.TxFn,
+                 rxfn: TransportLayerLogic.RxFn,
+                 txfn: TransportLayerLogic.TxFn,
                  address: isotp.Address,
-                 error_handler: Optional[TransportLayer.ErrorHandler] = None,
+                 error_handler: Optional[TransportLayerLogic.ErrorHandler] = None,
                  params: Optional[Dict[str, Any]] = None,
                  read_timeout=0.05):
         super().__init__(rxfn, txfn, address, error_handler, params)
@@ -1353,42 +1352,6 @@ class CanStack(TransportLayer):
 
         self.set_bus(bus)
         self.default_read_timeout = read_timeout
-        super().__init__(rxfn=self.rx_canbus, txfn=self.tx_canbus, *args, **kwargs)
-
-    def set_bus(self, bus):
-        if not isinstance(bus, can.BusABC):
-            raise ValueError('bus must be a python-can BusABC object')
-        self.bus = bus
-
-
-class ThreadedCanStack(ThreadedTransportLayer):
-    bus: "can.BusABC"
-
-    def _tx_canbus_3plus(self, msg):
-        self.bus.send(can.Message(arbitration_id=msg.arbitration_id, data=msg.data,
-                      is_extended_id=msg.is_extended_id, is_fd=msg.is_fd, bitrate_switch=msg.bitrate_switch))
-
-    def _tx_canbus_3minus(self, msg):
-        self.bus.send(can.Message(arbitration_id=msg.arbitration_id, data=msg.data,
-                      extended_id=msg.is_extended_id, is_fd=msg.is_fd, bitrate_switch=msg.bitrate_switch))
-
-    def rx_canbus(self, timeout: Optional[float] = 0.0):
-        msg = self.bus.recv(timeout)
-        if msg is not None:
-            return CanMessage(arbitration_id=msg.arbitration_id, data=msg.data, extended_id=msg.is_extended_id, is_fd=msg.is_fd, bitrate_switch=msg.bitrate_switch)
-
-    def __init__(self, bus, *args, **kwargs):
-        if not _can_available:
-            raise RuntimeError(f"python-can is not installed in this environment and is required for the {self.__class__.__name__} object.")
-
-        # Backward compatibility stuff.
-        message_input_args = can.Message.__init__.__code__.co_varnames[:can.Message.__init__.__code__.co_argcount]
-        if 'is_extended_id' in message_input_args:
-            self.tx_canbus = self._tx_canbus_3plus
-        else:
-            self.tx_canbus = self._tx_canbus_3minus
-
-        self.set_bus(bus)
         super().__init__(rxfn=self.rx_canbus, txfn=self.tx_canbus, *args, **kwargs)
 
     def set_bus(self, bus):
