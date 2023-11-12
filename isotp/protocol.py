@@ -285,14 +285,8 @@ class RateLimiter:
 class TransportLayerLogic:
     LOGGER_NAME = 'isotp'
 
+    @dataclass(slots=True, init=False)
     class Params:
-        __slots__ = ('stmin', 'blocksize', 'squash_stmin_requirement', 'rx_flowcontrol_timeout',
-                     'rx_consecutive_frame_timeout', 'tx_padding', 'wftmax', 'tx_data_length', 'tx_data_min_length',
-                     'max_frame_size', 'can_fd', 'bitrate_switch', 'default_target_address_type',
-                     'rate_limit_max_bitrate', 'rate_limit_window_size', 'rate_limit_enable', 'listen_mode',
-                     'blocking_send'
-                     )
-
         stmin: int
         blocksize: int
         squash_stmin_requirement: bool
@@ -311,6 +305,7 @@ class TransportLayerLogic:
         rate_limit_enable: bool
         listen_mode: bool
         blocking_send: bool
+        wait_for_tx_after_rx_time: Optional[float]
 
         def __init__(self):
             self.stmin = 0
@@ -331,6 +326,7 @@ class TransportLayerLogic:
             self.rate_limit_enable = False
             self.listen_mode = False
             self.blocking_send = False
+            self.wait_for_tx_after_rx_time = 0.01
 
         def set(self, key: str, val: Any, validate: bool = True) -> None:
             param_alias = {
@@ -446,6 +442,15 @@ class TransportLayerLogic:
             if not isinstance(self.blocking_send, bool):
                 raise ValueError('blocking_send must be a boolean value')
 
+            if self.wait_for_tx_after_rx_time is not None:
+                if not isinstance(self.wait_for_tx_after_rx_time, (int, float)):
+                    raise ValueError('wait_for_tx_after_rx_time must be a float value')
+
+                if self.wait_for_tx_after_rx_time < 0:
+                    raise ValueError('wait_for_tx_after_rx_time must be greater than 0')
+
+                self.wait_for_tx_after_rx_time = float(self.wait_for_tx_after_rx_time)
+
     class RxState(enum.Enum):
         IDLE = 0
         WAIT_CF = 1
@@ -504,6 +509,7 @@ class TransportLayerLogic:
     rxfn: RxFn
     txfn: TxFn
     tx_queue: "queue.Queue[SendRequest]"
+    tx_queue_enqueued: threading.Event
     rx_queue: "queue.Queue[bytearray]"
     tx_standby_msg: Optional[CanMessage]
     rx_state: RxState
@@ -528,6 +534,7 @@ class TransportLayerLogic:
     timer_rx_fc: Timer
     timer_rx_cf: Timer
     rate_limiter: RateLimiter
+    rxfn_supports_timeout: bool
 
     def __init__(self,
                  rxfn: RxFn,
@@ -549,8 +556,10 @@ class TransportLayerLogic:
         # Backward compatibility. Handle rxfn with no params as non-blocking
         if rxfn.__code__.co_argcount <= 1:
             self.rxfn = lambda x: rxfn()    # type: ignore
+            self.rxfn_supports_timeout = False
         else:
             self.rxfn = rxfn 	# Function to call to receive a CAN message
+            self.rxfn_supports_timeout = True
 
         self.txfn = txfn 	# Function to call to receive a CAN message
 
@@ -558,6 +567,7 @@ class TransportLayerLogic:
 
         self.tx_queue = queue.Queue()			# Layer Input queue for IsoTP frame
         self.rx_queue = queue.Queue()			# Layer Output queue for IsoTP frame
+        self.tx_queue_enqueued = threading.Event()  # Facility to get a better reaction time in threaded implementation
         self.tx_standby_msg = None              # Pending message when throttling is active
         self.active_send_request = None         # The user request for sending. Contains a synchronizing event for blocking send
 
@@ -644,7 +654,9 @@ class TransportLayerLogic:
         if self.params.blocking_send:
             send_request.complete_event.clear()
 
+        self.logger.debug("Enqueuing a SendRequest for %d bytes and TAT=%s" % (len(send_request.data), target_address_type.name))
         self.tx_queue.put(send_request)
+        self.tx_queue_enqueued.set()
 
         if self.params.blocking_send:
             send_request.complete_event.wait(send_timeout)
@@ -689,22 +701,29 @@ class TransportLayerLogic:
         msg_received = 0
         msg_received_processed = 0
         msg_sent = 0
-        nb_frame_received=0
+        nb_frame_received = 0
 
+        # Run as long as RxStateMachine or Tx StateMachine request the other state machine to immediatly do a pass.
+        # Prevent useless latency in FSM processing
         while run_process:
             msg: Optional[CanMessage] = None
             run_process = False
 
-            if do_rx:
-                self.check_timeouts_rx()
+            #  if we have data to send and nothing else in process. start by sending that data. Avoid blocking in rxfn for nothing.
+            start_with_tx = do_tx \
+                and not self.tx_queue.empty() \
+                and self.rx_state == self.RxState.IDLE \
+                and self.tx_state == self.TxState.IDLE
 
-            self.rate_limiter.update()
+            if start_with_tx:
+                run_process = True
 
-            if do_rx:
+            if do_rx and not start_with_tx:
                 first_loop = True
                 while msg is not None or first_loop:
                     first_loop = False
                     msg = self.rxfn(rx_timeout)
+                    self.check_timeouts_rx()    # Check for every message because rxfn may be blocking since v2.x. Always execute, even if msg=None (issue #41)
                     if msg is not None:
                         msg_received += 1
                         for_me = self.address.is_for_me(msg)
@@ -717,11 +736,16 @@ class TransportLayerLogic:
                             msg_received_processed += 1
                             result = self.process_rx(msg)
                             if result.frame_received:
-                                nb_frame_received+=1
+                                nb_frame_received += 1
+                                if self.params.wait_for_tx_after_rx_time is not None:
+                                    break   # Might need to send right away at higher level.
                             if result.immediate_tx_required:
                                 run_process = True
                                 break
 
+            start_with_tx = False   # it's a one-time event
+
+            self.rate_limiter.update()  # Only applies to transmission. Update after rxfn because it can be blocking.
             if do_tx:
                 first_loop = True
                 msg = None
@@ -747,11 +771,11 @@ class TransportLayerLogic:
             self.last_rx_state = self.rx_state
 
         return self.ProcessStats(
-            received = msg_received, 
-            received_processed = msg_received_processed, 
-            sent = msg_sent, 
-            frame_received = nb_frame_received
-            )
+            received=msg_received,
+            received_processed=msg_received_processed,
+            sent=msg_sent,
+            frame_received=nb_frame_received
+        )
 
     def check_timeouts_rx(self) -> None:
         if self.timer_rx_cf.is_timed_out():
@@ -1179,6 +1203,7 @@ class TransportLayerLogic:
             self.rx_queue.get_nowait()
 
     def clear_tx_queue(self):
+        self.tx_queue_enqueued.clear()
         while not self.tx_queue.empty():
             self.tx_queue.get_nowait()
 
@@ -1227,12 +1252,8 @@ class TransportLayerLogic:
         """
         Reset the layer: Empty all buffers, set the internal state machines to Idle
         """
-        while not self.tx_queue.empty():
-            self.tx_queue.get()
-
-        while not self.rx_queue.empty():
-            self.rx_queue.get()
-
+        self.clear_rx_queue()
+        self.clear_tx_queue()
         self.stop_sending(success=False)
         self.stop_receiving()
 
@@ -1355,17 +1376,26 @@ class TransportLayer(TransportLayerLogic):
                 t1 = time.monotonic()
                 count_stats = self.process(rx_timeout=rx_timeout)
                 diff = time.monotonic() - t1
-                if count_stats.received > 0 and not self.events.stop_requested.is_set():
-                    if diff < rx_timeout * 0.5:  # rxfn is not controlling the cpu usage.
-                        time.sleep(min(self.sleep_time(), max(0, rx_timeout - diff)))
+                if not self.events.stop_requested.is_set():
+                    # If we know rxfn is non-blocking OR we can figure it out. Sleep
+                    if not self.rxfn_supports_timeout or (count_stats.received == 0 and diff < rx_timeout * 0.5):
+                        time.sleep(max(0, min(self.sleep_time(), rx_timeout - diff)))
 
-                if self.events.reset_tx.is_set():
-                    self.stop_sending(success=False)
-                    self.events.reset_tx.clear()
+                    if self.events.reset_tx.is_set():
+                        self.stop_sending(success=False)
+                        self.events.reset_tx.clear()
 
-                if self.events.reset_rx.is_set():
-                    self.stop_receiving()
-                    self.events.reset_rx.clear()
+                    if self.events.reset_rx.is_set():
+                        self.stop_receiving()
+                        self.events.reset_rx.clear()
+
+                    if count_stats.frame_received > 0 and self.params.wait_for_tx_after_rx_time is not None:
+                        self.tx_queue_enqueued.clear()
+                        if self.tx_queue.empty():
+                            self.tx_queue_enqueued.wait(self.params.wait_for_tx_after_rx_time)
+                        if not self.tx_queue.empty():
+                            self.process(do_rx=False, do_tx=True)
+
         finally:
             self.reset()
             self.logger.debug("Thread is exiting")
