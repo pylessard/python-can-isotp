@@ -18,6 +18,7 @@ import enum
 from dataclasses import dataclass
 import threading
 from isotp.tools import Timer
+import inspect
 
 from typing import Optional, Any, List, Callable, Dict, Tuple, Union, TYPE_CHECKING
 
@@ -306,6 +307,7 @@ class TransportLayerLogic:
         listen_mode: bool
         blocking_send: bool
         wait_for_tx_after_rx_time: Optional[float]
+        logger_name: str
 
         def __init__(self):
             self.stmin = 0
@@ -327,6 +329,7 @@ class TransportLayerLogic:
             self.listen_mode = False
             self.blocking_send = False
             self.wait_for_tx_after_rx_time = 0.01
+            self.logger_name = TransportLayerLogic.LOGGER_NAME
 
         def set(self, key: str, val: Any, validate: bool = True) -> None:
             param_alias = {
@@ -451,6 +454,9 @@ class TransportLayerLogic:
 
                 self.wait_for_tx_after_rx_time = float(self.wait_for_tx_after_rx_time)
 
+            if not isinstance(self.logger_name, str):
+                raise ValueError('logger_name must be a string')
+
     class RxState(enum.Enum):
         IDLE = 0
         WAIT_CF = 1
@@ -551,10 +557,12 @@ class TransportLayerLogic:
                 self.params.set(k, params[k], validate=False)
         self.params.validate()
 
+        self.logger = logging.getLogger(self.params.logger_name)
+
         self.remote_blocksize = None  # Block size received in Flow Control message
 
         # Backward compatibility. Handle rxfn with no params as non-blocking
-        if rxfn.__code__.co_argcount <= 1:
+        if len(inspect.signature(rxfn).parameters) < 1:
             self.rxfn = lambda x: rxfn()    # type: ignore
             self.blocking_rxfn = False
             self.logger.debug("Given rxfn is considered non-blocking")
@@ -728,6 +736,7 @@ class TransportLayerLogic:
                     msg = self.rxfn(rx_timeout)
                     self.check_timeouts_rx()    # Check for every message because rxfn may be blocking since v2.x. Always execute, even if msg=None (issue #41)
                     if msg is not None:
+
                         msg_received += 1
                         for_me = self.address.is_for_me(msg)
                         if self.logger.isEnabledFor(logging.DEBUG):
@@ -1333,7 +1342,7 @@ class TransportLayer(TransportLayerLogic):
         self.events = self.Events()
 
     def start(self) -> None:
-        self.logger.debug(f"Starting {self.__class__}")
+        self.logger.debug(f"Starting {self.__class__.__name__}")
         if self.started:
             raise RuntimeError("Transport Layer is already started")
 
@@ -1468,7 +1477,7 @@ class CanStack(TransportLayer):
             raise RuntimeError(f"python-can is not installed in this environment and is required for the {self.__class__.__name__} object.")
 
         # Backward compatibility stuff.
-        message_input_args = can.Message.__init__.__code__.co_varnames[:can.Message.__init__.__code__.co_argcount]
+        message_input_args = inspect.signature(can.Message.__init__).parameters
         if 'is_extended_id' in message_input_args:
             self.tx_canbus = self._tx_canbus_3plus
         else:
