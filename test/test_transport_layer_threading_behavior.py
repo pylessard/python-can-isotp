@@ -14,14 +14,15 @@ class TestTransportLayerStackAgainstStack(unittest.TestCase):
     RXID = 0x121
 
     STACK_PARAMS = {
-        'stmin': 0,
+        'stmin': 10,
         'blocksize': 8,
-        'squash_stmin_requirement': False,
+        'squash_stmin_requirement': True,
         'rx_flowcontrol_timeout': 1000,
         'rx_consecutive_frame_timeout': 1000,
         'wftmax': 0,
         'tx_data_length': 8,
         'wait_for_tx_after_rx_time': None,
+        'max_frame_size': 65536
     }
 
     def setUp(self):
@@ -97,8 +98,6 @@ class TestTransportLayerStackAgainstStack(unittest.TestCase):
         self.assertEqual(data, payload)
 
     def test_send_10000(self):
-        self.layer1.params.set('max_frame_size', 10000)
-        self.layer2.params.set('max_frame_size', 10000)
         payload = bytearray([x & 0xFF for x in range(10000)])
         self.layer1.send(payload)
         data = self.layer2.recv(block=True, timeout=5)

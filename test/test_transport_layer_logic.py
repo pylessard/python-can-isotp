@@ -1554,8 +1554,41 @@ class TestTransportLayerLogicNonBlockingRxfn(TransportLayerBaseTest):
 
         params['rate_limit_enable'] = False
 
+        for val in ['asd', 1.1, None]:
+            with self.assertRaises(ValueError):
+                params['listen_mode'] = val
+                self.create_layer(params)
+
+        params['listen_mode'] = False
+
+        for val in ['asd', 1.1, None]:
+            with self.assertRaises(ValueError):
+                params['blocking_send'] = val
+                self.create_layer(params)
+
+        params['blocking_send'] = False
+
+        for val in ['asd', -1]:
+            with self.assertRaises(ValueError):
+                params['wait_for_tx_after_rx_time'] = val
+                self.create_layer(params)
+
+        params['wait_for_tx_after_rx_time'] = 1.1
+        self.create_layer(params)
+        params['wait_for_tx_after_rx_time'] = None
+        self.create_layer(params)
+
+        for val in [0, True, None]:
+            with self.assertRaises(ValueError):
+                params['logger_name'] = val
+                self.create_layer(params)
+
+        params['logger_name'] = 'asd'
+        self.create_layer(params)
 
 # Check the behaviour of the transport layer. Sequenece of CAN frames, timings, etc.
+
+
 class TestTransportLayerLogicBlockingRxfn(TransportLayerBaseTest):
     TXID = 0x111
     RXID = 0x222
