@@ -1,13 +1,21 @@
 import unittest
 import queue
+import isotp
 from isotp.protocol import PDU
+
+from typing import Dict, List, Type
 
 # Just a class with some helper such as simulate_rx() to make the tests cleaners.
 
 
 class TransportLayerBaseTest(unittest.TestCase):
-    def __init__(self, *args, **kwargs):
-        unittest.TestCase.__init__(self, *args, **kwargs)
+    ll_rx_queue: "queue.Queue[bytearray]"
+    ll_tx_queue: "queue.Queue[bytearray]"
+    error_triggered: Dict[Type[isotp.IsoTpError], List[isotp.IsoTpError]]
+    rx_block_count: int
+
+    def setUp(self):
+        self.rx_block_count = 0
         self.ll_rx_queue = queue.Queue()
         self.ll_tx_queue = queue.Queue()
         self.error_triggered = {}
@@ -25,6 +33,12 @@ class TransportLayerBaseTest(unittest.TestCase):
     def stack_rxfn(self):
         if not self.ll_rx_queue.empty():
             return self.ll_rx_queue.get()
+
+    def stack_rxfn_blocking(self, timeout: float):
+        try:
+            return self.ll_rx_queue.get(block=True, timeout=timeout)
+        except queue.Empty:
+            return None
 
     def rx_isotp_frame(self):
         return self.stack.recv()

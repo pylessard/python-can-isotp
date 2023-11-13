@@ -534,7 +534,7 @@ class TransportLayerLogic:
     timer_rx_fc: Timer
     timer_rx_cf: Timer
     rate_limiter: RateLimiter
-    rxfn_supports_timeout: bool
+    blocking_rxfn: bool
 
     def __init__(self,
                  rxfn: RxFn,
@@ -556,10 +556,12 @@ class TransportLayerLogic:
         # Backward compatibility. Handle rxfn with no params as non-blocking
         if rxfn.__code__.co_argcount <= 1:
             self.rxfn = lambda x: rxfn()    # type: ignore
-            self.rxfn_supports_timeout = False
+            self.blocking_rxfn = False
+            self.logger.debug("Given rxfn is considered non-blocking")
         else:
             self.rxfn = rxfn 	# Function to call to receive a CAN message
-            self.rxfn_supports_timeout = True
+            self.blocking_rxfn = True
+            self.logger.debug("Given rxfn is considered blocking")
 
         self.txfn = txfn 	# Function to call to receive a CAN message
 
@@ -594,6 +596,7 @@ class TransportLayerLogic:
 
         self.error_handler = error_handler
         self.actual_rxdl = None
+        self.is_threaded_implementation = False
 
         self.timings = {
             (self.RxState.IDLE, self.TxState.IDLE): 0.05,
@@ -737,7 +740,7 @@ class TransportLayerLogic:
                             result = self.process_rx(msg)
                             if result.frame_received:
                                 nb_frame_received += 1
-                                if self.params.wait_for_tx_after_rx_time is not None:
+                                if self.blocking_rxfn and self.params.wait_for_tx_after_rx_time is not None:
                                     break   # Might need to send right away at higher level.
                             if result.immediate_tx_required:
                                 run_process = True
@@ -1378,7 +1381,7 @@ class TransportLayer(TransportLayerLogic):
                 diff = time.monotonic() - t1
                 if not self.events.stop_requested.is_set():
                     # If we know rxfn is non-blocking OR we can figure it out. Sleep
-                    if not self.rxfn_supports_timeout or (count_stats.received == 0 and diff < rx_timeout * 0.5):
+                    if not self.blocking_rxfn or (count_stats.received == 0 and diff < rx_timeout * 0.5):
                         time.sleep(max(0, min(self.sleep_time(), rx_timeout - diff)))
 
                     if self.events.reset_tx.is_set():
