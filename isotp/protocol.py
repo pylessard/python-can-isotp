@@ -306,7 +306,6 @@ class TransportLayerLogic:
         rate_limit_enable: bool
         listen_mode: bool
         blocking_send: bool
-        wait_for_tx_after_rx_time: Optional[float]
         logger_name: str
 
         def __init__(self):
@@ -328,7 +327,6 @@ class TransportLayerLogic:
             self.rate_limit_enable = False
             self.listen_mode = False
             self.blocking_send = False
-            self.wait_for_tx_after_rx_time = 0.01
             self.logger_name = TransportLayerLogic.LOGGER_NAME
 
         def set(self, key: str, val: Any, validate: bool = True) -> None:
@@ -445,15 +443,6 @@ class TransportLayerLogic:
             if not isinstance(self.blocking_send, bool):
                 raise ValueError('blocking_send must be a boolean value')
 
-            if self.wait_for_tx_after_rx_time is not None:
-                if not isinstance(self.wait_for_tx_after_rx_time, (int, float)):
-                    raise ValueError('wait_for_tx_after_rx_time must be a float value')
-
-                if self.wait_for_tx_after_rx_time < 0:
-                    raise ValueError('wait_for_tx_after_rx_time must be greater than 0')
-
-                self.wait_for_tx_after_rx_time = float(self.wait_for_tx_after_rx_time)
-
             if not isinstance(self.logger_name, str):
                 raise ValueError('logger_name must be a string')
 
@@ -515,7 +504,6 @@ class TransportLayerLogic:
     rxfn: RxFn
     txfn: TxFn
     tx_queue: "queue.Queue[SendRequest]"
-    tx_queue_enqueued: threading.Event
     rx_queue: "queue.Queue[bytearray]"
     tx_standby_msg: Optional[CanMessage]
     rx_state: RxState
@@ -577,7 +565,6 @@ class TransportLayerLogic:
 
         self.tx_queue = queue.Queue()			# Layer Input queue for IsoTP frame
         self.rx_queue = queue.Queue()			# Layer Output queue for IsoTP frame
-        self.tx_queue_enqueued = threading.Event()  # Facility to get a better reaction time in threaded implementation
         self.tx_standby_msg = None              # Pending message when throttling is active
         self.active_send_request = None         # The user request for sending. Contains a synchronizing event for blocking send
 
@@ -667,7 +654,6 @@ class TransportLayerLogic:
 
         self.logger.debug("Enqueuing a SendRequest for %d bytes and TAT=%s" % (len(send_request.data), target_address_type.name))
         self.tx_queue.put(send_request)
-        self.tx_queue_enqueued.set()
 
         if self.params.blocking_send:
             send_request.complete_event.wait(send_timeout)
@@ -749,8 +735,6 @@ class TransportLayerLogic:
                             result = self.process_rx(msg)
                             if result.frame_received:
                                 nb_frame_received += 1
-                                if self.blocking_rxfn and self.params.wait_for_tx_after_rx_time is not None:
-                                    break   # Might need to send right away at higher level.
                             if result.immediate_tx_required:
                                 run_process = True
                                 break
@@ -1215,7 +1199,6 @@ class TransportLayerLogic:
             self.rx_queue.get_nowait()
 
     def clear_tx_queue(self):
-        self.tx_queue_enqueued.clear()
         while not self.tx_queue.empty():
             self.tx_queue.get_nowait()
 
@@ -1400,13 +1383,6 @@ class TransportLayer(TransportLayerLogic):
                     if self.events.reset_rx.is_set():
                         self.stop_receiving()
                         self.events.reset_rx.clear()
-
-                    if count_stats.frame_received > 0 and self.params.wait_for_tx_after_rx_time is not None:
-                        self.tx_queue_enqueued.clear()
-                        if self.tx_queue.empty():
-                            self.tx_queue_enqueued.wait(self.params.wait_for_tx_after_rx_time)
-                        if not self.tx_queue.empty():
-                            self.process(do_rx=False, do_tx=True)
 
         finally:
             self.reset()

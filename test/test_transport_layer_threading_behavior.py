@@ -21,7 +21,6 @@ class TestTransportLayerStackAgainstStack(unittest.TestCase):
         'rx_consecutive_frame_timeout': 1000,
         'wftmax': 0,
         'tx_data_length': 8,
-        'wait_for_tx_after_rx_time': None,
         'max_frame_size': 65536
     }
 

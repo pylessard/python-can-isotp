@@ -10,7 +10,7 @@ Message = isotp.CanMessage
 
 class TestAddressingMode(TransportLayerBaseTest):
     def setUp(self):
-        self.init_test_case()
+        super().setUp()
 
     def test_create_address(self):
         isotp.Address(isotp.AddressingMode.Normal_11bits, txid=1, rxid=2)

@@ -1568,15 +1568,6 @@ class TestTransportLayerLogicNonBlockingRxfn(TransportLayerBaseTest):
 
         params['blocking_send'] = False
 
-        for val in ['asd', -1]:
-            with self.assertRaises(ValueError):
-                params['wait_for_tx_after_rx_time'] = val
-                self.create_layer(params)
-
-        params['wait_for_tx_after_rx_time'] = 1.1
-        self.create_layer(params)
-        params['wait_for_tx_after_rx_time'] = None
-        self.create_layer(params)
 
         for val in [0, True, None]:
             with self.assertRaises(ValueError):
@@ -1627,59 +1618,9 @@ class TestTransportLayerLogicBlockingRxfn(TransportLayerBaseTest):
         self.simulate_rx(data=data)
 
     def test_receive_multiple_sf_single_process_call(self):
-        # blocking rxfn + wait_for_tx_after_rx_time=None.  All rxmessage should be processed in a single call
-        self.stack.params.set('wait_for_tx_after_rx_time', None)
-
         self.simulate_rx(data=[0x05, 0x11, 0x22, 0x33, 0x44, 0x55])
         self.simulate_rx(data=[0x05, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE])
         self.stack.process()
         self.assertEqual(self.rx_isotp_frame(), bytearray([0x11, 0x22, 0x33, 0x44, 0x55]))
         self.assertEqual(self.rx_isotp_frame(), bytearray([0xAA, 0xBB, 0xCC, 0xDD, 0xEE]))
-        self.assertIsNone(self.rx_isotp_frame())
-
-    def test_receive_multiple_sf_multiple_process_call_for_instant_tx(self):
-        # blocking rxfn + wait_for_tx_after_rx_time!=None.  Process should early exit after the reception of a new frame
-        self.stack.params.set('wait_for_tx_after_rx_time', 0.1)
-
-        self.simulate_rx(data=[0x05, 0x11, 0x22, 0x33, 0x44, 0x55])
-        self.simulate_rx(data=[0x05, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE])
-        self.stack.process()
-        self.assertEqual(self.rx_isotp_frame(), bytearray([0x11, 0x22, 0x33, 0x44, 0x55]))
-        self.assertIsNone(self.rx_isotp_frame())
-        # The stack is giving the user the possibility to send a response now. In real use case,
-        # handled in the TransportLayer worker thread, who is the "user" of the logic
-        self.stack.process()
-        self.assertEqual(self.rx_isotp_frame(), bytearray([0xAA, 0xBB, 0xCC, 0xDD, 0xEE]))
-        self.assertIsNone(self.rx_isotp_frame())
-
-    def test_receive_2_multiframe_single_process_call(self):
-        self.stack.params.set('wait_for_tx_after_rx_time', None)
-
-        payload_size = 10
-        payload = self.make_payload(payload_size)
-
-        self.simulate_rx(data=[0x10, payload_size] + payload[0:6])
-        self.simulate_rx(data=[0x21] + payload[6:10])
-        self.simulate_rx(data=[0x10, payload_size] + payload[0:6])
-        self.simulate_rx(data=[0x21] + payload[6:10])
-        self.stack.process()
-        self.assertEqual(self.rx_isotp_frame(), bytearray(payload))
-        self.assertEqual(self.rx_isotp_frame(), bytearray(payload))
-        self.assertIsNone(self.rx_isotp_frame())
-
-    def test_receive_2_multiframe_multiple_process_call_for_instant_tx(self):
-        self.stack.params.set('wait_for_tx_after_rx_time', 0.1)
-
-        payload_size = 10
-        payload = self.make_payload(payload_size)
-
-        self.simulate_rx(data=[0x10, payload_size] + payload[0:6])
-        self.simulate_rx(data=[0x21] + payload[6:10])
-        self.simulate_rx(data=[0x10, payload_size] + payload[0:6])
-        self.simulate_rx(data=[0x21] + payload[6:10])
-        self.stack.process()
-        self.assertEqual(self.rx_isotp_frame(), bytearray(payload))
-        self.assertIsNone(self.rx_isotp_frame())
-        self.stack.process()
-        self.assertEqual(self.rx_isotp_frame(), bytearray(payload))
         self.assertIsNone(self.rx_isotp_frame())

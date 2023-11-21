@@ -84,15 +84,6 @@ class TransportLayerBaseTest(unittest.TestCase):
     def clear_errors(self):
         self.error_triggered = {}
 
-    def init_test_case(self):
-        while not self.ll_rx_queue.empty():
-            self.ll_rx_queue.get()
-
-        while not self.ll_tx_queue.empty():
-            self.ll_tx_queue.get()
-
-        self.clear_errors()
-
     def simulate_rx_msg(self, msg):
         self.ll_rx_queue.put(msg)
 
