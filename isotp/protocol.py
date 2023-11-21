@@ -496,6 +496,7 @@ class TransportLayerLogic:
 
     RxFn = Callable[[Optional[float]], Optional[CanMessage]]
     TxFn = Callable[[CanMessage], None]
+    PostSendCallback = Callable[[SendRequest], None]
     ErrorHandler = Callable[[Exception], None]
 
     params: Params
@@ -529,14 +530,17 @@ class TransportLayerLogic:
     timer_rx_cf: Timer
     rate_limiter: RateLimiter
     blocking_rxfn: bool
+    post_send_callback: Optional[PostSendCallback]
 
     def __init__(self,
                  rxfn: RxFn,
                  txfn: TxFn,
                  address: isotp.Address,
                  error_handler: Optional[ErrorHandler] = None,
-                 params: Optional[Dict[str, Any]] = None
+                 params: Optional[Dict[str, Any]] = None,
+                 post_send_callback: Optional[PostSendCallback] = None
                  ):
+        self.post_send_callback = post_send_callback
         self.params = self.Params()
         self.logger = logging.getLogger(self.LOGGER_NAME)
 
@@ -600,6 +604,16 @@ class TransportLayerLogic:
 
         self.load_params()
 
+    def swap_rxfn(self, rxfn: "TransportLayerLogic.RxFn") -> "TransportLayerLogic.RxFn":
+        """
+        Allow post init change of rxfn. This is a trick to implement the threaded Transport Layer
+        and keeping the ability to run the TransportLayerLogic without threads for backward compatibility
+        with v1.x
+        """
+        oldrxfn = self.rxfn
+        self.rxfn = rxfn
+        return oldrxfn
+
     def load_params(self) -> None:
         self.params.validate()
         self.timer_rx_fc = Timer(timeout=float(self.params.rx_flowcontrol_timeout) / 1000)
@@ -654,6 +668,8 @@ class TransportLayerLogic:
 
         self.logger.debug("Enqueuing a SendRequest for %d bytes and TAT=%s" % (len(send_request.data), target_address_type.name))
         self.tx_queue.put(send_request)
+        if self.post_send_callback is not None:
+            self.post_send_callback(send_request)
 
         if self.params.blocking_send:
             send_request.complete_event.wait(send_timeout)
@@ -1294,21 +1310,26 @@ class TransportLayer(TransportLayerLogic):
     """
 
     class Events:
-        thread_ready: threading.Event
+        worker_thread_ready: threading.Event
+        relay_thread_ready: threading.Event
         stop_requested: threading.Event
         reset_tx: threading.Event
         reset_rx: threading.Event
 
         def __init__(self):
-            self.thread_ready = threading.Event()
+            self.worker_thread_ready = threading.Event()
+            self.relay_thread_ready = threading.Event()
             self.stop_requested = threading.Event()
             self.reset_tx = threading.Event()
             self.reset_rx = threading.Event()
 
     started: bool
     worker_thread: Optional[threading.Thread]
+    relay_thread: Optional[threading.Thread]
     default_read_timeout: float
     events: Events
+    rx_relay_queue: "queue.Queue[Optional[CanMessage]]"
+    user_rxfn: Optional[TransportLayerLogic.RxFn]
 
     def __init__(self,
                  rxfn: TransportLayerLogic.RxFn,
@@ -1317,28 +1338,52 @@ class TransportLayer(TransportLayerLogic):
                  error_handler: Optional[TransportLayerLogic.ErrorHandler] = None,
                  params: Optional[Dict[str, Any]] = None,
                  read_timeout=0.01):
-        super().__init__(rxfn, txfn, address, error_handler, params)
 
+        self.rx_relay_queue = queue.Queue()
         self.started = False
         self.worker_thread = None
         self.default_read_timeout = read_timeout
         self.events = self.Events()
+
+        def post_send_callback(send_request: TransportLayerLogic.SendRequest) -> None:
+            # This callback wakeup the worker thread from its blocking read if necessary
+            self.rx_relay_queue.put(None)
+
+        super().__init__(rxfn, txfn, address, error_handler, params, post_send_callback)
+
+    def read_relay_queue(self, timeout: Optional[float]) -> Optional[CanMessage]:
+        try:
+            return self.rx_relay_queue.get(block=True, timeout=timeout)
+        except queue.Empty:
+            return None
 
     def start(self) -> None:
         self.logger.debug(f"Starting {self.__class__.__name__}")
         if self.started:
             raise RuntimeError("Transport Layer is already started")
 
-        self.worker_thread = threading.Thread(target=self._worker_thread_fn)
+        self.user_rxfn = self.swap_rxfn(self.read_relay_queue)
+        # self.user_rxfn = lambda *a, **k: time.sleep(1)
 
-        self.events.thread_ready.clear()
+        self.worker_thread = threading.Thread(target=self._worker_thread_fn)
+        self.relay_thread = threading.Thread(target=self._relay_thread_fn)
+
+        self.events.worker_thread_ready.clear()
+        self.events.relay_thread_ready.clear()
         self.events.stop_requested.clear()
         self.events.reset_tx.clear()
         self.events.reset_rx.clear()
 
         self.worker_thread.start()
+        self.relay_thread.start()
 
-        if not self.events.thread_ready.is_set():
+        self.events.worker_thread_ready.wait(0.5)
+        if not self.events.worker_thread_ready.is_set():
+            self.stop()
+            raise RuntimeError("Failed to start the Transport Layer")
+
+        self.events.relay_thread_ready.wait(0.5)
+        if not self.events.relay_thread_ready.is_set():
             self.stop()
             raise RuntimeError("Failed to start the Transport Layer")
 
@@ -1353,18 +1398,37 @@ class TransportLayer(TransportLayerLogic):
                 self.worker_thread.join()
             self.worker_thread = None
 
-        self.events.thread_ready.clear()
+        if self.relay_thread is not None:
+            if self.relay_thread.is_alive():
+                self.relay_thread.join()
+            self.relay_thread = None
+
+        self.events.worker_thread_ready.clear()
+        self.events.relay_thread_ready.clear()
         self.events.stop_requested.clear()
         self.events.reset_tx.clear()
         self.events.reset_rx.clear()
 
         self.reset()
+        if self.user_rxfn is not None:
+            self.swap_rxfn(self.user_rxfn)
+        self.user_rxfn = None
         self.started = False
         self.logger.debug(f"{self.__class__.__name__} Stopped")
 
+    def _relay_thread_fn(self) -> None:
+        self.logger.debug("Relay thread has started")
+        assert self.user_rxfn is not None
+        self.events.relay_thread_ready.set()
+        while not self.events.stop_requested.is_set():
+            rx_timeout = 0.0 if self.is_tx_throttled() else self.default_read_timeout
+            data = self.user_rxfn(rx_timeout)
+            if data is not None:
+                self.rx_relay_queue.put(data)
+
     def _worker_thread_fn(self) -> None:
-        self.events.thread_ready.set()
         self.logger.debug("Thread has started")
+        self.events.worker_thread_ready.set()
         try:
             while not self.events.stop_requested.is_set():
                 rx_timeout = 0.0 if self.is_tx_throttled() else self.default_read_timeout
