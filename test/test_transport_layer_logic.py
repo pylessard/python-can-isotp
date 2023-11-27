@@ -6,26 +6,34 @@ Message = isotp.CanMessage
 
 
 # Check the behaviour of the transport layer. Sequenece of CAN frames, timings, etc.
-class TestTransportLayer(TransportLayerBaseTest):
-    RXID = 0x456
-    TXID = 0x123
+class TestTransportLayerLogicNonBlockingRxfn(TransportLayerBaseTest):
+    TXID = 0x111
+    RXID = 0x222
+
+    STACK_PARAMS = {
+        'stmin': 1,
+        'blocksize': 8,
+        'squash_stmin_requirement': False,
+        'rx_flowcontrol_timeout': 1000,
+        'rx_consecutive_frame_timeout': 1000,
+        'wftmax': 0,
+        'tx_data_length': 8
+    }
 
     def setUp(self):
-        params = {
-            'stmin': 1,
-            'blocksize': 8,
-            'squash_stmin_requirement': False,
-            'rx_flowcontrol_timeout': 1000,
-            'rx_consecutive_frame_timeout': 1000,
-            'wftmax': 0,
-            'tx_data_length': 8
-        }
-        address = isotp.Address(isotp.AddressingMode.Normal_11bits, txid=self.TXID, rxid=self.RXID)
-        self.stack = isotp.TransportLayer(txfn=self.stack_txfn, rxfn=self.stack_rxfn, address=address,
-                                          error_handler=self.error_handler, params=params)
-        self.error_triggered = {}
+        super().setUp()
 
-        self.init_test_case()
+        self.address = isotp.Address(isotp.AddressingMode.Normal_11bits, txid=self.TXID, rxid=self.RXID)
+        self.stack = isotp.TransportLayer(
+            txfn=self.stack_txfn,
+            rxfn=self.stack_rxfn,
+            address=self.address,
+            error_handler=self.error_handler,
+            params=self.STACK_PARAMS
+        )
+
+    def tearDown(self):
+        super().tearDown()
 
     def simulate_rx(self, data, rxid=RXID, dlc=None):
         self.simulate_rx_msg(Message(arbitration_id=rxid, data=bytearray(data), dlc=dlc))
@@ -69,7 +77,7 @@ class TestTransportLayer(TransportLayerBaseTest):
     def test_receive_multiple_sf_single_process_call(self):
         self.simulate_rx(data=[0x05, 0x11, 0x22, 0x33, 0x44, 0x55])
         self.simulate_rx(data=[0x05, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE])
-        self.stack.process()  # Call process once
+        self.stack.process()  # Call process once. Works because of non-blocking rxfn
         self.assertEqual(self.rx_isotp_frame(), bytearray([0x11, 0x22, 0x33, 0x44, 0x55]))
         self.assertEqual(self.rx_isotp_frame(), bytearray([0xAA, 0xBB, 0xCC, 0xDD, 0xEE]))
         self.assertIsNone(self.rx_isotp_frame())
@@ -236,9 +244,12 @@ class TestTransportLayer(TransportLayerBaseTest):
         self.assertIsNone(self.rx_isotp_frame())
 
     def test_receive_multiframe_bad_seqnum(self):
+        self.stack.params.set('blocksize', 1)
         payload_size = 10
         payload = self.make_payload(payload_size)
         self.simulate_rx(data=[0x10, payload_size] + payload[0:6])
+        self.stack.process()
+        self.assertIsNotNone(self.get_tx_can_msg())  # Send flow control
         self.simulate_rx(data=[0x22] + payload[6:10])		# Bad Sequence number
         self.stack.process()
         self.assertIsNone(self.rx_isotp_frame())
@@ -819,7 +830,7 @@ class TestTransportLayer(TransportLayerBaseTest):
         time.sleep(0.01)
         self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=8)
         self.stack.process()
-        self.assert_error_triggered(isotp.UnsuportedWaitFrameError)
+        self.assert_error_triggered(isotp.UnsupportedWaitFrameError)
 
     def test_send_wait_frame_after_consecutive_frame_wftmax_0(self):
         self.stack.params.set('wftmax', 0)
@@ -833,7 +844,7 @@ class TestTransportLayer(TransportLayerBaseTest):
         self.stack.process()
         self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=1)
         self.stack.process()
-        self.assert_error_triggered(isotp.UnsuportedWaitFrameError)
+        self.assert_error_triggered(isotp.UnsupportedWaitFrameError)
 
     def test_send_wait_frame_after_first_frame_reach_max(self):
         self.stack.params.set('wftmax', 5)
@@ -1542,3 +1553,74 @@ class TestTransportLayer(TransportLayerBaseTest):
             self.create_layer(params)
 
         params['rate_limit_enable'] = False
+
+        for val in ['asd', 1.1, None]:
+            with self.assertRaises(ValueError):
+                params['listen_mode'] = val
+                self.create_layer(params)
+
+        params['listen_mode'] = False
+
+        for val in ['asd', 1.1, None]:
+            with self.assertRaises(ValueError):
+                params['blocking_send'] = val
+                self.create_layer(params)
+
+        params['blocking_send'] = False
+
+
+        for val in [0, True, None]:
+            with self.assertRaises(ValueError):
+                params['logger_name'] = val
+                self.create_layer(params)
+
+        params['logger_name'] = 'asd'
+        self.create_layer(params)
+
+# Check the behaviour of the transport layer. Sequenece of CAN frames, timings, etc.
+
+
+class TestTransportLayerLogicBlockingRxfn(TransportLayerBaseTest):
+    TXID = 0x111
+    RXID = 0x222
+
+    STACK_PARAMS = {
+        'stmin': 1,
+        'blocksize': 8,
+        'squash_stmin_requirement': False,
+        'rx_flowcontrol_timeout': 1000,
+        'rx_consecutive_frame_timeout': 1000,
+        'wftmax': 0,
+        'tx_data_length': 8
+    }
+
+    def setUp(self):
+        super().setUp()
+
+        self.address = isotp.Address(isotp.AddressingMode.Normal_11bits, txid=self.TXID, rxid=self.RXID)
+        self.stack = isotp.TransportLayer(
+            txfn=self.stack_txfn,
+            rxfn=self.stack_rxfn_blocking,
+            address=self.address,
+            error_handler=self.error_handler,
+            params=self.STACK_PARAMS
+        )
+
+    def simulate_rx(self, data, rxid=RXID, dlc=None):
+        self.simulate_rx_msg(Message(arbitration_id=rxid, data=bytearray(data), dlc=dlc))
+
+    def simulate_rx_flowcontrol(self, flow_status, stmin, blocksize, prefix=None):
+        data = bytearray()
+        if prefix is not None:
+            data.extend(bytearray(prefix))
+        data.extend(bytearray([0x30 | (flow_status & 0xF), blocksize, stmin]))
+
+        self.simulate_rx(data=data)
+
+    def test_receive_multiple_sf_single_process_call(self):
+        self.simulate_rx(data=[0x05, 0x11, 0x22, 0x33, 0x44, 0x55])
+        self.simulate_rx(data=[0x05, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE])
+        self.stack.process()
+        self.assertEqual(self.rx_isotp_frame(), bytearray([0x11, 0x22, 0x33, 0x44, 0x55]))
+        self.assertEqual(self.rx_isotp_frame(), bytearray([0xAA, 0xBB, 0xCC, 0xDD, 0xEE]))
+        self.assertIsNone(self.rx_isotp_frame())

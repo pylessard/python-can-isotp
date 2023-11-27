@@ -5,6 +5,14 @@ class IsoTpError(Exception):
         Exception.__init__(self, *args, **kwargs)
 
 
+class BlockingSendFailure(IsoTpError):
+    pass
+
+
+class BlockingSendTimeout(BlockingSendFailure):
+    pass
+
+
 class FlowControlTimeoutError(IsoTpError):
     """
     Happens when the senders fails to sends a Flow Control message in time. 
@@ -63,7 +71,7 @@ class WrongSequenceNumberError(IsoTpError):
     pass
 
 
-class UnsuportedWaitFrameError(IsoTpError):
+class UnsupportedWaitFrameError(IsoTpError):
     """
     Happens when a Flow Control PDU with FlowStatus=Wait is received and :ref:`wftmax<param_wftmax>` is set to 0
     """

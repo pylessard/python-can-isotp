@@ -22,6 +22,8 @@ The CAN messages going in and out from the transport layer are defined with :cla
 
 -----
 
+.. _parameters:
+
 Parameters
 ----------
 
@@ -296,7 +298,7 @@ All errors inherit :class:`isotp.IsoTpError<isotp.IsoTpError>` which itself inhe
 .. autoclass:: isotp.ReceptionInterruptedWithSingleFrameError
 .. autoclass:: isotp.ReceptionInterruptedWithFirstFrameError
 .. autoclass:: isotp.WrongSequenceNumberError
-.. autoclass:: isotp.UnsuportedWaitFrameError
+.. autoclass:: isotp.UnsupportedWaitFrameError
 .. autoclass:: isotp.MaximumWaitFrameReachedError
 .. autoclass:: isotp.FrameTooLongError
 .. autoclass:: isotp.ChangingInvalidRXDLError
