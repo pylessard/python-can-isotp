@@ -34,6 +34,14 @@ class Timer:
         else:
             return 0
 
+    def remaining_ns(self) -> int:
+        if self.is_stopped():
+            return 0
+        return self.timeout - self.elapsed_ns()
+
+    def remaining(self) -> float:
+        return float(self.remaining_ns()) / 1e9
+
     def is_timed_out(self) -> bool:
         if self.is_stopped():
             return False

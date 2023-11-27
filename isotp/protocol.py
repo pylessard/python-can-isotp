@@ -776,11 +776,10 @@ class TransportLayer:
                                                                              len(msg.data), processed, binascii.hexlify(msg.data).decode('ascii')))
                         if for_me:
                             msg_received_processed += 1
-                            result = self._process_rx(msg)
-                            if result.frame_received:
+                            rx_result = self._process_rx(msg)
+                            if rx_result.frame_received:
                                 nb_frame_received += 1
-                            if result.immediate_tx_required:
-                                run_process = True
+                            if rx_result.immediate_tx_required:
                                 break
 
             start_with_tx = False   # it's a one-time event
@@ -1321,6 +1320,22 @@ class TransportLayer:
         """Tells if the transmission is actively being slowed down by the rate limited"""
         return self.tx_state in [self.TxState.TRANSMIT_SF_STANDBY, self.TxState.TRANSMIT_FF_STANDBY]
 
+    def is_rx_active(self) -> bool:
+        return self.rx_state != self.RxState.IDLE
+
+    def is_tx_transmitting_cf(self) -> bool:
+        return self.tx_state == self.TxState.TRANSMIT_CF
+
+    def next_cf_delay(self) -> Optional[float]:
+        if not self.is_tx_transmitting_cf():
+            return None
+
+        if self.params.squash_stmin_requirement:
+            return 0
+        if self.timer_tx_stmin.is_timed_out():
+            return 0
+        return self.timer_tx_stmin.remaining()
+
 
 class ThreadedTransportLayer:
     """
@@ -1343,7 +1358,7 @@ class ThreadedTransportLayer:
     :param params: List of parameters for the transport layer. See :ref:`the list of parameters<parameters>
     :type params: dict
 
-    :param read_timeout: The default timeout to pass to the given `rxfn` when nothing is to be done and we are waiting on a frame. Can affect the CPU usage
+    :param read_timeout: The default timeout to pass to the given `rxfn` when nothing is to be done and we are waiting on a frame. Can affect the CPU usage and reac
     Default: 0.05s
     :type read_timeout: float
     """
@@ -1489,21 +1504,29 @@ class ThreadedTransportLayer:
         try:
             while not self.events.stop_requested.is_set():
                 rx_timeout = 0.0 if self.proto.is_tx_throttled() else self.default_read_timeout
-                t1 = time.monotonic()
-                count_stats = self.proto.process(rx_timeout=rx_timeout)
-                diff = time.monotonic() - t1
-                if not self.events.stop_requested.is_set():
-                    # If we know rxfn is non-blocking OR we can figure it out. Sleep
-                    if not self.proto.blocking_rxfn or (count_stats.received == 0 and diff < rx_timeout * 0.5):
-                        time.sleep(max(0, min(self.proto.sleep_time(), rx_timeout - diff)))
 
-                    if self.events.reset_tx.is_set():
-                        self.proto.stop_sending(success=False)
-                        self.events.reset_tx.clear()
+                if not self.proto.is_rx_active() and self.proto.is_tx_transmitting_cf():
+                    delay = self.proto.next_cf_delay()
+                    assert delay is not None
+                    if delay > 0:
+                        time.sleep(delay)   # If we are transmitting CFs, no need to call rxfn, we can stream those CF with short sleep
+                    if not self.events.stop_requested.is_set():
+                        self.proto.process(do_rx=False, do_tx=True)
+                else:
+                    t1 = time.monotonic()
+                    count_stats = self.proto.process(rx_timeout=rx_timeout)
+                    diff = time.monotonic() - t1
+                    if not self.events.stop_requested.is_set():
+                        if not self.proto.blocking_rxfn or (count_stats.received == 0 and diff < rx_timeout * 0.5):
+                            time.sleep(max(0, min(self.proto.sleep_time(), rx_timeout - diff)))
 
-                    if self.events.reset_rx.is_set():
-                        self.proto.stop_receiving()
-                        self.events.reset_rx.clear()
+                if self.events.reset_tx.is_set():
+                    self.proto.stop_sending(success=False)
+                    self.events.reset_tx.clear()
+
+                if self.events.reset_rx.is_set():
+                    self.proto.stop_receiving()
+                    self.events.reset_rx.clear()
 
         finally:
             self.proto.reset()
