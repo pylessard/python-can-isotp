@@ -1,8 +1,8 @@
 __all__ = [
     'PDU',
     'RateLimiter',
+    'TransportLayerLogic',
     'TransportLayer',
-    'ThreadedTransportLayer',
     'CanStack',
 ]
 
@@ -20,6 +20,7 @@ from dataclasses import dataclass
 import threading
 from isotp.tools import Timer
 import inspect
+import functools
 
 from typing import Optional, Any, List, Callable, Dict, Tuple, Union, TYPE_CHECKING
 
@@ -291,10 +292,10 @@ class RateLimiter:
                     self.burst_bitcount[-1] += bytelen
 
 
-class TransportLayer:
+class TransportLayerLogic:
     """
     The IsoTP transport layer raw implementation. When using this class, the user is responsible of handling timings by calling the `process()` function
-    as fast as possible. For an easier solution with less degrees of freedom, use the :ref:`ThreadedTransportLayer<ThreadedTransportLayer>`
+    as fast as possible, like the legacy V1 library was requiring. For an easier solution with less degrees of freedom, use the :ref:`TransportLayer<TransportLayer>`
 
     :param rxfn: Function to be called by the transport layer to read the CAN layer. Must return a :class:`isotp.CanMessage<isotp.CanMessage>` or None if no message has been received.
     :type rxfn: Callable
@@ -708,7 +709,6 @@ class TransportLayer:
                     isotp.errors.BlockingSendFailure("Error while sending IsoTP frame")
 
     # Receive an IsoTP frame. Output of the layer
-
     def recv(self, block: bool = False, timeout: Optional[float] = None) -> Optional[bytearray]:
         """
         Dequeue an IsoTP frame from the reception queue if available.
@@ -816,10 +816,18 @@ class TransportLayer:
             frame_received=nb_frame_received
         )
 
+    def set_rxfn(self, rxfn: "TransportLayerLogic.RxFn"):
+        """
+        Allow post init change of rxfn. This is a trick to implement the threaded Transport Layer
+        and keeping the ability to run the TransportLayerLogic without threads for backward compatibility
+        with v1.x
+        """
+        self.rxfn = rxfn
+
     def _check_timeouts_rx(self) -> None:
         if self.timer_rx_cf.is_timed_out():
             self._trigger_error(isotp.errors.ConsecutiveFrameTimeoutError("Reception of CONSECUTIVE_FRAME timed out."))
-            self.stop_receiving()
+            self._stop_receiving()
 
     def _process_rx(self, msg: CanMessage) -> ProcessRxReport:
         """Process the reception of a CAN message. Moves the reception state machine accordingly and optionally"""
@@ -828,7 +836,7 @@ class TransportLayer:
             pdu = PDU(msg, start_of_data=self.address.rx_prefix_size)
         except Exception as e:
             self._trigger_error(isotp.errors.InvalidCanDataError("Received invalid CAN frame. %s" % (str(e))))
-            self.stop_receiving()
+            self._stop_receiving()
             return self.ProcessRxReport(immediate_tx_required=False, frame_received=False)
 
         # Process Flow Control message
@@ -891,7 +899,7 @@ class TransportLayer:
                     if len(self.rx_buffer) >= self.rx_frame_length:
                         frame_complete = True
                         self.rx_queue.put(copy(self.rx_buffer))			# Data complete
-                        self.stop_receiving() 							# Go back to IDLE. Reset all variables and timers.
+                        self._stop_receiving() 							# Go back to IDLE. Reset all variables and timers.
                     else:
                         self.rx_block_counter += 1
                         if self.params.blocksize > 0 and (self.rx_block_counter % self.params.blocksize) == 0:
@@ -900,7 +908,7 @@ class TransportLayer:
                             self.timer_rx_cf.stop()
                             immediate_tx_msg_required = True
                 else:
-                    self.stop_receiving()
+                    self._stop_receiving()
                     received = str(None)
                     if pdu.seqnum is not None:
                         received = "0x%02X" % pdu.seqnum
@@ -934,7 +942,7 @@ class TransportLayer:
 
         if flow_control_frame is not None:
             if flow_control_frame.flow_status == PDU.FlowStatus.Overflow: 	# Needs to stop sending.
-                self.stop_sending(success=False)
+                self._stop_sending(success=False)
                 self._trigger_error(isotp.errors.OverflowError('Received a FlowControl PDU indicating an Overflow. Stopping transmission.'))
                 return self.ProcessTxReport(msg=None, immediate_rx_required=False)
 
@@ -948,7 +956,7 @@ class TransportLayer:
                     elif self.wft_counter >= self.params.wftmax:
                         self._trigger_error(isotp.errors.MaximumWaitFrameReachedError(
                             'Received %d wait frame which is the maximum set in params.wftmax' % (self.wft_counter)))
-                        self.stop_sending(success=False)
+                        self._stop_sending(success=False)
                     else:
                         self.wft_counter += 1
                         if self.tx_state in [self.TxState.WAIT_FC, self.TxState.TRANSMIT_CF]:
@@ -973,12 +981,12 @@ class TransportLayer:
         # ======= Timeouts ======
         if self.timer_rx_fc.is_timed_out():
             self._trigger_error(isotp.errors.FlowControlTimeoutError('Reception of FlowControl timed out. Stopping transmission'))
-            self.stop_sending(success=False)
+            self._stop_sending(success=False)
 
         # ======= FSM ======
         # Check this first as we may have another isotp frame to send and we need to handle it right away without waiting for next "process()" call
         if self.tx_state != self.TxState.IDLE and len(self.tx_buffer) == 0:
-            self.stop_sending(success=True)
+            self._stop_sending(success=True)
 
         immediate_rx_msg_required = False
         if self.tx_state == self.TxState.IDLE:
@@ -1070,7 +1078,7 @@ class TransportLayer:
                     self.tx_block_counter += 1
 
             if (len(self.tx_buffer) == 0):
-                self.stop_sending(success=True)
+                self._stop_sending(success=True)
 
             elif self.remote_blocksize != 0 and self.tx_block_counter >= self.remote_blocksize:
                 self.tx_state = self.TxState.WAIT_FC
@@ -1213,10 +1221,13 @@ class TransportLayer:
 
         return self._make_tx_msg(self.address.get_tx_arbitration_id(), self.address.tx_payload_prefix + data)
 
-    def stop_sending(self, success) -> None:
+    def stop_sending(self) -> None:
         """
         Request the TransportLayer object to stop transmitting, clear the transmit buffer and put back its transmit state machine to idle state.
         """
+        self._stop_sending(success=False)
+
+    def _stop_sending(self, success) -> None:
         if self.active_send_request is not None:
             self.active_send_request.complete(success)
             self.active_send_request = None
@@ -1236,6 +1247,10 @@ class TransportLayer:
         Request the TransportLayer object to stop receiving, clear the reception buffer and put back its receive state machine to idle state. 
         If a reception is ongoing, the following messages will be discared and considered like garbage
         """
+        self._stop_receiving()
+
+    def _stop_receiving(self) -> None:
+
         self.actual_rxdl = None
         self.rx_state = self.RxState.IDLE
         self._empty_rx_buffer()
@@ -1257,7 +1272,7 @@ class TransportLayer:
         if pdu.rx_dl not in [8, 12, 16, 20, 24, 32, 48, 64]:
             self._trigger_error(isotp.errors.InvalidCanFdFirstFrameRXDL(
                 "Received a FirstFrame with a RX_DL value of %d which is invalid according to ISO-15765-2" % (pdu.rx_dl)))
-            self.stop_receiving()
+            self._stop_receiving()
             return False
 
         self.actual_rxdl = pdu.rx_dl
@@ -1297,8 +1312,8 @@ class TransportLayer:
         """
         self.clear_rx_queue()
         self.clear_tx_queue()
-        self.stop_sending(success=False)
-        self.stop_receiving()
+        self._stop_sending(success=False)
+        self._stop_receiving()
 
         self.rate_limiter.reset()
 
@@ -1337,14 +1352,14 @@ class TransportLayer:
         return self.timer_tx_stmin.remaining()
 
 
-class ThreadedTransportLayer:
+class TransportLayer(TransportLayerLogic):
     """
-    The easy-to-run implementation of the IsoTP layer running the :ref:`TransportLayer<TransportLayer>` object into a dedicated thread. 
-    The main interfaces to be used are `start`, `stop`, `send`, `recv`. Timings are handled internally. New in V2.x
+    An IsoTP transport layer implementation that runs in a separate thread. The main public interface are `start`, `stop`, `send`, `recv`.
+    For backward compatibility, this class will behave similarly as a V1 TransportLayer if start/stop are never called; meaning that `process()` can be called by the user
 
     :param rxfn: Function to be called by the transport layer to read the CAN layer. Must return a :class:`isotp.CanMessage<isotp.CanMessage>` or None if no message has been received.
     For optimal performance, this function should perform a blocking read that waits on IO
-    :type rxfn: Callable: expected signature: `my_txfn(msg:isotp.CanMessage) -> None`
+    :type rxfn: Callable : expected signature: `my_txfn(msg:isotp.CanMessage) -> None`
 
     :param txfn: Function to be called by the transport layer to send a message on the CAN layer. This function should receive a :class:`isotp.CanMessage<isotp.CanMessage>`
     :type txfn: Callable : expected signature: `my_rxfn(timeout:float) -> Optional[isotp.CanMessage]`
@@ -1352,17 +1367,15 @@ class ThreadedTransportLayer:
     :param address: The address information of CAN messages. Includes the addressing mode, txid/rxid, source/target address and address extension. See :class:`isotp.Address<isotp.Address>` for more details.
     :type address: isotp.Address
 
-    :param error_handler: A function to be called when an error has been detected. An :class:`isotp.IsoTpError<isotp.IsoTpError>` (inheriting Exception class) will be given as sole parameter. See the :ref:`Error section<Errors>`
+    :param error_handler: A function to be called when an error has been detected. 
+    An :class:`isotp.IsoTpError<isotp.IsoTpError>` (inheriting Exception class) will be given as sole parameter. See the :ref:`Error section<Errors>`
+    When started, the error handler will be called from a different thread than the user thread, make sure to consider thread safety if the error handler is more complex than a log.
     :type error_handler: Callable
 
     :param params: List of parameters for the transport layer. See :ref:`the list of parameters<parameters>
     :type params: dict
 
-    :param read_timeout: The default timeout to pass to the given `rxfn` when nothing is to be done and we are waiting on a frame. Can affect the CPU usage and reac
-    Default: 0.05s
-    :type read_timeout: float
     """
-
     class Events:
         main_thread_ready: threading.Event
         relay_thread_ready: threading.Event
@@ -1377,20 +1390,19 @@ class ThreadedTransportLayer:
             self.reset_tx = threading.Event()
             self.reset_rx = threading.Event()
 
-    proto: TransportLayer
     started: bool
     main_thread: Optional[threading.Thread]
     relay_thread: Optional[threading.Thread]
     default_read_timeout: float
     events: Events
     rx_relay_queue: "queue.Queue[Optional[CanMessage]]"
-    user_rxfn: TransportLayer.RxFn
+    user_rxfn: TransportLayerLogic.RxFn
 
     def __init__(self,
-                 rxfn: TransportLayer.RxFn,
-                 txfn: TransportLayer.TxFn,
+                 rxfn: TransportLayerLogic.RxFn,
+                 txfn: TransportLayerLogic.TxFn,
                  address: isotp.Address,
-                 error_handler: Optional[TransportLayer.ErrorHandler] = None,
+                 error_handler: Optional[TransportLayerLogic.ErrorHandler] = None,
                  params: Optional[Dict[str, Any]] = None,
                  read_timeout=0.05):
 
@@ -1405,7 +1417,7 @@ class ThreadedTransportLayer:
             # This callback wakeup the main thread from its blocking read if necessary
             self.rx_relay_queue.put(None)
 
-        self.proto = TransportLayer(self._read_relay_queue, txfn, address, error_handler, params, post_send_callback)
+        TransportLayerLogic.__init__(self, rxfn, txfn, address, error_handler, params, post_send_callback)
 
     def _read_relay_queue(self, timeout: Optional[float]) -> Optional[CanMessage]:
         try:
@@ -1415,10 +1427,11 @@ class ThreadedTransportLayer:
 
     def start(self) -> None:
         """Start the internal thread that handles the IsoTP layer."""
-        self.proto.logger.debug(f"Starting {self.__class__.__name__}")
+        self.logger.debug(f"Starting {self.__class__.__name__}")
         if self.started:
             raise RuntimeError("Transport Layer is already started")
 
+        self.set_rxfn(self._read_relay_queue)
         self.main_thread = threading.Thread(target=self._main_thread_fn)
         self.relay_thread = threading.Thread(target=self._relay_thread_fn)
 
@@ -1445,7 +1458,7 @@ class ThreadedTransportLayer:
 
     def stop(self) -> None:
         """Stops the internal thread that handles the IsoTP layer."""
-        self.proto.logger.debug(f"Stopping {self.__class__.__name__}")
+        self.logger.debug(f"Stopping {self.__class__.__name__}")
         self.events.stop_requested.set()
         self.rx_relay_queue.put(None)
 
@@ -1465,110 +1478,109 @@ class ThreadedTransportLayer:
         self.events.reset_tx.clear()
         self.events.reset_rx.clear()
 
-        self.proto.reset()
+        self.reset()
+        self.set_rxfn(self.user_rxfn)
         self.started = False
-        self.proto.logger.debug(f"{self.__class__.__name__} Stopped")
-
-    @is_documented_by(TransportLayer.send)
-    def send(self,
-             data: Union[bytes, bytearray],
-             target_address_type: Optional[Union[isotp.address.TargetAddressType, int]] = None,
-             send_timeout: float = 0) -> None:
-        if not self.started:
-            raise RuntimeError("Transport Layer is not started")
-
-        self.proto.send(data, target_address_type, send_timeout)
-
-    @is_documented_by(TransportLayer.recv)
-    def recv(self, block: bool = False, timeout: Optional[float] = None) -> Optional[bytearray]:
-        if not self.started:
-            raise RuntimeError("Transport Layer is not started")
-
-        return self.proto.recv(block, timeout)
+        self.logger.debug(f"{self.__class__.__name__} Stopped")
 
     def _relay_thread_fn(self) -> None:
         """Internal function executed by the relay thread. Reads the user rxfn and put any results in a queue."""
-        self.proto.logger.debug("Relay thread has started")
+        self.logger.debug("Relay thread has started")
         assert self.user_rxfn is not None
         self.events.relay_thread_ready.set()
         while not self.events.stop_requested.is_set():
-            rx_timeout = 0.0 if self.proto.is_tx_throttled() else self.default_read_timeout
+            rx_timeout = 0.0 if self.is_tx_throttled() else self.default_read_timeout
             data = self.user_rxfn(rx_timeout)
             if data is not None:
                 self.rx_relay_queue.put(data)
 
     def _main_thread_fn(self) -> None:
         """Internal function executed by the main thread. """
-        self.proto.logger.debug("Main thread has started")
+        self.logger.debug("Main thread has started")
         self.events.main_thread_ready.set()
         try:
             while not self.events.stop_requested.is_set():
-                rx_timeout = 0.0 if self.proto.is_tx_throttled() else self.default_read_timeout
+                rx_timeout = 0.0 if self.is_tx_throttled() else self.default_read_timeout
 
-                if not self.proto.is_rx_active() and self.proto.is_tx_transmitting_cf():
-                    delay = self.proto.next_cf_delay()
+                if not self.is_rx_active() and self.is_tx_transmitting_cf():
+                    delay = self.next_cf_delay()
                     assert delay is not None
                     if delay > 0:
                         time.sleep(delay)   # If we are transmitting CFs, no need to call rxfn, we can stream those CF with short sleep
                     if not self.events.stop_requested.is_set():
-                        self.proto.process(do_rx=False, do_tx=True)
+                        self.process(do_rx=False, do_tx=True)
                 else:
                     t1 = time.monotonic()
-                    count_stats = self.proto.process(rx_timeout=rx_timeout)
+                    count_stats = self.process(rx_timeout=rx_timeout)
                     diff = time.monotonic() - t1
                     if not self.events.stop_requested.is_set():
-                        if not self.proto.blocking_rxfn or (count_stats.received == 0 and diff < rx_timeout * 0.5):
-                            time.sleep(max(0, min(self.proto.sleep_time(), rx_timeout - diff)))
+                        if not self.blocking_rxfn or (count_stats.received == 0 and diff < rx_timeout * 0.5):
+                            time.sleep(max(0, min(self.sleep_time(), rx_timeout - diff)))
 
                 if self.events.reset_tx.is_set():
-                    self.proto.stop_sending(success=False)
+                    self._stop_sending(success=False)
                     self.events.reset_tx.clear()
 
                 if self.events.reset_rx.is_set():
-                    self.proto.stop_receiving()
+                    self._stop_receiving()
                     self.events.reset_rx.clear()
 
         finally:
-            self.proto.reset()
-            self.proto.logger.debug("Thread is exiting")
+            self.reset()
+            self.logger.debug("Thread is exiting")
 
-    @is_documented_by(TransportLayer.stop_sending)
+    @is_documented_by(TransportLayerLogic.stop_sending)
     def stop_sending(self):
-        if not self.events.stop_requested.is_set():
-            if self.main_thread is not None and self.main_thread.is_alive():
-                self.events.reset_tx.set()
-                while self.events.reset_tx.is_set():
-                    time.sleep(0.05)
+        if self.started:
+            if not self.events.stop_requested.is_set():
+                if self.main_thread is not None and self.main_thread.is_alive():
+                    self.events.reset_tx.set()
+                    while self.events.reset_tx.is_set():
+                        time.sleep(0.05)
+        else:
+            self._stop_sending()
 
-    @is_documented_by(TransportLayer.stop_receiving)
+    @is_documented_by(TransportLayerLogic.stop_receiving)
     def stop_receiving(self):
-        if not self.events.stop_requested.is_set():
-            if self.main_thread is not None and self.main_thread.is_alive():
-                self.events.reset_rx.set()
-                while self.events.reset_rx.is_set():
-                    time.sleep(0.05)
-
-    @is_documented_by(TransportLayer.available)
-    def available(self) -> bool:
-        return not self.proto.available()   # Thread safe
-
-    @is_documented_by(TransportLayer.transmitting)
-    def transmitting(self) -> bool:
-        return self.proto.transmitting()    # Not thread safe, but should be OK
-
-    @is_documented_by(TransportLayer.clear_rx_queue)
-    def clear_rx_queue(self):
-        self.proto.clear_rx_queue()
-
-    @is_documented_by(TransportLayer.clear_tx_queue)
-    def clear_tx_queue(self):
-        self.proto.clear_tx_queue()
+        if self.started:
+            if not self.events.stop_requested.is_set():
+                if self.main_thread is not None and self.main_thread.is_alive():
+                    self.events.reset_rx.set()
+                    while self.events.reset_rx.is_set():
+                        time.sleep(0.05)
+        else:
+            self._stop_receiving()
 
 
-class CanStack(ThreadedTransportLayer):
+class BusOwner:
+    bus: "can.BusABC"
+
+
+def python_can_tx_canbus_3plus(owner: BusOwner, msg: CanMessage) -> None:
+    owner.bus.send(can.Message(arbitration_id=msg.arbitration_id, data=msg.data,
+                               is_extended_id=msg.is_extended_id, is_fd=msg.is_fd, bitrate_switch=msg.bitrate_switch))  # type:ignore
+
+
+def python_can_tx_canbus_3minus(owner: BusOwner, msg: CanMessage) -> None:
+    owner.bus.send(can.Message(arbitration_id=msg.arbitration_id, data=msg.data,
+                               extended_id=msg.is_extended_id, is_fd=msg.is_fd, bitrate_switch=msg.bitrate_switch))  # type:ignore
+
+
+def make_python_can_tx_func(owner: BusOwner) -> Callable[[CanMessage], None]:
+    message_input_args = inspect.signature(can.Message.__init__).parameters
+    if 'is_extended_id' in message_input_args:
+        return functools.partial(python_can_tx_canbus_3plus, owner)
+    else:
+        return functools.partial(python_can_tx_canbus_3minus, owner)
+
+
+class CanStack(TransportLayer, BusOwner):
     """
     The IsoTP transport layer preconfigured to use `python-can <https://python-can.readthedocs.io>`__ as CAN layer. python-can must be installed in order to use this class.
     All parameters except the ``bus`` parameter will be given to the :class:`TransportLayer<isotp.TransportLayer>` constructor
+
+    :param bus: A python-can bus object implementing ``recv`` and ``send``
+    :type bus: BusABC
 
     :param bus: A python-can bus object implementing ``recv`` and ``send``
     :type bus: BusABC
@@ -1583,18 +1595,7 @@ class CanStack(ThreadedTransportLayer):
     :type params: dict
 
     """
-    bus: "can.BusABC"
     default_read_timeout: float
-
-    def _tx_canbus_3plus(self, msg: CanMessage) -> None:
-
-        self.bus.send(can.Message(arbitration_id=msg.arbitration_id, data=msg.data,
-                      is_extended_id=msg.is_extended_id, is_fd=msg.is_fd, bitrate_switch=msg.bitrate_switch))  # type:ignore
-
-    def _tx_canbus_3minus(self, msg: CanMessage) -> None:
-
-        self.bus.send(can.Message(arbitration_id=msg.arbitration_id, data=msg.data,
-                      extended_id=msg.is_extended_id, is_fd=msg.is_fd, bitrate_switch=msg.bitrate_switch))  # type:ignore
 
     def rx_canbus(self, timeout: Optional[float] = None) -> Optional[CanMessage]:
         if timeout is None:
@@ -1608,16 +1609,13 @@ class CanStack(ThreadedTransportLayer):
         if not _can_available:
             raise RuntimeError(f"python-can is not installed in this environment and is required for the {self.__class__.__name__} object.")
 
-        # Backward compatibility stuff.
-        message_input_args = inspect.signature(can.Message.__init__).parameters
-        if 'is_extended_id' in message_input_args:
-            self.tx_canbus = self._tx_canbus_3plus
-        else:
-            self.tx_canbus = self._tx_canbus_3minus
-
         self.set_bus(bus)
         self.default_read_timeout = read_timeout
-        super().__init__(self.rx_canbus, self.tx_canbus, *args, **kwargs)
+        kwargs.update(dict(
+            rxfn=self.rx_canbus,
+            txfn=make_python_can_tx_func(self),
+        ))
+        super().__init__(*args, **kwargs)
 
     def set_bus(self, bus: "can.BusABC") -> None:
         if not isinstance(bus, can.BusABC):
