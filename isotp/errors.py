@@ -6,10 +6,12 @@ class IsoTpError(Exception):
 
 
 class BlockingSendFailure(IsoTpError):
+    """Raised when a blocking send is performed and an error occurred"""
     pass
 
 
 class BlockingSendTimeout(BlockingSendFailure):
+    """Raised when a blocking send fails to complete within the given timeout value"""
     pass
 
 

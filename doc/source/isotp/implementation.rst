@@ -37,7 +37,8 @@ The transport layer ``params`` parameter must be a dictionary with the following
    **default: 0**
 
    The single-byte Separation Time to include in the flow control message that the layer will send when receiving data. 
-   Refer to ISO-15765-2 for specific values. From 1 to 127, represents milliseconds. From 0xF1 to 0xF9, represents hundreds of microseconds (100us, 200us, ..., 900us). 0 Means no timing requirements
+   Refer to ISO-15765-2 for specific values. From 1 to 127, represents milliseconds. From 0xF1 to 0xF9, represents hundreds of microseconds (100us, 200us, ..., 900us). 
+   0 Means no timing requirements
 
 .. _param_blocksize:
 
@@ -47,7 +48,8 @@ The transport layer ``params`` parameter must be a dictionary with the following
    **default: 8**
 
    The single-byte Block Size to include in the flow control message that the layer will send when receiving data.
-   Represents the number of consecutive frames that a sender should send before expecting the layer to send a flow control message. 0 means infinitely large block size (implying no flow control message)
+   Represents the number of consecutive frames that a sender should send before expecting the layer to send a flow control message. 
+   0 means infinitely large block size (implying no flow control message)
 
 .. _param_tx_data_length:
 
@@ -59,9 +61,7 @@ The transport layer ``params`` parameter must be a dictionary with the following
    The maximum number of bytes that the Link Layer (CAN layer) can transport. In other words, the biggest number of data bytes possible in a single CAN message.
    Valid values are : 8, 12, 16, 20, 24, 32, 48, 64.
    
-   Large frames will be transmitted in small CAN messages of this size except for the last CAN message that will be as small as possible, unless padding is used. 
-
-   This parameter was formely named ``ll_data_length`` but has been renamed to explicitly indicate that it affects transmitted messages only.
+   Large IsoTP frames will be transmitted in small CAN messages of this size except for the last CAN message that will be as small as possible, unless padding is used. 
 
 .. _param_tx_data_min_length:
 
@@ -72,19 +72,24 @@ The transport layer ``params`` parameter must be a dictionary with the following
 
    Sets the minimum length of CAN messages. Message with less data than this value will be padded using ``tx_padding`` byte or ``0xCC`` if ``tx_padding=None``. 
 
-   When set to ``None``, CAN messages will be as small as possible unless ``tx_data_length=8`` and ``tx_padding != None``; in that case, all CAN messages will be padded up to 8 bytes to be compliant with ISO-15765.
+   When set to ``None``, CAN messages will be as small as possible unless ``tx_data_length=8`` and ``tx_padding != None``; in that case, all CAN messages will be padded up 
+   to 8 bytes to be compliant with ISO-15765.
 
    Valid values are : 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64.
    
-.. _param_squash_stmin_requirement:
+.. _param_override_receiver_stmin:
 
-.. attribute:: squash_stmin_requirement
-   :annotation: (bool)
+.. attribute:: override_receiver_stmin
+   :annotation: (float or None)
 
-   **default: False**
+   **default: None**
 
-   Indicates if the layer should override the receiver separation time (stmin) when sending and try sending as fast as possible instead.
-   This can be useful when the layer is running on an operating system giving low priority to your application; such as Windows that has a thread resolution of 16ms.
+    Time in seconds to wait between consecutive frames when transmitting. When set, this value will override the receiver ``stmin`` requirement. When ``None``, the receiver
+    ``stmin`` parameter will be respected. This parameter can be useful to speed up a transmission by setting a value of 0 (send as fast as possible) on a system that has low 
+    execution priority or coarse thread resolution.  
+
+    This parameter replace the ``squash_stmin_requirement`` parameter available in v1.x
+   
 
 .. _param_rx_flowcontrol_timeout:
 
@@ -121,7 +126,7 @@ The transport layer ``params`` parameter must be a dictionary with the following
 
    **default: 0**
 
-   The single-byte Wait Frame Max to include in the flow control message that the layer will send when receiving data. 
+   The single-byte "Wait Frame Max" to include in the flow control message that the layer will send when receiving data. 
    When this limits is reached, reception will stop and trigger a :class:`MaximumWaitFrameReachedError<isotp.MaximumWaitFrameReachedError>`
 
    A value of 0 means that wait frames are not supported and none shall be sent.
@@ -146,7 +151,7 @@ The transport layer ``params`` parameter must be a dictionary with the following
 
    When set to ``True``, transmitted messages will be CAN FD. CAN 2.0 when ``False``.
 
-   Setting this parameter to ``True`` does not change the behaviour of the :class:`TransportLayer<isotp.TransportLayer>` except that outputted message will have their ``is_fd`` property set to ``True``. This parameter is just a convenience to integrate more easily with python-can
+   Setting this parameter to ``True`` does not change the behavior of the :class:`TransportLayer<isotp.TransportLayer>` except that outputted message will have their ``is_fd`` property set to ``True``. This parameter is just a convenience to integrate more easily with python-can
 
 
 .. _param_bitrate_switch:
@@ -156,9 +161,9 @@ The transport layer ``params`` parameter must be a dictionary with the following
 
    **default: False**
 
-   When set to ``True``, tx message will have a flag ``bitrate_switch`` marked as ``True``, meaning that the underlying layer shall performe a CAN FD bitrate switch after arbitration phase.
+   When set to ``True``, tx message will have a flag ``bitrate_switch`` marked as ``True``, meaning that the underlying layer shall perform a CAN FD bitrate switch after arbitration phase.
 
-   Setting this parameter to ``True`` does not change the behaviour of the :class:`TransportLayer<isotp.TransportLayer>` except that outputted message will have their ``bitrate_switch`` property set to ``True``. This parameter is just a convenience to integrate more easily with python-can
+   Setting this parameter to ``True`` does not change the behavior of the :class:`TransportLayer<isotp.TransportLayer>` except that outputted message will have their ``bitrate_switch`` property set to ``True``. This parameter is just a convenience to integrate more easily with python-can
 
 
 .. _param_default_target_address_type:
@@ -169,7 +174,7 @@ The transport layer ``params`` parameter must be a dictionary with the following
    **default: Physical (0)**
 
    When using the :meth:`TransportLayer.send<isotp.TransportLayer.send>` method without specifying ``target_address_type``, the value in this field will be used.
-   The purpose of this parameter is to easily switch the address type if your program is not calling `send` directly; for example, if you use a library
+   The purpose of this parameter is to easily switch the address type if an application is not calling ``send()`` directly; for example, if you use a library
    that interact with the :class:`TransportLayer<isotp.TransportLayer>` object (such as a UDS client).
 
    Can either be :class:`Physical (0)<isotp.TargetAddressType>` or :meth:`Functional (1)<isotp.TargetAddressType>`
@@ -182,7 +187,7 @@ The transport layer ``params`` parameter must be a dictionary with the following
 
    **default: False**
 
-   Enable or disable the rate limiter. When disabled, no throttling is done on the output rate. When enabled, extra wait states are added in between CAN message tranmission to meet ``rate_limit_max_bitrate``
+   Enable or disable the rate limiter. When disabled, no throttling is done on the output rate. When enabled, extra wait states are added in between CAN message transmission to meet ``rate_limit_max_bitrate``
 
    Refer to :ref:`Rate Limiter Section<rate_limiter_section>` for more details
 
@@ -193,7 +198,7 @@ The transport layer ``params`` parameter must be a dictionary with the following
 
    **default: 10000000 b/s**
 
-   Defines the target bitrate in Bits/seconds that the TranportLayer object should try to respect. This rate limiter only apply to the data of the output messages. 
+   Defines the target bitrate in Bits/seconds that the TransportLayer object should try to respect. This rate limiter only apply to the data of the output messages. 
 
    Refer to :ref:`Rate Limiter Section<rate_limiter_section>` for more details
 
@@ -221,8 +226,28 @@ The transport layer ``params`` parameter must be a dictionary with the following
    **default: False**
 
    When Listen Mode is enabled, the :class:`TransportLayer<isotp.TransportLayer>` will correctly receive and transmit ISO-TP Frame, but will not send Flow Control
-   message when receiving a frame. This mode of operation is usefull to listen to a transmission between two third-party devices without interferring. 
+   message when receiving a frame. This mode of operation is useful to listen to a transmission between two third-party devices without interfering. 
 
+.. _param_blocking_send:
+
+.. attribute:: blocking_send
+   :annotation: (bool)
+
+   **default: False**
+
+   When True, the ``send()`` method will block until the transmission is complete or an error occurred (including a timeout). 
+
+   .. warning:: This parameter requires the processing of the transport layer to happen in parallel, therefore ``TransportLayer.start()`` must be called prior to ``send()`` or
+        a manually generated thread must called ``process()`` as fast as possible.
+
+.. _param_logger_name:
+
+.. attribute:: logger_name
+   :annotation: (str)
+
+   **default: "isotp"**
+
+   Sets the name of the logger from the ``logging`` module used to log info and debug information
 
 -----
 
@@ -250,7 +275,7 @@ this situation, it is useful to use the rate limiter to reduces the strain on th
 In the above scenario, having a bitrate of 80000 bps and a window size of 0.1 sec would make the :class:`isotp.TransportLayer<isotp.TransportLayer>` output a burst of 8000 bits (1000 bytes) every 0.1 seconds.
 
 .. warning:: The bitrate defined by :ref:`rate_limit_max_bitrate<param_rate_limit_max_bitrate>` represent the bitrate of the CAN payload that goes out of the :class:`isotp.TransportLayer<isotp.TransportLayer>` object only, 
-    the CAN layer overhead is exluded. 
+    the CAN layer overhead is excluded. 
     Knowing the a classical CAN message with 11bits ID and a payload of 64 bits usually have 111 bits, the extra 47 bits of overhead will not be considered by the rate limiter. This means
     that even if the rate limiter is requested to keep a steady 10kbps, depending on the CAN layer configuration, the effective hardware bitrate measured might be much more significant, from 1 to 1.5x more.
 
@@ -264,24 +289,44 @@ Usage
 
 The :class:`isotp.TransportLayer<isotp.TransportLayer>` object has the following methods
 
+.. automethod:: isotp.TransportLayer.start
+.. automethod:: isotp.TransportLayer.stop
 .. automethod:: isotp.TransportLayer.send
 .. automethod:: isotp.TransportLayer.recv
 .. automethod:: isotp.TransportLayer.available
 .. automethod:: isotp.TransportLayer.transmitting
 .. automethod:: isotp.TransportLayer.set_address
+.. automethod:: isotp.TransportLayer.stop_sending
+.. automethod:: isotp.TransportLayer.stop_receiving
+
+.. warning:: ``set_address`` is not thread safe and should be called before ``start()`` is called.
+
+-----
+
+Legacy methods (v1.x)
+---------------------
+
+With isotp v2.x, the processing of the transport layer is done from an internal thread. For backward compatibility, the following methods are still accessible to the
+users, but **should not** be called from the user thread if ``start()`` has been called. It is safe to call them if no call to ``start()`` is done.
+
 .. automethod:: isotp.TransportLayer.reset
 .. automethod:: isotp.TransportLayer.process
 .. automethod:: isotp.TransportLayer.sleep_time
 
------
+The unthreaded transport layer object used in the isotp module v1.x is still accessible un the name :class:`isotp.TransportLayerLogic<isotp.TransportLayerLogic>`.  
+The :class:`isotp.TransportLayer<isotp.TransportLayer>` object is an extension of it that can spawn a thread and calls methods that are were to be called by the user.
+
+---------
 
 .. _Errors:
 
 Errors
 ------
 
-When calling ``TransportLayer.process``, no exception should raise. Still, errors are possible and are given to an error handler provided by the user. 
+When a transmission error happens, for instance the receiving party stop responding or bad messages are received, the error is signaled to the user by calling an error handler. 
 An error handler should be a callable function that expects an Exception as first parameter.
+
+.. warning:: The error handler will be called from the internal thread, therefore, any interaction with the application should use a thread safe mechanism
 
 .. function:: my_error_handler(error)
 
@@ -305,3 +350,18 @@ All errors inherit :class:`isotp.IsoTpError<isotp.IsoTpError>` which itself inhe
 .. autoclass:: isotp.MissingEscapeSequenceError
 .. autoclass:: isotp.InvalidCanFdFirstFrameRXDL
 .. autoclass:: isotp.OverflowError
+
+----------
+
+.. _exceptions:
+
+Exceptions
+----------
+
+Some exception can be raised in special cases. These are never sent to the error handler
+
+.. autoclass:: isotp.BlockingSendFailure
+.. autoclass:: isotp.BlockingSendTimeout
+
+.. note:: ``BlockingSendTimeout`` inherits ``BlockingSendTimeout``. Catching a ``BlockingSendFailure`` will also catch timeouts if no 
+    dedicated catching of ``BlockingSendTimeout`` is done

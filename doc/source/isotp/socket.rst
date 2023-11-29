@@ -18,7 +18,7 @@ A socket is a standard interface for communication protocols and as anything gen
 Troubleshooting
 ---------------
 
- - **My socket module does not include the `CAN_ISOTP` constant**
+ - **My socket module does not include the ``CAN_ISOTP`` constant**
  
 That means that your Python version does not include support for IsoTP protocol. It should be included starting from Python 3.7, under Linux build only. See `Python issue <https://bugs.python.org/issue30987>`_ and `Pull request <https://github.com/python/cpython/pull/2956>`_
 
