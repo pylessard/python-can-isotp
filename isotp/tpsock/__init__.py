@@ -119,7 +119,7 @@ class socket:
                     ) -> "opts.LinkLayerOpts":
         """ 
         Sets the link layer options. Default values are set to work with CAN 2.0. Link layer may be configure to work in CAN FD.
-        Values of `None` will leave the parameter unchanged
+        Values of ``None`` will leave the parameter unchanged
 
         :param mtu: The internal CAN frame structure size. Possible values are defined in :class:`isotp.socket.LinkLayerProtocol<isotp.socket.LinkLayerProtocol>`
         :type mtu: int
@@ -151,7 +151,7 @@ class socket:
                  tx_stmin: Optional[int] = None) -> "opts.GeneralOpts":
         """
 
-        Sets the general options of the socket. Values of `None` will leave the parameter unchanged
+        Sets the general options of the socket. Values of ``None`` will leave the parameter unchanged
 
         :param optflag: A list of flags modifying the protocol behavior. Refer to :class:`socket.flags<isotp.socket.flags>`
         :type optflag: int
@@ -193,7 +193,7 @@ class socket:
 
     def set_fc_opts(self, bs: Optional[int] = None, stmin: Optional[int] = None, wftmax: Optional[int] = None) -> "opts.FlowControlOpts":
         """   
-        Sets the flow control options of the socket. Values of `None` will leave the parameter unchanged
+        Sets the flow control options of the socket. Values of ``None`` will leave the parameter unchanged
 
         :param bs: The block size sent in the flow control message. Indicates the number of consecutive frame a sender can send before the socket sends a new flow control. A block size of 0 means that no additional flow control message will be sent (block size of infinity)
         :type bs: int

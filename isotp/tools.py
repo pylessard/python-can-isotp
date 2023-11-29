@@ -37,7 +37,7 @@ class Timer:
     def remaining_ns(self) -> int:
         if self.is_stopped():
             return 0
-        return self.timeout - self.elapsed_ns()
+        return max(0, self.timeout - self.elapsed_ns())
 
     def remaining(self) -> float:
         return float(self.remaining_ns()) / 1e9

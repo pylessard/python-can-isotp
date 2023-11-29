@@ -8,7 +8,7 @@ import unittest
 Message = isotp.CanMessage
 
 
-# Check the behaviour of the transport layer. Sequenece of CAN frames, timings, etc.
+# Check the behavior of the transport layer. Sequenece of CAN frames, timings, etc.
 class TestTransportLayerStackAgainstStack(unittest.TestCase):
     TXID = 0x120
     RXID = 0x121
@@ -16,7 +16,7 @@ class TestTransportLayerStackAgainstStack(unittest.TestCase):
     STACK_PARAMS = {
         'stmin': 10,
         'blocksize': 8,
-        'squash_stmin_requirement': True,
+        'override_receiver_stmin': 0,
         'rx_flowcontrol_timeout': 1000,
         'rx_consecutive_frame_timeout': 1000,
         'wftmax': 0,

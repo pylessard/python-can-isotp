@@ -5,7 +5,7 @@ from .TransportLayerBaseTest import TransportLayerBaseTest
 Message = isotp.CanMessage
 
 
-# Check the behaviour of the transport layer. Sequenece of CAN frames, timings, etc.
+# Check the behavior of the transport layer. Sequenece of CAN frames, timings, etc.
 class TestTransportLayerLogicNonBlockingRxfn(TransportLayerBaseTest):
     TXID = 0x111
     RXID = 0x222
@@ -13,7 +13,7 @@ class TestTransportLayerLogicNonBlockingRxfn(TransportLayerBaseTest):
     STACK_PARAMS = {
         'stmin': 1,
         'blocksize': 8,
-        'squash_stmin_requirement': False,
+        'override_receiver_stmin': None,
         'rx_flowcontrol_timeout': 1000,
         'rx_consecutive_frame_timeout': 1000,
         'wftmax': 0,
@@ -920,8 +920,8 @@ class TestTransportLayerLogicNonBlockingRxfn(TransportLayerBaseTest):
                 self.stack.process()  # Receive the flow control and enqueue another bloc of can message.
                 block_counter = 0
 
-    def test_squash_timing_requirement(self):
-        self.stack.params.set('squash_stmin_requirement', True)
+    def test_override_receiver_stmin_0(self):
+        self.stack.params.set('override_receiver_stmin', 0)
 
         payload_size = 4095
         stmin = 100  # 100 msec
@@ -1154,7 +1154,7 @@ class TestTransportLayerLogicNonBlockingRxfn(TransportLayerBaseTest):
 
     def test_transmit_single_frame_txdl_8_min_length_6(self):
         self.stack.params.set('tx_data_length', 8)
-        self.stack.params.set('tx_data_min_length', 6)  # This behaviour is not defined by the standard, but we allow it
+        self.stack.params.set('tx_data_min_length', 6)  # This behavior is not defined by the standard, but we allow it
         self.stack.params.set('tx_padding', 0xAA)
         payload = self.make_payload(3)
         self.tx_isotp_frame(payload)
@@ -1365,7 +1365,7 @@ class TestTransportLayerLogicNonBlockingRxfn(TransportLayerBaseTest):
         params = {
             'stmin': 1,
             'blocksize': 8,
-            'squash_stmin_requirement': False,
+            'override_receiver_stmin': 0,
             'rx_flowcontrol_timeout': 1000,
             'rx_consecutive_frame_timeout': 1000,
             'tx_data_length': 8,
@@ -1402,9 +1402,18 @@ class TestTransportLayerLogicNonBlockingRxfn(TransportLayerBaseTest):
         params['blocksize'] = 8
 
         with self.assertRaises(ValueError):
-            params['squash_stmin_requirement'] = 'string'
+            params['override_receiver_stmin'] = 'string'
             self.create_layer(params)
-        params['squash_stmin_requirement'] = False
+        with self.assertRaises(ValueError):
+            params['override_receiver_stmin'] = True
+            self.create_layer(params)
+        with self.assertRaises(ValueError):
+            params['override_receiver_stmin'] = -1
+            self.create_layer(params)
+
+        params['override_receiver_stmin'] = 0.001
+        self.create_layer(params)
+        params['override_receiver_stmin'] = None
 
         with self.assertRaises(ValueError):
             params['rx_flowcontrol_timeout'] = -1
@@ -1568,7 +1577,6 @@ class TestTransportLayerLogicNonBlockingRxfn(TransportLayerBaseTest):
 
         params['blocking_send'] = False
 
-
         for val in [0, True, None]:
             with self.assertRaises(ValueError):
                 params['logger_name'] = val
@@ -1577,7 +1585,7 @@ class TestTransportLayerLogicNonBlockingRxfn(TransportLayerBaseTest):
         params['logger_name'] = 'asd'
         self.create_layer(params)
 
-# Check the behaviour of the transport layer. Sequenece of CAN frames, timings, etc.
+# Check the behavior of the transport layer. Sequenece of CAN frames, timings, etc.
 
 
 class TestTransportLayerLogicBlockingRxfn(TransportLayerBaseTest):
@@ -1587,7 +1595,7 @@ class TestTransportLayerLogicBlockingRxfn(TransportLayerBaseTest):
     STACK_PARAMS = {
         'stmin': 1,
         'blocksize': 8,
-        'squash_stmin_requirement': False,
+        'override_receiver_stmin': None,
         'rx_flowcontrol_timeout': 1000,
         'rx_consecutive_frame_timeout': 1000,
         'wftmax': 0,

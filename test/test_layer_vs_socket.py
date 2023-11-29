@@ -53,7 +53,7 @@ class TestLayerAgainstSocket(ThreadableTest):
             'tx_padding': 0,  # Will pad all transmitted CAN messages with byte 0x00. None means no padding
             'rx_flowcontrol_timeout': 1000,  # Triggers a timeout if a flow control is awaited for more than 1000 milliseconds
             'rx_consecutive_frame_timeout': 1000,  # Triggers a timeout if a consecutive frame is awaited for more than 1000 milliseconds
-            'squash_stmin_requirement': False,  # When sending, respect the stmin requirement of the receiver. If set to True, go as fast as possible.
+            'override_receiver_stmin': None,  # When sending, respect the stmin requirement of the receiver. If set to True, go as fast as possible.
             'can_fd': False,
             'max_frame_size': 4095,
             'bitrate_switch': False,

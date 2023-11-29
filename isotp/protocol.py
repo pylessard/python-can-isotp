@@ -294,29 +294,30 @@ class RateLimiter:
 
 class TransportLayerLogic:
     """
-    The IsoTP transport layer raw implementation. When using this class, the user is responsible of handling timings by calling the `process()` function
+    The IsoTP transport layer raw implementation. When using this class, the user is responsible of handling timings by calling the ``process()`` function
     as fast as possible, like the legacy V1 library was requiring. For an easier solution with less degrees of freedom, use the :ref:`TransportLayer<TransportLayer>`
 
     :param rxfn: Function to be called by the transport layer to read the CAN layer. Must return a :class:`isotp.CanMessage<isotp.CanMessage>` or None if no message has been received.
-    :type rxfn: Callable
+    :type rxfn: Callable : expected signature: ``my_txfn(msg:isotp.CanMessage) -> None``
 
     :param txfn: Function to be called by the transport layer to send a message on the CAN layer. This function should receive a :class:`isotp.CanMessage<isotp.CanMessage>`
-    :type txfn: Callable
+    :type txfn: Callable : expected signature: ``my_rxfn(timeout:float) -> Optional[isotp.CanMessage]``
 
-    :param address: The address information of CAN messages. Includes the addressing mode, txid/rxid, source/target address and address extension. See :class:`isotp.Address<isotp.Address>` for more details.
-    :type address: isotp.Address
+    :param address: The address information of CAN messages. Includes the addressing mode, txid/rxid, source/target address and address extension. 
+        See :class:`isotp.Address<isotp.Address>` for more details.
+    :type address: :class:`isotp.Address<isotp.Address>`
 
-    :param error_handler: A function to be called when an error has been detected. An :class:`isotp.IsoTpError<isotp.IsoTpError>` (inheriting Exception class) will be given as sole parameter. See the :ref:`Error section<Errors>`
-    :type error_handler: Callable
+    :param error_handler: A function to be called when an error has been detected. An :class:`isotp.IsoTpError<isotp.IsoTpError>` (inheriting Exception class) 
+        will be given as sole parameter. See the :ref:`Error section<Errors>`
+    :type error_handler: Callable : Expected signature: ``my_error_handler(error:isotp.IsoTpError) -> None``
 
     :param params: List of parameters for the transport layer. See :ref:`the list of parameters<parameters>
     :type params: dict
 
     :param post_send_callback: An optional callback to be called right after a send request has been enqueued. The main purpose of this parameter is to allow 
-    a facility to stop waiting for a message (if blocked in `rxfn`) and start transmitting right away if possible.
-    The function must have this signature : `my_func(send_request)`  Where `send_request` is an instance of :ref:`SendRequest<TransportLayer.SendRequest>`
+        a facility to stop waiting for a message (if blocked in ``rxfn``) and start transmitting right away if possible.
+        the function must have this signature : ``my_func(send_request)``  Where ``send_request`` is an instance of :ref:`SendRequest<TransportLayer.SendRequest>`
     :type post_send_callback: Callable
-
     """
 
     LOGGER_NAME = 'isotp'
@@ -325,7 +326,7 @@ class TransportLayerLogic:
     class Params:
         stmin: int
         blocksize: int
-        squash_stmin_requirement: bool
+        override_receiver_stmin: Optional[float]
         rx_flowcontrol_timeout: float
         rx_consecutive_frame_timeout: float
         tx_padding: Optional[int]
@@ -346,7 +347,7 @@ class TransportLayerLogic:
         def __init__(self):
             self.stmin = 0
             self.blocksize = 8
-            self.squash_stmin_requirement = False
+            self.override_receiver_stmin = None
             self.rx_flowcontrol_timeout = 1000
             self.rx_consecutive_frame_timeout = 1000
             self.tx_padding = None
@@ -365,8 +366,7 @@ class TransportLayerLogic:
             self.logger_name = TransportLayer.LOGGER_NAME
 
         def set(self, key: str, val: Any, validate: bool = True) -> None:
-            param_alias = {
-                'll_data_length': 'tx_data_length'  # For backward compatibility
+            param_alias: Dict[str, str] = {
             }
             if key in param_alias:
                 key = param_alias[key]
@@ -406,8 +406,13 @@ class TransportLayerLogic:
             if self.blocksize < 0 or self.blocksize > 0xFF:
                 raise ValueError('blocksize must be and integer between 0x00 and 0xFF')
 
-            if not isinstance(self.squash_stmin_requirement, bool):
-                raise ValueError('squash_stmin_requirement must be a boolean value')
+            if self.override_receiver_stmin is not None:
+                if not isinstance(self.override_receiver_stmin, (int, float)) or isinstance(self.override_receiver_stmin, bool):
+                    raise ValueError('override_receiver_stmin must be a float')
+                self.override_receiver_stmin = float(self.override_receiver_stmin)
+
+                if self.override_receiver_stmin < 0 or not math.isfinite(self.override_receiver_stmin):
+                    raise ValueError('Invalid override_receiver_stmin')
 
             if not isinstance(self.wftmax, int):
                 raise ValueError('wftmax must be an integer')
@@ -512,7 +517,7 @@ class TransportLayerLogic:
 
     @dataclass(slots=True, frozen=True)
     class ProcessStats:
-        """Some statistics produced by every `process` called indicating how much has been accomplish during that iteration."""
+        """Some statistics produced by every ``process`` called indicating how much has been accomplish during that iteration."""
         received: int
         received_processed: int
         sent: int
@@ -612,31 +617,31 @@ class TransportLayerLogic:
         self.rx_state = self.RxState.IDLE		# State of the reception FSM
         self.tx_state = self.TxState.IDLE		# State of the transmission FSM
 
-        self.last_rx_state = self.rx_state
-        self.last_tx_state = self.tx_state
+        self.last_rx_state = self.rx_state      # Used to log changes in states
+        self.last_tx_state = self.tx_state      # Used to log changes in states
 
-        self.rx_block_counter = 0
+        self.rx_block_counter = 0               # Keeps track of how many block we've received. Used to determine when to send a flow control message
         self.last_seqnum = 0					# Consecutive frame Sequence number of previous message
         self.rx_frame_length = 0				# Length of IsoTP frame being received at the moment
         self.tx_frame_length = 0				# Length of the data that we are sending
         self.last_flow_control_frame = None		# When a FlowControl is received. Put here
-        self.tx_block_counter = 0				# Keeps track of how many block we've sent
+        self.tx_block_counter = 0				# Keeps track of how many block we've sent. USed to determine when to wait for a flow control message
         self.tx_seqnum = 0						# Keeps track of the actual sequence number while sending
         self.wft_counter = 0 					# Keeps track of how many wait frame we've received
 
-        self.pending_flow_control_tx = False  # Flag indicating that we need to transmit a flow control message. Set by Rx Process, Cleared by Tx Process
+        self.pending_flow_control_tx = False    # Flag indicating that we need to transmit a flow control message. Set by Rx Process, Cleared by Tx Process
         self._empty_rx_buffer()
         self._empty_tx_buffer()
 
         self.timer_tx_stmin = Timer(timeout=0)
 
         self.error_handler = error_handler
-        self.actual_rxdl = None
-        self.is_threaded_implementation = False
+        self.actual_rxdl = None                 # Length of the CAN messages during a reception. Set by the first frame. All consecutive frames must be identical
 
+        # Legacy (v1.x) timing recommendation
         self.timings = {
-            (self.RxState.IDLE, self.TxState.IDLE): 0.05,
-            (self.RxState.IDLE, self.TxState.WAIT_FC): 0.01,
+            (self.RxState.IDLE, self.TxState.IDLE): 0.02,
+            (self.RxState.IDLE, self.TxState.WAIT_FC): 0.005,
         }
 
         self.load_params()
@@ -655,19 +660,26 @@ class TransportLayerLogic:
              target_address_type: Optional[Union[isotp.address.TargetAddressType, int]] = None,
              send_timeout: float = 0):
         """
-        Enqueue an IsoTP frame to be sent over CAN network
+        Enqueue an IsoTP frame to be sent over CAN network.
+        When performing a blocking send, this method returns only when the transmission is complete or raise an exception when a failure or a timeout occurs.
+        See :ref:`blocking_send<param_blocking_send>`
 
         :param data: The data to be sent
         :type data: bytearray
 
-        :param target_address_type: Optional parameter that can be Physical (0) for 1-to-1 communication or Functional (1) for 1-to-n. See :class:`isotp.TargetAddressType<isotp.TargetAddressType>`.
-            If not provided, parameter :ref:`default_target_address_type<param_default_target_address_type>` will be used (default to `Physical`)
+        :param target_address_type: Optional parameter that can be Physical (0) for 1-to-1 communication or Functional (1) for 1-to-n. 
+            See :class:`isotp.TargetAddressType<isotp.TargetAddressType>`.
+            If not provided, parameter :ref:`default_target_address_type<param_default_target_address_type>` will be used (default to ``Physical``)
         :type target_address_type: int
+
+        :param send_timeout: Timeout value for blocking send. Unused if :ref:`blocking_send<param_blocking_send>` is ``False``
+        :type send_timeout: float
 
         :raises ValueError: Input parameter is not a bytearray or not convertible to bytearray
         :raises RuntimeError: Transmit queue is full
-        :raises BlockingSendTimeout: When `:ref:`blocking_send<param_blocking_send>` is set to `True` and the send operation does not complete in the given timeout
-        :raises BlockingSendFailure: When `:ref:`blocking_send<param_blocking_send>` is set to `True` and the transmission failed for any reason (e.g. unexpected frame or bad timings) 
+        :raises BlockingSendTimeout: When :ref:`blocking_send<param_blocking_send>` is set to ``True`` and the send operation does not complete in the given timeout.
+        :raises BlockingSendFailure: When :ref:`blocking_send<param_blocking_send>` is set to ``True`` and the transmission failed for any reason (e.g. unexpected frame or bad timings), including a timeout. Note that 
+            :class:`BlockingSendTimeout<BlockingSendTimeout>` inherits :class:`BlockingSendFailure<BlockingSendFailure>`.
         """
 
         if target_address_type is None:
@@ -967,7 +979,10 @@ class TransportLayerLogic:
                     self.wft_counter = 0
                     self.timer_rx_fc.stop()
                     assert flow_control_frame.stmin_sec is not None
-                    self.timer_tx_stmin.set_timeout(flow_control_frame.stmin_sec)
+                    if self.params.override_receiver_stmin is not None:
+                        self.timer_tx_stmin.set_timeout(self.params.override_receiver_stmin)
+                    else:
+                        self.timer_tx_stmin.set_timeout(flow_control_frame.stmin_sec)
                     self.remote_blocksize = flow_control_frame.blocksize
 
                     if self.tx_state == self.TxState.WAIT_FC:
@@ -1065,7 +1080,7 @@ class TransportLayerLogic:
 
         elif self.tx_state == self.TxState.TRANSMIT_CF:
             assert self.remote_blocksize is not None
-            if self.timer_tx_stmin.is_timed_out() or self.params.squash_stmin_requirement:
+            if self.timer_tx_stmin.is_timed_out():
                 data_length = self.params.tx_data_length - 1 - len(self.address.tx_payload_prefix)
                 msg_data = self.address.tx_payload_prefix + bytearray([0x20 | self.tx_seqnum]) + self.tx_buffer[:data_length]
                 arbitration_id = self.address.get_tx_arbitration_id()
@@ -1345,8 +1360,6 @@ class TransportLayerLogic:
         if not self.is_tx_transmitting_cf():
             return None
 
-        if self.params.squash_stmin_requirement:
-            return 0
         if self.timer_tx_stmin.is_timed_out():
             return 0
         return self.timer_tx_stmin.remaining()
@@ -1354,27 +1367,26 @@ class TransportLayerLogic:
 
 class TransportLayer(TransportLayerLogic):
     """
-    An IsoTP transport layer implementation that runs in a separate thread. The main public interface are `start`, `stop`, `send`, `recv`.
-    For backward compatibility, this class will behave similarly as a V1 TransportLayer if start/stop are never called; meaning that `process()` can be called by the user
+    An IsoTP transport layer implementation that runs in a separate thread. The main public interface are ``start``, ``stop``, ``send``, ``recv``.
+    For backward compatibility, this class will behave similarly as a V1 TransportLayer if start/stop are never called; meaning that ``process()`` can be called by the user
 
     :param rxfn: Function to be called by the transport layer to read the CAN layer. Must return a :class:`isotp.CanMessage<isotp.CanMessage>` or None if no message has been received.
-    For optimal performance, this function should perform a blocking read that waits on IO
-    :type rxfn: Callable : expected signature: `my_txfn(msg:isotp.CanMessage) -> None`
+        For optimal performance, this function should perform a blocking read that waits on IO
+    :type rxfn: Callable : expected signature: ``my_txfn(msg:isotp.CanMessage) -> None``
 
     :param txfn: Function to be called by the transport layer to send a message on the CAN layer. This function should receive a :class:`isotp.CanMessage<isotp.CanMessage>`
-    :type txfn: Callable : expected signature: `my_rxfn(timeout:float) -> Optional[isotp.CanMessage]`
+    :type txfn: Callable : expected signature: ``my_rxfn(timeout:float) -> Optional[isotp.CanMessage]``
 
     :param address: The address information of CAN messages. Includes the addressing mode, txid/rxid, source/target address and address extension. See :class:`isotp.Address<isotp.Address>` for more details.
     :type address: isotp.Address
 
     :param error_handler: A function to be called when an error has been detected. 
-    An :class:`isotp.IsoTpError<isotp.IsoTpError>` (inheriting Exception class) will be given as sole parameter. See the :ref:`Error section<Errors>`
-    When started, the error handler will be called from a different thread than the user thread, make sure to consider thread safety if the error handler is more complex than a log.
+        An :class:`isotp.IsoTpError<isotp.IsoTpError>` (inheriting Exception class) will be given as sole parameter. See the :ref:`Error section<Errors>`
+        When started, the error handler will be called from a different thread than the user thread, make sure to consider thread safety if the error handler is more complex than a log.
     :type error_handler: Callable
 
-    :param params: List of parameters for the transport layer. See :ref:`the list of parameters<parameters>
+    :param params: List of parameters for the transport layer. See :ref:`the list of parameters<parameters>`
     :type params: dict
-
     """
     class Events:
         main_thread_ready: threading.Event
