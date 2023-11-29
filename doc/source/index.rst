@@ -35,3 +35,5 @@ Here is the major API changes to v2.x that might make an application designed wi
     - The transport layer can perform blocking sends, allowing an UDS layer to better handle its timeouts (P2/P2* vs P6 timeouts)
     - Some methods dedicated to internal usage have been prefixed with an underscore (``_``) to indicates that they are internals
     - The CanStack object uses a Notifier instead of performing ``bus.recv()`` solving the popular issue of a CanStack depleting the receive queue and starving other modules from their incoming messages
+    - The ``isotp.socket.recv()`` method does not return ``None`` on timeout anymore. 
+        The API now comply with the Python socket API and will raise the proper exception in case of timeout.
