@@ -1502,9 +1502,15 @@ class TransportLayer(TransportLayerLogic):
         self.events.relay_thread_ready.set()
         while not self.events.stop_requested.is_set():
             rx_timeout = 0.0 if self.is_tx_throttled() else self.default_read_timeout
+            t1 = time.monotonic()
             data = self.user_rxfn(rx_timeout)
+            diff = time.monotonic() - t1
             if data is not None:
                 self.rx_relay_queue.put(data)
+            else:   # No data received. Sleep if user is not blocking
+                if not self.events.stop_requested.is_set():
+                    if not self.blocking_rxfn or diff < rx_timeout * 0.5:
+                        time.sleep(max(0, min(self.sleep_time(), rx_timeout - diff)))
 
     def _main_thread_fn(self) -> None:
         """Internal function executed by the main thread. """
@@ -1512,22 +1518,17 @@ class TransportLayer(TransportLayerLogic):
         self.events.main_thread_ready.set()
         try:
             while not self.events.stop_requested.is_set():
-                rx_timeout = 0.0 if self.is_tx_throttled() else self.default_read_timeout
 
                 if not self.is_rx_active() and self.is_tx_transmitting_cf():
                     delay = self.next_cf_delay()
-                    assert delay is not None
+                    assert delay is not None    # Confirmed by is_tx_transmitting_cf()
                     if delay > 0:
                         time.sleep(delay)   # If we are transmitting CFs, no need to call rxfn, we can stream those CF with short sleep
                     if not self.events.stop_requested.is_set():
                         self.process(do_rx=False, do_tx=True)
                 else:
-                    t1 = time.monotonic()
-                    count_stats = self.process(rx_timeout=rx_timeout)
-                    diff = time.monotonic() - t1
-                    if not self.events.stop_requested.is_set():
-                        if not self.blocking_rxfn or (count_stats.received == 0 and diff < rx_timeout * 0.5):
-                            time.sleep(max(0, min(self.sleep_time(), rx_timeout - diff)))
+                    rx_timeout = 0.0 if self.is_tx_throttled() else self.default_read_timeout
+                    self.process(rx_timeout)
 
                 if self.events.reset_tx.is_set():
                     self._stop_sending(success=False)
