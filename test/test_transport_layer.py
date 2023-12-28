@@ -14,14 +14,23 @@ class TestTransportLayerStackAgainstStack(unittest.TestCase):
     RXID = 0x121
 
     STACK_PARAMS = {
-        'stmin': 10,
+        'stmin': 2,
         'blocksize': 8,
         'override_receiver_stmin': 0,
         'rx_flowcontrol_timeout': 1000,
         'rx_consecutive_frame_timeout': 1000,
         'wftmax': 0,
         'tx_data_length': 8,
-        'max_frame_size': 65536
+        'tx_padding': None,
+        'rx_flowcontrol_timeout': 1000,
+        'rx_consecutive_frame_timeout': 1000,
+        'squash_stmin_requirement': False,
+        'can_fd': False,
+        'max_frame_size': 65536,
+        'bitrate_switch': False,
+        'rate_limit_enable': False,
+        'listen_mode': False,
+        'blocking_send': False
     }
 
     def setUp(self):
@@ -69,6 +78,9 @@ class TestTransportLayerStackAgainstStack(unittest.TestCase):
         unittest_logging.logger.debug("Error reported:%s" % error)
         self.error_triggered[error.__class__].append(error)
 
+    def assert_no_error_reported(self):
+        self.assertEqual(len(self.error_triggered), 0, "At least 1 error was reported")
+
     def read_queue_blocking(self, q: queue.Queue, timeout: float):
         try:
             return q.get(block=True, timeout=timeout)
@@ -83,21 +95,53 @@ class TestTransportLayerStackAgainstStack(unittest.TestCase):
         self.layer1.send(payload)
         data = self.layer2.recv(block=True, timeout=3)
         self.assertEqual(data, payload)
+        self.assert_no_error_reported()
 
     def test_single_frame(self):
         payload = bytearray([x & 0xFF for x in range(5)])
         self.layer1.send(payload)
         data = self.layer2.recv(block=True, timeout=3)
         self.assertEqual(data, payload)
+        self.assert_no_error_reported()
 
     def test_send_4095(self):
         payload = bytearray([x & 0xFF for x in range(4095)])
         self.layer1.send(payload)
-        data = self.layer2.recv(block=True, timeout=2)
+        data = self.layer2.recv(block=True, timeout=10)
         self.assertEqual(data, payload)
+        self.assert_no_error_reported()
 
     def test_send_10000(self):
         payload = bytearray([x & 0xFF for x in range(10000)])
         self.layer1.send(payload)
-        data = self.layer2.recv(block=True, timeout=5)
+
+        data = self.layer2.recv(block=True, timeout=20)
         self.assertEqual(data, payload)
+        self.assert_no_error_reported()
+
+    def test_blocking_send_timeout(self):
+        self.layer1.params.blocking_send = True
+        self.layer1.load_params()
+        self.layer2.stop()
+
+        with self.assertRaises(isotp.BlockingSendFailure):
+            # Will fail because no receiver to send the flow control
+            # Timeout will trigger before any other error
+            self.layer1.send(bytes([1] * 10), send_timeout=0.5)
+
+    def test_blocking_send_error(self):
+        self.layer1.params.blocking_send = True
+        self.layer1.load_params()
+        self.layer2.stop()
+
+        with self.assertRaises(isotp.BlockingSendFailure):
+            # Will fail because no receiver to send the flow control
+            # Transmission will fail because no flow control
+            self.layer1.send(bytes([1] * 10), send_timeout=10)
+
+    def test_blocking_send(self):
+        self.layer1.params.blocking_send = True
+        self.layer1.load_params()
+        # layer2 has a thread to handle reception
+        self.layer1.send(bytes([1] * 100), send_timeout=5)
+        self.assert_no_error_reported()

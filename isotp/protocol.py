@@ -718,7 +718,7 @@ class TransportLayerLogic:
                 raise isotp.errors.BlockingSendTimeout("Failed to send IsoTP frame in time")
             else:
                 if not send_request.success:
-                    isotp.errors.BlockingSendFailure("Error while sending IsoTP frame")
+                    raise isotp.errors.BlockingSendFailure("Error while sending IsoTP frame")
 
     # Receive an IsoTP frame. Output of the layer
     def recv(self, block: bool = False, timeout: Optional[float] = None) -> Optional[bytearray]:
