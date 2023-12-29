@@ -675,7 +675,7 @@ class TransportLayerLogic:
         :param send_timeout: Timeout value for blocking send. Unused if :ref:`blocking_send<param_blocking_send>` is ``False``
         :type send_timeout: float
 
-        :raises ValueError: Input parameter is not a bytearray or not convertible to bytearray
+        :raises ValueError: Input parameter is not a bytearray, convertible to bytearray or too big
         :raises RuntimeError: Transmit queue is full
         :raises BlockingSendTimeout: When :ref:`blocking_send<param_blocking_send>` is set to ``True`` and the send operation does not complete in the given timeout.
         :raises BlockingSendFailure: When :ref:`blocking_send<param_blocking_send>` is set to ``True`` and the transmission failed for any reason (e.g. unexpected frame or bad timings), including a timeout. Note that 
@@ -1116,7 +1116,7 @@ class TransportLayerLogic:
 
     def set_address(self, address: isotp.address.Address):
         """
-        Sets the layer :class:`Address<isotp.Address>`. Can be set after initialization if needed.
+        Sets the layer :class:`Address<isotp.Address>`. Can be set after initialization if needed. May cause a timeout if called while a transmission is active.
         """
 
         if not isinstance(address, isotp.address.Address):
@@ -1365,6 +1365,7 @@ class TransportLayerLogic:
         return self.timer_tx_stmin.remaining()
 
 
+# Inheritance of TransportLayerLogic instead of using composition is a design choice to ease backward compatibility at the expense of a more crowded interface.
 class TransportLayer(TransportLayerLogic):
     """
     An IsoTP transport layer implementation that runs in a separate thread. The main public interface are ``start``, ``stop``, ``send``, ``recv``.
@@ -1385,8 +1386,13 @@ class TransportLayer(TransportLayerLogic):
         When started, the error handler will be called from a different thread than the user thread, make sure to consider thread safety if the error handler is more complex than a log.
     :type error_handler: Callable
 
-    :param params: List of parameters for the transport layer. See :ref:`the list of parameters<parameters>`
+    :param params: Dict of parameters for the transport layer. See :ref:`the list of parameters<parameters>`
     :type params: dict
+
+    :param read_timeout: Default blocking read timeout passed down to the ``rxfn``. Affects only the reading thread time granularity which can affect timing performance.
+        A value between 20ms-500ms should generally be good. MEaningless if the provided ``rxfn`` ignores its timeout parameter
+    :type read_timeout: float
+
     """
     class Events:
         main_thread_ready: threading.Event
@@ -1438,7 +1444,7 @@ class TransportLayer(TransportLayerLogic):
             return None
 
     def start(self) -> None:
-        """Start the internal thread that handles the IsoTP layer."""
+        """Start the IsoTP layer. Starts internal threads that handle the IsoTP communication."""
         self.logger.debug(f"Starting {self.__class__.__name__}")
         if self.started:
             raise RuntimeError("Transport Layer is already started")
@@ -1469,7 +1475,7 @@ class TransportLayer(TransportLayerLogic):
         self.started = True
 
     def stop(self) -> None:
-        """Stops the internal thread that handles the IsoTP layer."""
+        """Stops the IsoTP layer. Stops the internal threads that handle the IsoTP communication and reset the layer state."""
         self.logger.debug(f"Stopping {self.__class__.__name__}")
         self.events.stop_requested.set()
         self.rx_relay_queue.put(None)
@@ -1491,7 +1497,7 @@ class TransportLayer(TransportLayerLogic):
         self.events.reset_rx.clear()
 
         self.reset()
-        self.set_rxfn(self.user_rxfn)
+        self.set_rxfn(self.user_rxfn)   # Switch back to the given user rxfn. Backward compatibility with v1.x
         self.started = False
         self.logger.debug(f"{self.__class__.__name__} Stopped")
 

@@ -138,7 +138,7 @@ The transport layer ``params`` parameter must be a dictionary with the following
 
    **default: 4095**
 
-   The maximum frame length that the stack will accept to receive. ISO-15765-2:2016 allows frames as long as 2^32-1 (4294967295 bytes). When a FirstFrame is sent with a length longer than ``max_frame_size``, the message will be ignored, a FlowControl message with FlowStaus=2 (Overflow) will be sent and a :class:`FrameTooLongError<isotp.FrameTooLongError>` will be triggered.
+   The maximum frame length that the stack will accept to receive. ISO-15765-2:2016 allows frames as long as 2^32-1 (4294967295 bytes). When a FirstFrame is sent with a length longer than ``max_frame_size``, the message will be ignored, a FlowControl message with FlowStatus=2 (Overflow) will be sent and a :class:`FrameTooLongError<isotp.FrameTooLongError>` will be triggered.
 
    This parameter mainly is a protection to avoid crashes due to lack of memory (caused by an external device).
 
@@ -228,6 +228,7 @@ The transport layer ``params`` parameter must be a dictionary with the following
    When Listen Mode is enabled, the :class:`TransportLayer<isotp.TransportLayer>` will correctly receive and transmit ISO-TP Frame, but will not send Flow Control
    message when receiving a frame. This mode of operation is useful to listen to a transmission between two third-party devices without interfering. 
 
+
 .. _param_blocking_send:
 
 .. attribute:: blocking_send
@@ -235,7 +236,8 @@ The transport layer ``params`` parameter must be a dictionary with the following
 
    **default: False**
 
-   When True, the ``send()`` method will block until the transmission is complete or an error occurred (including a timeout). 
+   When enabled, calling :meth:`TransportLayer.send()<isotp.TransportLayer.send>` will block until the whole payload has been passed down to the lower layer.
+   In case of failure, a :class:`BlockingSendFailure<isotp.BlockingSendFailure>` exception will be raised.
 
    .. warning:: This parameter requires the processing of the transport layer to happen in parallel, therefore ``TransportLayer.start()`` must be called prior to ``send()`` or
         a manually generated thread must called ``process()`` as fast as possible.
@@ -323,8 +325,8 @@ The :class:`isotp.TransportLayer<isotp.TransportLayer>` object is an extension o
 Errors
 ------
 
-When a transmission error happens, for instance the receiving party stop responding or bad messages are received, the error is signaled to the user by calling an error handler. 
-An error handler should be a callable function that expects an Exception as first parameter.
+Problem during the transmission/reception are possible. These error are reported to the user by calling a error handler and passing an error object containing the details of the error. 
+An error handler should be a callable function that expects an  :class:`isotp.IsoTpError<isotp.IsoTpError>` as first parameter.
 
 .. warning:: The error handler will be called from the internal thread, therefore, any interaction with the application should use a thread safe mechanism
 
@@ -359,9 +361,55 @@ Exceptions
 ----------
 
 Some exception can be raised in special cases. These are never sent to the error handler
+Some other custom exception are used in this project, but will never be passed down to a error handler as they might simply be raised during normal operation.
 
 .. autoclass:: isotp.BlockingSendFailure
 .. autoclass:: isotp.BlockingSendTimeout
 
 .. note:: ``BlockingSendTimeout`` inherits ``BlockingSendTimeout``. Catching a ``BlockingSendFailure`` will also catch timeouts if no 
     dedicated catching of ``BlockingSendTimeout`` is done
+--------
+
+.. _about_timings:
+
+About timings
+-------------
+
+Timing management is a complex subject and has been the source of a lot of discussions in Github issue tracker. v1.x had many timing-related flaws that were addressed in v2.x.
+Still, reaching good timing with the pure python :class:`TransportLayer<isotp.TransportLayer>` object is not an easy task, mainly because of the 2 following facts
+ 
+ 1. Timing depends on the OS scheduler
+ 2. The transport layer is not tightly coupled with the underlying layers (``rxfn`` is user provided)
+
+The fact #2 is useful for compatibility, allowing to couple the isotp layer with any kind of link layer. Unfortunately, it has the drawback of preventing cross-layer optimizations.
+For that reason, this module employs a 3 thread strategy and rely on the python ``Queue`` object for synchronization. The python ``Queue`` module employ OS primitives for synchronization, such
+as condition variables to pass control between threads. See the following figure
+
+.. image:: assets/threads.png
+    :width: 800px
+    :align: center
+
+
+- The relay thread reads the user provided ``rxfn`` in a loop and fills the relay queue when that callback returns a value different from ``None``
+- The worker thread interact with the user by doing non-blocking reads to the Rx Queue
+- The worker thread does blocking reads to the relay queue and gets woken up right away by Python when a message arrives
+- When the user calls ``send()``, a ``None`` is injected in the relay queue, forcing the worker thread to wake up and process the user provided payload right away.
+
+Using the approach described above, a message can be read from the link-layer and processed after 2 context switches, which are achievable in about 20us on both Windows and Linux. This
+40us latency is far better than the latency caused by calls to ``time.sleep()`` required with v1.x. Considering that a CAN bus running at 500kbps has a message duration of about 230us,
+the latency is in the acceptable range.
+
+--------
+
+.. _backward_compatibility:
+
+Backward compatibility
+----------------------
+
+For backward compatibility with v1.x, the :class:`isotp.TransportLayer<isotp.TransportLayer>` is an extension of the v1.x transport layer, which has been renamed to ``TransportLayerLogic``.
+In v1.x, the user had to handle timing and repeatedly call the ``process()`` method. To avoid breaking applications using that approach, the :class:`isotp.TransportLayer<isotp.TransportLayer>` inherits
+``TransportLayerLogic``, therefore the old interface is still accessible under the same name. Inheritance is used instead of composition for that purpose.
+
+When calling ``start()`` and ``stop()``, which have been added in the 2.x extension, it is assumed that the user will uses the TransportLayer as documented by the v2.x documentation,
+otherwise race conditions could occur. Put simply, ``process()`` should never be called after ``start()`` has been called.
+

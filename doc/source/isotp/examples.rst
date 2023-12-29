@@ -1,72 +1,75 @@
 Examples
 ========
 
-.. _example_transmit_can_stack:
-
-Basic transmission with python-can
-----------------------------------
-
-.. code-block:: python
-   
-    import isotp
-    import logging
-    import time
-
-    from can.interfaces.vector import VectorBus
-
-    def my_error_handler(error):
-        # Called by a different thread. Make it thread safe.
-        logging.warning('IsoTp error happened : %s - %s' % (error.__class__.__name__, str(error)))
-
-    bus = VectorBus(channel=0, bitrate=500000)
-    addr = isotp.Address(isotp.AddressingMode.Normal_11bits, rxid=0x123, txid=0x456)
-
-    stack = isotp.CanStack(bus, address=addr, error_handler=my_error_handler)
-    stack.start()
-    stack.send(b'Hello, this is a long payload sent in small chunks')
-
-    while stack.transmitting():
-        time.sleep(stack.sleep_time())
-
-    print("Payload transmission done.")
-    stack.stop()
-    bus.shutdown()
-
------
-
 .. _example_transmit_can_stack_blocking_send:
 
-Basic blocking transmission
-----------------------------------
+Blocking transmission with python-can
+-------------------------------------------
+
 .. code-block:: python
-   
+
+    # In this example, we transmit a payload using a blocking send()
     import isotp
     import logging
-    import time
 
-    from can.interfaces.vector import VectorBus
+    from can.interfaces.socketcan import SocketcanBus
 
     def my_error_handler(error):
-        # Called by a different thread. Make it thread safe.
+        # I am called from a different thread, careful to race conditions!
         logging.warning('IsoTp error happened : %s - %s' % (error.__class__.__name__, str(error)))
 
     bus = SocketcanBus(channel='vcan0')
     addr = isotp.Address(isotp.AddressingMode.Normal_11bits, rxid=0x123, txid=0x456)
-
     params = {
         'blocking_send' : True
     }
-
     stack = isotp.CanStack(bus, address=addr, error_handler=my_error_handler, params=params)
-    stack.start()
+
     try:
-        stack.send(b'Hello, this is a long payload sent in small chunks', timeout=1.0)
-    except isotp.BlockingSendFailure:
-        # Catches all failure, including isotp.BlockingSendTimeout
-        print("Failed to transmit")
-    print("Payload transmission done.")
-    stack.stop()
-    bus.shutdown()
+        stack.start()
+        stack.send(b'Hello, this is a long payload sent in small chunks', timeout=2)    # Blocking send, raise on error
+        print("Payload transmission successfully completed.")     # Success is guaranteed because send() can raise
+    except isotp.BlockingSendFailure:   # Happens for any kind of failure, including timeouts
+        print("Send failed")
+    finally:
+        stack.stop()
+        bus.shutdown()
+
+-----
+
+.. _example_transmit_can_stack_non_blocking_send:
+
+Non-blocking transmission with python-can
+-----------------------------------------------
+
+.. code-block:: python
+   
+    # In this example, we transmit a payload sing a non-blocking send()
+    import isotp
+    import logging
+    import time
+
+    from can.interfaces.socketcan import SocketcanBus
+
+    def my_error_handler(error):
+        # Called from a different thread, needs to be thread safe
+        logging.warning('IsoTp error happened : %s - %s' % (error.__class__.__name__, str(error)))
+
+    bus = SocketcanBus(channel='vcan0')
+    addr = isotp.Address(isotp.AddressingMode.Normal_11bits, rxid=0x123, txid=0x456)
+    stack = isotp.CanStack(bus, address=addr, error_handler=my_error_handler)
+
+    try:
+        stack.start()
+        
+        stack.send(b'Hello, this is a long payload sent in small chunks')    # Non-blocking send, does not raise exception.
+        while stack.transmitting():
+            time.sleep(stack.sleep_time())  # Recommended sleep time, optional
+
+        print("Payload transmission done.") # May have failed, use the error_handler to know
+    finally:
+        stack.stop()
+        bus.shutdown()
 
 -----
 
@@ -95,20 +98,18 @@ Sending with functional addressing (broadcast)
 
 .. code-block:: python
 
-   import isotp
-   import time
+    import isotp
 
-   from can.interfaces.vector import VectorBus
-
-   bus = VectorBus(channel=0, bitrate=500000)
-   addr = isotp.Address(isotp.AddressingMode.Normal_11bits, rxid=0x123, txid=0x456)
-   stack = isotp.CanStack(bus, address=addr)
-   stack.send(b'Hello', isotp.TargetAddressType.Functional) # Payload must fit a Single Frame. Functional addressing only works with Single Frames
-
-   while stack.transmitting():
-      time.sleep(stack.sleep_time())
-
-   bus.shutdown()
+    addr = isotp.Address(isotp.AddressingMode.Normal_11bits, rxid=0x123, txid=0x456)
+    layer = isotp.TransportLayer(rxfn=..., txfn=..., address=addr)
+    try:
+        layer.start()
+        layer.send(b'Hello', isotp.TargetAddressType.Functional) # Payload must fit a Single Frame. Functional addressing only works with Single Frames
+        while layer.transmitting():
+            time.sleep(layer.sleep_time())
+    finally:
+        layer.stop()
+        bus.shutdown()
 
 -----
 
@@ -119,30 +120,35 @@ In this example, we see how to configure a :class:`TransportLayer<isotp.Transpor
 
 .. code-block:: python
 
-   import isotp
+    import isotp
+    from typing import Optional
 
-   def my_rxfn():
-       # All my_hardware_something and get_something() function are fictive of course.
-       msg = my_hardware_api_recv()
-       return isotp.CanMesage(arbitration_id=msg.get_id(), data=msg.get_data(), dlc=msg.get_dlc(), extended_id=msg.is_extended_id())
+    def my_rxfn(timeout:float) -> Optional[isotp.CanMesage]:
+        # All my_hardware_something and get_something() function are fictive of course.
+        msg = my_hardware_api_recv(timeout) # Blocking read are encouraged for better timing.
+        if msg is None:
+            return None # Return None if no message available
+        return isotp.CanMesage(arbitration_id=msg.get_id(), data=msg.get_data(), dlc=msg.get_dlc(), extended_id=msg.is_extended_id())
 
 
-   def my_txfn(isotp_msg):
-       # all set_something functions and my_hardware_something are fictive.
-       msg = my_hardware_api_make_msg()
-       msg.set_id(isotp_msg.arbitration_id)
-       msg.set_data(isotp_msg.data)
-       msg.set_dlc(isotp_msg.dlc)
-       msg.set_extended_id(isotp_msg.is_extended_id)
-       my_hardware_api_send(msg)
+    def my_txfn(isotp_msg:isotp.CanMesage):
+        # all set_something functions and my_hardware_something are fictive.
+        msg = my_hardware_api_make_msg()
+        msg.set_id(isotp_msg.arbitration_id)
+        msg.set_data(isotp_msg.data)
+        msg.set_dlc(isotp_msg.dlc)
+        msg.set_extended_id(isotp_msg.is_extended_id)
+        my_hardware_api_send(msg)
 
-   addr = isotp.Address(isotp.AddressingMode.Normal_29bits, txid=0x123456, rxid = 0x123457)
-   layer = isotp.TransportLayer(rxfn=my_rxfn, txfn=my_txfn, address=addr)
+    addr = isotp.Address(isotp.AddressingMode.Normal_29bits, txid=0x123456, rxid = 0x123457)
+    layer = isotp.TransportLayer(rxfn=my_rxfn, txfn=my_txfn, address=addr)
+    layer.start()
 
-   # ... rest of programs
-   # ...
+    # ... rest of programs
+    # ...
 
-   my_hardware_close()
+    layer.stop()
+    my_hardware_close()
 
 -----
 
@@ -156,30 +162,37 @@ A clean way to overcome this limitation is to use a ``functools.partial`` functi
 
 .. code-block:: python
 
-   import isotp
-   from functools import partial   # Allow partial functions
+    import isotp
+    import functools
+    from typing import Optional
 
-   # hardware_handle is passed through partial func
-   def my_rxfn(hardware_handle):
-       msg = my_hardware_api_recv(hardware_handle)
-       return isotp.CanMesage(arbitration_id=msg.get_id(), data=msg.get_data(), dlc=msg.get_dlc(), extended_id=msg.is_extended_id())
+    # hardware_handle is passed through partial func
+    def my_rxfn(hardware_handle, timeout:float) -> Optional[isotp.CanMesage]:
+        msg = my_hardware_api_recv(timeout) # Blocking read are encouraged for better timing.
+        if msg is None:
+            return None # Return None if no message available
+        return isotp.CanMesage(arbitration_id=msg.get_id(), data=msg.get_data(), dlc=msg.get_dlc(), extended_id=msg.is_extended_id())
 
-   # hardware_handle is passed through partial func
-   def my_txfn(hardware_handle, isotp_msg):
-       # all set_something functions and my_hardware_something are fictive.
-       msg = my_hardware_api_make_msg()
-       msg.set_id(isotp_msg.arbitration_id)
-       msg.set_data(isotp_msg.data)
-       msg.set_dlc(isotp_msg.dlc)
-       msg.set_extended_id(isotp_msg.is_extended_id)
-       my_hardware_api_send(hardware_handle, msg)
+    # hardware_handle is passed through partial func
+    def my_txfn(hardware_handle, isotp_msg:isotp.CanMesage):
+        # all set_something functions and my_hardware_something are fictive.
+        msg = my_hardware_api_make_msg()
+        msg.set_id(isotp_msg.arbitration_id)
+        msg.set_data(isotp_msg.data)
+        msg.set_dlc(isotp_msg.dlc)
+        msg.set_extended_id(isotp_msg.is_extended_id)
+        my_hardware_api_send(hardware_handle, msg)
 
-   hardware_handle = my_hardware_open()    # Fictive handle mechanism
-   addr = isotp.Address(isotp.AddressingMode.Normal_29bits, txid=0x123456, rxid = 0x123457)
-   # This is where the magic happens
-   layer = isotp.TransportLayer(rxfn=partial(my_rxfn, hardware_handle), txfn=partial(my_txfn, hardware_handle), address=addr)
+    hardware_handle = my_hardware_open()    # Fictive handle mechanism
+    addr = isotp.Address(isotp.AddressingMode.Normal_29bits, txid=0x123456, rxid = 0x123457)
+    
+    # This is where the magic happens
+    partial_rxfn = functools.partial(my_rxfn, hardware_handle)
+    partial_txfn = functools.partial(my_txfn, hardware_handle)
+    layer = isotp.TransportLayer(rxfn=partial_rxfn, txfn=partial_txfn, address=addr)
 
-   # ... rest of programs
-   # ...
-
-   my_hardware_close()
+    layer.start()
+    # ... rest of programs
+    # ...
+    layer.stop()
+    my_hardware_close()

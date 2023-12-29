@@ -11,7 +11,7 @@ class BlockingSendFailure(IsoTpError):
 
 
 class BlockingSendTimeout(BlockingSendFailure):
-    """Happens when a blocking send fails to complete because the user timeout is expired"""
+    """Happens when a blocking send fails to complete because the user timeout is expired. Inherits :class:`BlockingSendFailure<isotp.BlockingSendFailure>`"""
     pass
 
 
