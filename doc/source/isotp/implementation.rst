@@ -361,14 +361,12 @@ Exceptions
 ----------
 
 Some exception can be raised in special cases. These are never sent to the error handler
-Some other custom exception are used in this project, but will never be passed down to a error handler as they might simply be raised during normal operation.
 
 .. autoclass:: isotp.BlockingSendFailure
 .. autoclass:: isotp.BlockingSendTimeout
 
-.. note:: ``BlockingSendTimeout`` inherits ``BlockingSendTimeout``. Catching a ``BlockingSendFailure`` will also catch timeouts if no 
-    dedicated catching of ``BlockingSendTimeout`` is done
-    
+.. note:: ``BlockingSendTimeout`` inherits ``BlockingSendTimeout``. Catching a ``BlockingSendFailure`` will also catch timeouts
+
 --------
 
 .. _about_timings:
