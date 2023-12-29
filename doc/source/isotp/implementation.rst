@@ -368,6 +368,7 @@ Some other custom exception are used in this project, but will never be passed d
 
 .. note:: ``BlockingSendTimeout`` inherits ``BlockingSendTimeout``. Catching a ``BlockingSendFailure`` will also catch timeouts if no 
     dedicated catching of ``BlockingSendTimeout`` is done
+    
 --------
 
 .. _about_timings:
