@@ -21,7 +21,10 @@ class CanMessage:
     :type extended_id: bool
 
     :param is_fd: When True, message has to be transmitted or has been received in a CAN FD frame. CAN frame when set to False
-    :type extended_id: bool
+    :type is_fd: bool
+
+    :param bitrate_switch: When True, message has the Bit Rate Switch (BRS) bit set.
+    :type bitrate_switch: bool
     """
     __slots__ = 'arbitration_id', 'dlc', 'data', 'is_extended_id', 'is_fd', 'bitrate_switch'
 

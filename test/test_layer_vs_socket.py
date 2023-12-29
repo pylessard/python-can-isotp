@@ -58,7 +58,8 @@ class TestLayerAgainstSocket(ThreadableTest):
             'max_frame_size': 4095,
             'bitrate_switch': False,
             'rate_limit_enable': False,
-            'listen_mode': False
+            'listen_mode': False,
+            'blocking_send': False
         }
 
         isotp_params.update(isotp_params_override)

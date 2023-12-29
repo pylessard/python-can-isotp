@@ -675,7 +675,7 @@ class TransportLayerLogic:
         :param send_timeout: Timeout value for blocking send. Unused if :ref:`blocking_send<param_blocking_send>` is ``False``
         :type send_timeout: float
 
-        :raises ValueError: Input parameter is not a bytearray or not convertible to bytearray
+        :raises ValueError: Input parameter is not a bytearray, convertible to bytearray or too big
         :raises RuntimeError: Transmit queue is full
         :raises BlockingSendTimeout: When :ref:`blocking_send<param_blocking_send>` is set to ``True`` and the send operation does not complete in the given timeout.
         :raises BlockingSendFailure: When :ref:`blocking_send<param_blocking_send>` is set to ``True`` and the transmission failed for any reason (e.g. unexpected frame or bad timings), including a timeout. Note that 
@@ -718,7 +718,7 @@ class TransportLayerLogic:
                 raise isotp.errors.BlockingSendTimeout("Failed to send IsoTP frame in time")
             else:
                 if not send_request.success:
-                    isotp.errors.BlockingSendFailure("Error while sending IsoTP frame")
+                    raise isotp.errors.BlockingSendFailure("Error while sending IsoTP frame")
 
     # Receive an IsoTP frame. Output of the layer
     def recv(self, block: bool = False, timeout: Optional[float] = None) -> Optional[bytearray]:
@@ -749,6 +749,19 @@ class TransportLayerLogic:
         """
         Function to be called periodically, as fast as possible. 
         This function is expected to block only if the given rxfn performs a blocking read.
+
+        :param rx_timeout: Timeout for any read operation
+        :type rx_timeout: float
+
+        :param do_rx: Process reception when ``True``
+        :type do_rx: bool
+
+        :param do_tx: Process transmission when ``True``
+        :type do_tx: bool
+
+        :return: Statistics about what have been accomplished during the call
+        :rtype: :class:`ProcessStats<isotp.ProcessStats>`
+
         """
         run_process = True
         msg_received = 0
@@ -828,7 +841,7 @@ class TransportLayerLogic:
             frame_received=nb_frame_received
         )
 
-    def set_rxfn(self, rxfn: "TransportLayerLogic.RxFn"):
+    def _set_rxfn(self, rxfn: "TransportLayerLogic.RxFn"):
         """
         Allow post init change of rxfn. This is a trick to implement the threaded Transport Layer
         and keeping the ability to run the TransportLayerLogic without threads for backward compatibility
@@ -1108,6 +1121,9 @@ class TransportLayerLogic:
     def set_sleep_timing(self, idle: float, wait_fc: float) -> None:
         """
         Sets values in seconds that can be passed to ``time.sleep()`` when the stack is processed in a different thread.
+
+        :param idle:
+        :param wait_fc:
         """
         self.timings = {
             (self.RxState.IDLE, self.TxState.IDLE): idle,
@@ -1116,7 +1132,7 @@ class TransportLayerLogic:
 
     def set_address(self, address: isotp.address.Address):
         """
-        Sets the layer :class:`Address<isotp.Address>`. Can be set after initialization if needed.
+        Sets the layer :class:`Address<isotp.Address>`. Can be set after initialization if needed. May cause a timeout if called while a transmission is active.
         """
 
         if not isinstance(address, isotp.address.Address):
@@ -1365,6 +1381,7 @@ class TransportLayerLogic:
         return self.timer_tx_stmin.remaining()
 
 
+# Inheritance of TransportLayerLogic instead of using composition is a design choice to ease backward compatibility at the expense of a more crowded interface.
 class TransportLayer(TransportLayerLogic):
     """
     An IsoTP transport layer implementation that runs in a separate thread. The main public interface are ``start``, ``stop``, ``send``, ``recv``.
@@ -1385,8 +1402,13 @@ class TransportLayer(TransportLayerLogic):
         When started, the error handler will be called from a different thread than the user thread, make sure to consider thread safety if the error handler is more complex than a log.
     :type error_handler: Callable
 
-    :param params: List of parameters for the transport layer. See :ref:`the list of parameters<parameters>`
+    :param params: Dict of parameters for the transport layer. See :ref:`the list of parameters<parameters>`
     :type params: dict
+
+    :param read_timeout: Default blocking read timeout passed down to the ``rxfn``. Affects only the reading thread time granularity which can affect timing performance.
+        A value between 20ms-500ms should generally be good. MEaningless if the provided ``rxfn`` ignores its timeout parameter
+    :type read_timeout: float
+
     """
     class Events:
         main_thread_ready: threading.Event
@@ -1438,12 +1460,12 @@ class TransportLayer(TransportLayerLogic):
             return None
 
     def start(self) -> None:
-        """Start the internal thread that handles the IsoTP layer."""
+        """Start the IsoTP layer. Starts internal threads that handle the IsoTP communication."""
         self.logger.debug(f"Starting {self.__class__.__name__}")
         if self.started:
             raise RuntimeError("Transport Layer is already started")
 
-        self.set_rxfn(self._read_relay_queue)
+        self._set_rxfn(self._read_relay_queue)
         self.main_thread = threading.Thread(target=self._main_thread_fn)
         self.relay_thread = threading.Thread(target=self._relay_thread_fn)
 
@@ -1469,7 +1491,7 @@ class TransportLayer(TransportLayerLogic):
         self.started = True
 
     def stop(self) -> None:
-        """Stops the internal thread that handles the IsoTP layer."""
+        """Stops the IsoTP layer. Stops the internal threads that handle the IsoTP communication and reset the layer state."""
         self.logger.debug(f"Stopping {self.__class__.__name__}")
         self.events.stop_requested.set()
         self.rx_relay_queue.put(None)
@@ -1491,7 +1513,7 @@ class TransportLayer(TransportLayerLogic):
         self.events.reset_rx.clear()
 
         self.reset()
-        self.set_rxfn(self.user_rxfn)
+        self._set_rxfn(self.user_rxfn)   # Switch back to the given user rxfn. Backward compatibility with v1.x
         self.started = False
         self.logger.debug(f"{self.__class__.__name__} Stopped")
 
@@ -1502,9 +1524,15 @@ class TransportLayer(TransportLayerLogic):
         self.events.relay_thread_ready.set()
         while not self.events.stop_requested.is_set():
             rx_timeout = 0.0 if self.is_tx_throttled() else self.default_read_timeout
+            t1 = time.monotonic()
             data = self.user_rxfn(rx_timeout)
+            diff = time.monotonic() - t1
             if data is not None:
                 self.rx_relay_queue.put(data)
+            else:   # No data received. Sleep if user is not blocking
+                if not self.events.stop_requested.is_set():
+                    if not self.blocking_rxfn or diff < rx_timeout * 0.5:
+                        time.sleep(max(0, min(self.sleep_time(), rx_timeout - diff)))
 
     def _main_thread_fn(self) -> None:
         """Internal function executed by the main thread. """
@@ -1512,22 +1540,17 @@ class TransportLayer(TransportLayerLogic):
         self.events.main_thread_ready.set()
         try:
             while not self.events.stop_requested.is_set():
-                rx_timeout = 0.0 if self.is_tx_throttled() else self.default_read_timeout
 
                 if not self.is_rx_active() and self.is_tx_transmitting_cf():
                     delay = self.next_cf_delay()
-                    assert delay is not None
+                    assert delay is not None    # Confirmed by is_tx_transmitting_cf()
                     if delay > 0:
                         time.sleep(delay)   # If we are transmitting CFs, no need to call rxfn, we can stream those CF with short sleep
                     if not self.events.stop_requested.is_set():
                         self.process(do_rx=False, do_tx=True)
                 else:
-                    t1 = time.monotonic()
-                    count_stats = self.process(rx_timeout=rx_timeout)
-                    diff = time.monotonic() - t1
-                    if not self.events.stop_requested.is_set():
-                        if not self.blocking_rxfn or (count_stats.received == 0 and diff < rx_timeout * 0.5):
-                            time.sleep(max(0, min(self.sleep_time(), rx_timeout - diff)))
+                    rx_timeout = 0.0 if self.is_tx_throttled() else self.default_read_timeout
+                    self.process(rx_timeout)
 
                 if self.events.reset_tx.is_set():
                     self._stop_sending(success=False)
