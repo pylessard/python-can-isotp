@@ -205,3 +205,11 @@ class TestTransportLayerStackAgainstStack(unittest.TestCase):
             self.assertTrue(layer3_tx_queue.empty())    # layer3 cannot send
         finally:
             layer3.stop()
+
+    def test_no_call_to_process_after_start(self):
+        # Make sure we maintain backward compatibility without introducing weird race conditions into old application
+        with self.assertRaises(RuntimeError):
+            self.layer1.process()   # layer is running, Cannot call process
+
+        self.layer1.stop()
+        self.layer1.process()   # OK to call backwrd compatible process() when not running
