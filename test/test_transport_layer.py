@@ -1,11 +1,37 @@
 import isotp
-import time
 from . import unittest_logging
-from .TransportLayerBaseTest import TransportLayerBaseTest
 import queue
 from functools import partial
 import unittest
 Message = isotp.CanMessage
+from typing import List
+
+
+class SpliceableQueue(queue.Queue):
+    _rx_splices: List[queue.Queue]
+    _tx_splices: List[queue.Queue]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._tx_splices = []
+        self._rx_splices = []
+
+    def add_tx_splice(self, q: queue.Queue):
+        self._tx_splices.append(q)
+
+    def add_rx_splice(self, q: queue.Queue):
+        self._rx_splices.append(q)
+
+    def put(self, *args, **kwargs):
+        super().put(*args, **kwargs)
+        for splice in self._tx_splices:
+            splice.put(*args, **kwargs)
+
+    def get(self, *args, **kwargs):
+        v = super().get(*args, **kwargs)
+        for splice in self._rx_splices:
+            splice.put(v)
+        return v
 
 
 # Check the behavior of the transport layer. Sequenece of CAN frames, timings, etc.
@@ -34,8 +60,8 @@ class TestTransportLayerStackAgainstStack(unittest.TestCase):
 
     def setUp(self):
         self.error_triggered = {}
-        self.queue1to2 = queue.Queue()
-        self.queue2to1 = queue.Queue()
+        self.queue1to2 = SpliceableQueue()
+        self.queue2to1 = SpliceableQueue()
 
         params1 = self.STACK_PARAMS.copy()
         params1.update(dict(logger_name='layer1'))
@@ -144,3 +170,38 @@ class TestTransportLayerStackAgainstStack(unittest.TestCase):
         # layer2 has a thread to handle reception
         self.layer1.send(bytes([1] * 100), send_timeout=5)
         self.assert_no_error_reported()
+
+    def test_listen_mode(self):
+        layer3_rx_queue = queue.Queue()
+        layer3_tx_queue = queue.Queue()
+
+        self.queue1to2.add_tx_splice(layer3_rx_queue)
+        self.queue2to1.add_tx_splice(layer3_rx_queue)
+
+        params3 = self.STACK_PARAMS.copy()
+        params3.update(dict(logger_name='layer3', listen_mode=True))
+
+        # Layer 3 should receive the same thing as layer 2 even though it receives all messages
+        layer3 = isotp.TransportLayer(
+            txfn=partial(self.send_queue, layer3_tx_queue),
+            rxfn=partial(self.read_queue_blocking, layer3_rx_queue),
+            address=self.address2,
+            error_handler=self.error_handler,
+            params=params3
+        )
+
+        unittest_logging.configure_transport_layer(layer3)
+        layer3.start()
+        try:
+            payload = bytes([x % 255 for x in range(100)])
+            self.layer1.send(payload)
+            payload2 = self.layer2.recv(block=True, timeout=5)
+            self.assertEqual(payload, payload2)
+
+            payload3 = layer3.recv(block=True, timeout=1)
+            self.assertEqual(payload, payload3)
+
+            self.assert_no_error_reported()
+            self.assertTrue(layer3_tx_queue.empty())    # layer3 cannot send
+        finally:
+            layer3.stop()
