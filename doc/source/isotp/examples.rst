@@ -64,7 +64,7 @@ Non-blocking transmission with python-can
         
         stack.send(b'Hello, this is a long payload sent in small chunks')    # Non-blocking send, does not raise exception.
         while stack.transmitting():
-            time.sleep(stack.sleep_time())  # Recommended sleep time, optional
+            time.sleep(0.005)
 
         print("Payload transmission done.") # May have failed, use the error_handler to know
     finally:
@@ -106,7 +106,7 @@ Sending with functional addressing (broadcast)
         layer.start()
         layer.send(b'Hello', isotp.TargetAddressType.Functional) # Payload must fit a Single Frame. Functional addressing only works with Single Frames
         while layer.transmitting():
-            time.sleep(layer.sleep_time())
+            time.sleep(0.005)
     finally:
         layer.stop()
         bus.shutdown()
