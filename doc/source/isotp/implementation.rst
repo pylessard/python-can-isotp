@@ -281,7 +281,7 @@ In the above scenario, having a bitrate of 80000 bps and a window size of 0.1 se
     Knowing the a classical CAN message with 11bits ID and a payload of 64 bits usually have 111 bits, the extra 47 bits of overhead will not be considered by the rate limiter. This means
     that even if the rate limiter is requested to keep a steady 10kbps, depending on the CAN layer configuration, the effective hardware bitrate measured might be much more significant, from 1 to 1.5x more.
 
-.. warning::    Bitrate is achieved by adding extra wait states which normally translate into OS calls to ``Sleep()``. 
+.. warning:: Bitrate is achieved by adding extra wait states which normally translate into OS calls to ``Sleep()``. 
     Because an OS scheduler has a time resolution, bitrate accuracy will be poor if the specified bitrate is very low or if the window size is very small.
 
 -----

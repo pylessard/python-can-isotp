@@ -15,7 +15,7 @@ Blocking transmission with python-can
     from can.interfaces.socketcan import SocketcanBus
 
     def my_error_handler(error):
-        # I am called from a different thread, careful to race conditions!
+        # Called from a different thread, needs to be thread safe
         logging.warning('IsoTp error happened : %s - %s' % (error.__class__.__name__, str(error)))
 
     bus = SocketcanBus(channel='vcan0')

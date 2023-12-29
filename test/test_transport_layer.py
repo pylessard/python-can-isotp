@@ -16,7 +16,7 @@ class TestTransportLayerStackAgainstStack(unittest.TestCase):
     STACK_PARAMS = {
         'stmin': 2,
         'blocksize': 8,
-        'override_receiver_stmin': 0,
+        'override_receiver_stmin': None,
         'rx_flowcontrol_timeout': 1000,
         'rx_consecutive_frame_timeout': 1000,
         'wftmax': 0,
@@ -24,7 +24,6 @@ class TestTransportLayerStackAgainstStack(unittest.TestCase):
         'tx_padding': None,
         'rx_flowcontrol_timeout': 1000,
         'rx_consecutive_frame_timeout': 1000,
-        'squash_stmin_requirement': False,
         'can_fd': False,
         'max_frame_size': 65536,
         'bitrate_switch': False,
