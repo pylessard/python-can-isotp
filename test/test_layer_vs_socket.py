@@ -87,12 +87,10 @@ class TestLayerAgainstSocket(ThreadableTest):
         self.stack.start()
 
     def clientTearDown(self):
-        # print("clientTearDown")
         self.stack.stop()
         self.bus.shutdown()
 
     def tearDown(self):
-        # print("Teardown")
         for socket in self.socket_list:
             socket.close()
 
