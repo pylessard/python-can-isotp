@@ -7,23 +7,27 @@ __all__ = [
     'NotifierBasedCanStack'
 ]
 
+from isotp.can_message import CanMessage
+from isotp.tools import Timer
+import isotp.address
+import isotp.errors
+
 import queue
 import logging
 from copy import copy
 import binascii
 import time
-import isotp.address
-import isotp.errors
-from isotp.can_message import CanMessage
 import math
 import enum
 from dataclasses import dataclass
 import threading
-from isotp.tools import Timer
 import inspect
 import functools
+import types
+from collections.abc import Iterable
+import itertools
 
-from typing import Optional, Any, List, Callable, Dict, Tuple, Union, TYPE_CHECKING
+from typing import Optional, Any, List, Callable, Dict, Tuple, Union, Generator
 
 try:
     import can
@@ -474,13 +478,35 @@ class TransportLayerLogic:
     @dataclass
     class SendRequest:
         """An object representing a call to `TransportLayer.send() by the user. Wraps the given parameter and associate with a completion event and a success flag`"""
-        data: bytearray
+        generator: Generator[int, None, None]
+        generator_size: int
+        consumed_size: int
         target_address_type: isotp.address.TargetAddressType
         complete_event: threading.Event
         success: bool
 
-        def __init__(self, data: Union[bytearray, bytes], target_address_type: isotp.address.TargetAddressType):
-            self.data = bytearray(data)
+        def __init__(self, data: Union[bytearray, bytes, Tuple[Generator[int, None, None], int]], target_address_type: isotp.address.TargetAddressType):
+            if isinstance(data, tuple):
+                if len(data) != 2:
+                    raise ValueError("Given tuple must have 2 items. A generator and a length")
+                gen, size = data
+                if not isinstance(gen, types.GeneratorType):
+                    raise ValueError("Given data tuple must be a pair of generator, size (int)")
+
+                if not isinstance(size, int):
+                    raise ValueError("Given data tuple must be a pair of generator, size (int)")
+                self.generator = gen
+                self.generator_size = size
+            elif isinstance(data, Iterable):
+                self.generator = (x for x in data)
+                self.generator_size = len(data)
+            else:
+                raise ValueError("data must be an iterable element (bytes or bytearray) or a tuple of generator,size")
+
+            if self.generator_size < 0:
+                raise ValueError("Given data size must a be a positive integer")
+
+            self.consumed_size = 0
             self.target_address_type = target_address_type
             self.complete_event = threading.Event()
             self.success = False
@@ -488,6 +514,24 @@ class TransportLayerLogic:
         def complete(self, success: bool) -> None:
             self.success = success
             self.complete_event.set()
+
+        def total_length(self) -> int:
+            return self.generator_size
+
+        def remaining_size(self) -> int:
+            return self.generator_size - self.consumed_size
+
+        def depleted(self) -> bool:
+            return self.remaining_size() <= 0
+
+        def consume(self, size: int, enforce_exact: bool = True) -> bytearray:
+            data = bytearray(itertools.islice(self.generator, size))
+            self.consumed_size += len(data)
+            if self.consumed_size > self.generator_size:
+                raise isotp.errors.BadGeneratorError("Given generator size and actual amount of data does not match")
+            if enforce_exact and len(data) != size:
+                raise isotp.errors.BadGeneratorError(f"Did not read the requested amount of data. Tried to read {size}, got {len(data)}")
+            return data
 
     @dataclass(slots=True, frozen=True)
     class ProcessStats:
@@ -514,6 +558,7 @@ class TransportLayerLogic:
     TxFn = Callable[[CanMessage], None]
     PostSendCallback = Callable[[SendRequest], None]
     ErrorHandler = Callable[[Exception], None]
+    SendGenerator = Tuple[Generator[int, None, None], int]
 
     params: Params
     logger: logging.Logger
@@ -539,7 +584,6 @@ class TransportLayerLogic:
     actual_rxdl: Optional[int]
     timings: Dict[Tuple[RxState, TxState], float]
     active_send_request: Optional[SendRequest]
-    tx_buffer: bytearray
     rx_buffer: bytearray
     address: isotp.Address
     timer_rx_fc: Timer
@@ -605,7 +649,6 @@ class TransportLayerLogic:
 
         self.pending_flow_control_tx = False    # Flag indicating that we need to transmit a flow control message. Set by Rx Process, Cleared by Tx Process
         self._empty_rx_buffer()
-        self._empty_tx_buffer()
 
         self.timer_tx_stmin = Timer(timeout=0)
 
@@ -630,7 +673,7 @@ class TransportLayerLogic:
             self.rate_limiter.enable()
 
     def send(self,
-             data: Union[bytes, bytearray],
+             data: Union[bytes, bytearray, SendGenerator],
              target_address_type: Optional[Union[isotp.address.TargetAddressType, int]] = None,
              send_timeout: float = 0):
         """
@@ -661,11 +704,7 @@ class TransportLayerLogic:
         else:
             target_address_type = isotp.address.TargetAddressType(target_address_type)
 
-        if not isinstance(data, bytearray):
-            try:
-                data = bytearray(data)
-            except:
-                raise ValueError('data must be a bytearray')
+        send_request = self.SendRequest(data=data, target_address_type=target_address_type)
 
         if self.tx_queue.full():
             raise RuntimeError('Transmit queue is full')
@@ -674,14 +713,13 @@ class TransportLayerLogic:
             length_bytes = 1 if self.params.tx_data_length == 8 else 2
             maxlen = self.params.tx_data_length - length_bytes - len(self.address.tx_payload_prefix)
 
-            if len(data) > maxlen:
+            if send_request.total_length() > maxlen:
                 raise ValueError('Cannot send multi packet frame with Functional TargetAddressType')
 
-        send_request = self.SendRequest(data=data, target_address_type=target_address_type)
         if self.params.blocking_send:
             send_request.complete_event.clear()
 
-        self.logger.debug("Enqueuing a SendRequest for %d bytes and TAT=%s" % (len(send_request.data), target_address_type.name))
+        self.logger.debug("Enqueuing a SendRequest for %d bytes and TAT=%s" % (send_request.total_length(), target_address_type.name))
         self.tx_queue.put(send_request)
         if self.post_send_callback is not None:
             self.post_send_callback(send_request)
@@ -987,8 +1025,10 @@ class TransportLayerLogic:
 
         # ======= FSM ======
         # Check this first as we may have another isotp frame to send and we need to handle it right away without waiting for next "process()" call
-        if self.tx_state != self.TxState.IDLE and len(self.tx_buffer) == 0:
-            self._stop_sending(success=True)
+        if self.tx_state != self.TxState.IDLE:
+            assert self.active_send_request is not None
+            if self.active_send_request.depleted() and self.tx_standby_msg is None:  # No transmission in progress
+                self._stop_sending(success=True)
 
         immediate_rx_msg_required = False
         if self.tx_state == self.TxState.IDLE:
@@ -997,54 +1037,63 @@ class TransportLayerLogic:
                 read_tx_queue = False
                 if not self.tx_queue.empty():
                     self.active_send_request = self.tx_queue.get()
-                    if len(self.active_send_request.data) == 0:
+                    if self.active_send_request.depleted():
                         read_tx_queue = True  # Read another frame from tx_queue
                         self.active_send_request.complete(True)
                     else:
-                        self.tx_buffer = bytearray(self.active_send_request.data)
-                        size_on_first_byte = (len(self.tx_buffer) + len(self.address.tx_payload_prefix)) <= 7
+                        size_on_first_byte = (self.active_send_request.remaining_size() + len(self.address.tx_payload_prefix)) <= 7
                         size_offset = 1 if size_on_first_byte else 2
 
-                        # Single frame
-                        if len(self.tx_buffer) <= self.params.tx_data_length - size_offset - len(self.address.tx_payload_prefix):
-                            if size_on_first_byte:
-                                msg_data = self.address.tx_payload_prefix + bytearray([0x0 | len(self.tx_buffer)]) + self.tx_buffer
-                            else:
-                                msg_data = self.address.tx_payload_prefix + bytearray([0x0, len(self.tx_buffer)]) + self.tx_buffer
+                        try:
+                            # Single frame
+                            total_size = self.active_send_request.total_length()
+                            if total_size <= self.params.tx_data_length - size_offset - len(self.address.tx_payload_prefix):
+                                # Will raise if size is not what was requested
+                                payload = self.active_send_request.consume(total_size, enforce_exact=True)
 
-                            arbitration_id = self.address.get_tx_arbitration_id(self.active_send_request.target_address_type)
-                            msg_temp = self._make_tx_msg(arbitration_id, msg_data)
+                                if size_on_first_byte:
+                                    msg_data = self.address.tx_payload_prefix + bytearray([0x0 | len(payload)]) + payload
+                                else:
+                                    msg_data = self.address.tx_payload_prefix + bytearray([0x0, len(payload)]) + payload
 
-                            if len(msg_data) > allowed_bytes:
-                                self.tx_standby_msg = msg_temp
-                                self.tx_state = self.TxState.TRANSMIT_SF_STANDBY
-                            else:
-                                output_msg = msg_temp
+                                arbitration_id = self.address.get_tx_arbitration_id(self.active_send_request.target_address_type)
+                                msg_temp = self._make_tx_msg(arbitration_id, msg_data)
 
-                        # Multi frame - First Frame
-                        else:
-                            self.tx_frame_length = len(self.tx_buffer)
-                            encode_length_on_2_first_bytes = True if self.tx_frame_length <= 0xFFF else False
-                            if encode_length_on_2_first_bytes:
-                                data_length = self.params.tx_data_length - 2 - len(self.address.tx_payload_prefix)
-                                msg_data = self.address.tx_payload_prefix + \
-                                    bytearray([0x10 | ((self.tx_frame_length >> 8) & 0xF), self.tx_frame_length & 0xFF]) + self.tx_buffer[:data_length]
-                            else:
-                                data_length = self.params.tx_data_length - 6 - len(self.address.tx_payload_prefix)
-                                msg_data = self.address.tx_payload_prefix + bytearray([0x10, 0x00, (self.tx_frame_length >> 24) & 0xFF, (self.tx_frame_length >> 16) & 0xFF, (
-                                    self.tx_frame_length >> 8) & 0xFF, (self.tx_frame_length >> 0) & 0xFF]) + self.tx_buffer[:data_length]
+                                if len(msg_data) > allowed_bytes:
+                                    self.tx_standby_msg = msg_temp
+                                    self.tx_state = self.TxState.TRANSMIT_SF_STANDBY
+                                else:
+                                    output_msg = msg_temp
 
-                            arbitration_id = self.address.get_tx_arbitration_id()
-                            self.tx_buffer = self.tx_buffer[data_length:]
-                            self.tx_seqnum = 1
-                            msg_temp = self._make_tx_msg(arbitration_id, msg_data)
-                            if len(msg_data) <= allowed_bytes:
-                                output_msg = msg_temp
-                                self.tx_state = self.TxState.WAIT_FC
-                                self._start_rx_fc_timer()
+                            # Multi frame - First Frame
                             else:
-                                self.tx_standby_msg = msg_temp
-                                self.tx_state = self.TxState.TRANSMIT_FF_STANDBY
+                                self.tx_frame_length = total_size
+                                encode_length_on_2_first_bytes = True if self.tx_frame_length <= 0xFFF else False
+                                if encode_length_on_2_first_bytes:
+                                    data_length = self.params.tx_data_length - 2 - len(self.address.tx_payload_prefix)
+                                    payload = self.active_send_request.consume(data_length, enforce_exact=True)
+                                    msg_data = self.address.tx_payload_prefix + \
+                                        bytearray([0x10 | ((self.tx_frame_length >> 8) & 0xF), self.tx_frame_length & 0xFF]) + payload
+                                else:
+                                    data_length = self.params.tx_data_length - 6 - len(self.address.tx_payload_prefix)
+                                    payload = self.active_send_request.consume(data_length, enforce_exact=True)
+                                    msg_data = self.address.tx_payload_prefix + bytearray([0x10, 0x00, (self.tx_frame_length >> 24) & 0xFF, (self.tx_frame_length >> 16) & 0xFF, (
+                                        self.tx_frame_length >> 8) & 0xFF, (self.tx_frame_length >> 0) & 0xFF]) + payload
+
+                                arbitration_id = self.address.get_tx_arbitration_id()
+                                self.tx_seqnum = 1
+                                msg_temp = self._make_tx_msg(arbitration_id, msg_data)
+                                if len(msg_data) <= allowed_bytes:
+                                    output_msg = msg_temp
+                                    self.tx_state = self.TxState.WAIT_FC
+                                    self._start_rx_fc_timer()
+                                else:
+                                    self.tx_standby_msg = msg_temp
+                                    self.tx_state = self.TxState.TRANSMIT_FF_STANDBY
+
+                        except isotp.errors.BadGeneratorError as e:
+                            self._trigger_error(e)
+                            self._stop_sending(success=False)
 
         elif self.tx_state in [self.TxState.TRANSMIT_SF_STANDBY, self.TxState.TRANSMIT_FF_STANDBY]:
             # This states serves if the rate limiter prevent from starting a new transmission.
@@ -1067,25 +1116,28 @@ class TransportLayerLogic:
 
         elif self.tx_state == self.TxState.TRANSMIT_CF:
             assert self.remote_blocksize is not None
+            assert self.active_send_request is not None
             if self.timer_tx_stmin.is_timed_out():
                 data_length = self.params.tx_data_length - 1 - len(self.address.tx_payload_prefix)
-                msg_data = self.address.tx_payload_prefix + bytearray([0x20 | self.tx_seqnum]) + self.tx_buffer[:data_length]
-                arbitration_id = self.address.get_tx_arbitration_id()
-                msg_temp = self._make_tx_msg(arbitration_id, msg_data)
-                if len(msg_temp.data) <= allowed_bytes:
-                    output_msg = msg_temp
-                    self.tx_buffer = self.tx_buffer[data_length:]
+                payload_length = min(data_length, self.active_send_request.remaining_size())
+
+                if payload_length <= allowed_bytes:
+                    payload = self.active_send_request.consume(data_length, enforce_exact=False)    # We may have less data than requested
+                    msg_data = self.address.tx_payload_prefix + bytearray([0x20 | self.tx_seqnum]) + payload
+                    arbitration_id = self.address.get_tx_arbitration_id()
+                    output_msg = self._make_tx_msg(arbitration_id, msg_data)
                     self.tx_seqnum = (self.tx_seqnum + 1) & 0xF
                     self.timer_tx_stmin.start()
                     self.tx_block_counter += 1
 
-            if (len(self.tx_buffer) == 0):
-                self._stop_sending(success=True)
-
-            elif self.remote_blocksize != 0 and self.tx_block_counter >= self.remote_blocksize:
-                self.tx_state = self.TxState.WAIT_FC
-                immediate_rx_msg_required = True
-                self._start_rx_fc_timer()
+                    if (self.active_send_request.depleted()):
+                        self._stop_sending(success=True)
+                    elif self.remote_blocksize != 0 and self.tx_block_counter >= self.remote_blocksize:
+                        self.tx_state = self.TxState.WAIT_FC
+                        immediate_rx_msg_required = True
+                        self._start_rx_fc_timer()
+                else:
+                    pass  # We are rate limited. Standby
 
         if output_msg is not None:
             self.rate_limiter.inform_byte_sent(len(output_msg.data))
@@ -1152,9 +1204,6 @@ class TransportLayerLogic:
 
     def _empty_rx_buffer(self) -> None:
         self.rx_buffer = bytearray()
-
-    def _empty_tx_buffer(self) -> None:
-        self.tx_buffer = bytearray()
 
     def _start_rx_fc_timer(self) -> None:
         self.timer_rx_fc = Timer(timeout=float(self.params.rx_flowcontrol_timeout) / 1000)
@@ -1236,7 +1285,6 @@ class TransportLayerLogic:
         if self.active_send_request is not None:
             self.active_send_request.complete(success)
             self.active_send_request = None
-        self._empty_tx_buffer()
         self.tx_state = self.TxState.IDLE
         self.tx_frame_length = 0
         self.timer_rx_fc.stop()
@@ -1470,12 +1518,10 @@ class TransportLayer(TransportLayerLogic):
         self.events.stop_requested.set()
         self.rx_relay_queue.put(None)
 
-        # self.logger.debug("Joining main")
         if self.main_thread is not None:
             self.main_thread.join()
             self.main_thread = None
 
-        # self.logger.debug("Joining relay_thread")
         if self.relay_thread is not None:
             self.relay_thread.join()
             self.relay_thread = None
@@ -1538,7 +1584,7 @@ class TransportLayer(TransportLayerLogic):
 
         finally:
             super().reset()
-            self.logger.debug("Thread is exiting")
+            self.logger.debug("Main thread is exiting")
 
     @is_documented_by(TransportLayerLogic.stop_sending)
     def stop_sending(self):

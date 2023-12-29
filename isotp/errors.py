@@ -10,6 +10,11 @@ class BlockingSendFailure(IsoTpError):
     pass
 
 
+class BadGeneratorError(IsoTpError):
+    """Happens when the user tries to send data using a generator and provides a size that does not match the amount of data in the generator"""
+    pass
+
+
 class BlockingSendTimeout(BlockingSendFailure):
     """Happens when a blocking send fails to complete because the user timeout is expired. Inherits :class:`BlockingSendFailure<isotp.BlockingSendFailure>`"""
     pass

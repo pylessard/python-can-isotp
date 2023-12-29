@@ -840,9 +840,11 @@ class TestTransportLayerLogicNonBlockingRxfn(TransportLayerBaseTest):
         self.stack.process()
         self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=1)
         self.stack.process()
-        self.simulate_rx_flowcontrol(flow_status=1, stmin=0, blocksize=1)
+        self.assert_no_error_triggered()
+
+        self.tx_isotp_frame(payload)
         self.stack.process()
-        self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=1)
+        self.simulate_rx_flowcontrol(flow_status=1, stmin=0, blocksize=1)
         self.stack.process()
         self.assert_error_triggered(isotp.UnsupportedWaitFrameError)
 
