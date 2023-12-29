@@ -749,6 +749,19 @@ class TransportLayerLogic:
         """
         Function to be called periodically, as fast as possible. 
         This function is expected to block only if the given rxfn performs a blocking read.
+
+        :param rx_timeout: Timeout for any read operation
+        :type rx_timeout: float
+
+        :param do_rx: Process reception when ``True``
+        :type do_rx: bool
+
+        :param do_tx: Process transmission when ``True``
+        :type do_tx: bool
+
+        :return: Statistics about what have been accomplished during the call
+        :rtype: :class:`ProcessStats<isotp.ProcessStats>`
+
         """
         run_process = True
         msg_received = 0
