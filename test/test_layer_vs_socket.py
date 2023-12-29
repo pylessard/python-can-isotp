@@ -7,6 +7,8 @@ import math
 import threading
 from . import unittest_logging  # Don't remove
 
+from typing import List
+
 try:
     import can
     can_module_missing = False
@@ -17,6 +19,9 @@ except ImportError:
 @unittest.skipIf(tools.check_isotp_socket_possible() == False, 'Cannot test stack against IsoTP socket. %s' % tools.isotp_socket_impossible_reason())
 @unittest.skipIf(can_module_missing, 'Python-can must be isntalled to run this test suite')
 class TestLayerAgainstSocket(ThreadableTest):
+
+    stack: isotp.CanStack
+    socket_list: List[isotp.socket]
 
     def __init__(self, *args, **kwargs):
         ThreadableTest.__init__(self, *args, **kwargs)
@@ -30,6 +35,7 @@ class TestLayerAgainstSocket(ThreadableTest):
         self.transmission_complete = threading.Event()
         self.reception_complete = threading.Event()
         self.socket_ready = threading.Event()
+        self.stack_ready = threading.Event()
         self.allow_send = threading.Event()
 
     def make_socket(self, tx_data_length=8, can_fd=False, *args, **kwargs):
@@ -63,15 +69,14 @@ class TestLayerAgainstSocket(ThreadableTest):
         }
 
         isotp_params.update(isotp_params_override)
-
         return isotp.CanStack(bus=self.bus, address=self.address, params=isotp_params)
 
     def clientSetUp(self, socketcan_fd=False, tx_data_length=8):
         bus_config = tools.get_test_interface_config()
         bus_config['fd'] = socketcan_fd
 
-        # if hasattr(self, 'stack'):    # In case this is recalled by the test.
-        #    self.stack.stop()
+        if hasattr(self, 'stack'):    # In case this is recalled by the test.
+            self.stack.stop()
 
         if hasattr(self, 'bus'):    # In case this is recalled by the test.
             self.bus.shutdown()
@@ -79,13 +84,15 @@ class TestLayerAgainstSocket(ThreadableTest):
         self.bus = can.interface.Bus(**bus_config)
         self.address = isotp.Address(isotp.AddressingMode.Normal_11bits, txid=self.stack_txid, rxid=self.stack_rxid)
         self.stack = self.get_can_stack(can_fd=socketcan_fd, tx_data_length=tx_data_length)
-        # self.stack.start()
+        self.stack.start()
 
     def clientTearDown(self):
-        # self.stack.stop()
+        # print("clientTearDown")
+        self.stack.stop()
         self.bus.shutdown()
 
     def tearDown(self):
+        # print("Teardown")
         for socket in self.socket_list:
             socket.close()
 
@@ -93,10 +100,9 @@ class TestLayerAgainstSocket(ThreadableTest):
         t1 = time.monotonic()
         self.reception_complete.clear()
         while time.monotonic() - t1 < timeout:
-            self.stack.process()
             if self.stack.available():
                 break
-            time.sleep(self.stack.sleep_time())
+            time.sleep(0.01)
         self.reception_complete.set()
         return self.stack.recv()
 
@@ -104,10 +110,9 @@ class TestLayerAgainstSocket(ThreadableTest):
         self.transmission_complete.clear()
         t1 = time.monotonic()
         while time.monotonic() - t1 < timeout:
-            self.stack.process()
             if not self.stack.transmitting():
                 break
-            time.sleep(self.stack.sleep_time())
+            time.sleep(0.01)
         self.transmission_complete.set()
 
     def wait_transmission_complete(self, timeout=1):
@@ -125,10 +130,13 @@ class TestLayerAgainstSocket(ThreadableTest):
         if not self.socket_ready.is_set():
             raise TimeoutError("Socket not ready")
 
-    def wait_allow_send(self, timeout=1):
-        self.allow_send.wait(timeout)
-        if not self.allow_send.is_set():
-            raise TimeoutError("Never allowed to send")
+    def wait_stack_ready(self, timeout=1):
+        self.stack_ready.wait(timeout)
+        if not self.stack_ready.is_set():
+            raise TimeoutError("Stack not ready")
+
+    def make_payload(self, size: int, start=0):
+        return bytes([x % 255 for x in range(start, start + size)])
 
     # ========= Test cases ======
 
@@ -136,16 +144,16 @@ class TestLayerAgainstSocket(ThreadableTest):
         s = self.make_socket(tx_data_length=remote_tx_data_length, can_fd=True)
         s.bind(tools.get_test_interface_config("channel"), isotp.Address(txid=self.stack_rxid, rxid=self.stack_txid))
         self.socket_ready.set()
-        self.wait_allow_send(timeout=2)  # Recreating the stack may take some time.
-        s.send(b'a' * 100)
+        self.wait_stack_ready(timeout=2)  # Recreating the stack may take some time.
+        s.send(self.make_payload(100))
         self.wait_reception_complete()
 
     def do_test_tx_dl_receive_client(self, tx_data_length=8):
         self.clientSetUp(socketcan_fd=True, tx_data_length=tx_data_length)
         self.wait_socket_ready()
-        self.allow_send.set()
+        self.stack_ready.set()
         frame = self.process_stack_receive()
-        self.assertEqual(frame, b'a' * 100)
+        self.assertEqual(frame, self.make_payload(100))
 
     @unittest.skipIf(tools.is_can_fd_socket_possible() == False, 'CAN FD socket is not possible. %s' % tools.isotp_can_fd_socket_impossible_reason())
     def test_receive_tx_data_length_8_8(self):
@@ -179,15 +187,21 @@ class TestLayerAgainstSocket(ThreadableTest):
         s = self.make_socket(tx_data_length=remote_tx_data_length, can_fd=True)
         s.bind(tools.get_test_interface_config("channel"), isotp.Address(txid=self.stack_rxid, rxid=self.stack_txid))
         self.socket_ready.set()
-        self.wait_transmission_complete(2)  # Creating the stack may take some time as we delete the previous and create a new one
+        self.wait_stack_ready()  # Creating the stack may take some time as we delete the previous and create a new one
+        self.wait_transmission_complete(2)
         frame = s.recv()
-        self.assertEqual(frame, b'b' * 100)
+        self.reception_complete.set()
+        payload = self.make_payload(100)
+        self.assertEqual(frame, payload)
 
     def do_test_tx_dl_transmit_client(self, tx_data_length=8):
         self.clientSetUp(socketcan_fd=True, tx_data_length=tx_data_length)
+        self.stack_ready.set()
         self.wait_socket_ready()
-        self.stack.send(b'b' * 100)
+        payload = self.make_payload(100)
+        self.stack.send(payload)
         self.process_stack_send()
+        self.wait_reception_complete(3)
 
     @unittest.skipIf(tools.is_can_fd_socket_possible() == False, 'CAN FD socket is not possible. %s' % tools.isotp_can_fd_socket_impossible_reason())
     def test_transmit_tx_data_length_8_8(self):
@@ -224,11 +238,12 @@ class TestLayerAgainstSocket(ThreadableTest):
         self.socket_ready.set()
         self.wait_transmission_complete(5)
         frame = s.recv()
-        self.assertEqual(frame, b'b' * 150)
+        self.assertEqual(frame, self.make_payload(150))
+        self.reception_complete.set()
 
     def _test_transmit_long_stmin(self):
         self.wait_socket_ready()
-        payload = b'b' * 150
+        payload = self.make_payload(150)
         ncf = math.ceil(max(len(payload) - 6, 0) / 7)
         expected_time = ncf * 0.1
         self.stack.send(payload)
@@ -236,17 +251,18 @@ class TestLayerAgainstSocket(ThreadableTest):
         self.process_stack_send(timeout=2 * expected_time * 0.95)
         diff = time.monotonic() - t1
         self.assertGreater(diff, expected_time)
+        self.wait_reception_complete()
 
     def test_receive_long_stmin(self):
         s = self.make_socket()
         s.bind(tools.get_test_interface_config("channel"), isotp.Address(txid=self.stack_rxid, rxid=self.stack_txid))
         self.socket_ready.set()
-        s.send(b'a' * 150)
+        s.send(self.make_payload(150))
         self.wait_reception_complete(timeout=5)
 
     def _test_receive_long_stmin(self):
         self.wait_socket_ready()
-        payload = b'a' * 150
+        payload = self.make_payload(150)
         ncf = math.ceil(max(len(payload) - 6, 0) / 7)
         expected_time = ncf * 0.1
         t1 = time.monotonic()
@@ -262,7 +278,7 @@ class TestLayerAgainstSocket(ThreadableTest):
                              rxid=self.stack_txid, source_address=0x88, target_address=0x99)
         s.bind(tools.get_test_interface_config("channel"), addr)
         self.socket_ready.set()
-        s.send(b'a' * 100)
+        s.send(self.make_payload(100))
         self.wait_reception_complete()
 
     def _test_receive_extended_29bits(self):
@@ -271,7 +287,7 @@ class TestLayerAgainstSocket(ThreadableTest):
                              rxid=self.stack_rxid, source_address=0x99, target_address=0x88)
         self.stack.set_address(addr)
         frame = self.process_stack_receive()
-        self.assertEqual(frame, b'a' * 100)
+        self.assertEqual(frame, self.make_payload(100))
 
     def test_transmit_extended_29bits(self):
         s = self.make_socket()
@@ -282,22 +298,25 @@ class TestLayerAgainstSocket(ThreadableTest):
 
         self.wait_transmission_complete(1)
         frame = s.recv()
-        self.assertEqual(frame, b'b' * 100)
+        self.reception_complete.set()
+        self.assertEqual(frame, self.make_payload(100, 1))
 
     def _test_transmit_extended_29bits(self):
         self.wait_socket_ready()
         addr = isotp.Address(isotp.AddressingMode.Extended_29bits, txid=self.stack_txid,
                              rxid=self.stack_rxid, source_address=0x99, target_address=0x88)
         self.stack.set_address(addr)
-        self.stack.send(b'b' * 100)
+        self.stack_ready.set()
+        self.stack.send(self.make_payload(100, 1))
         self.process_stack_send()
+        self.wait_reception_complete()
 
     def test_receive_mixed_29bits(self):
         s = self.make_socket()
         addr = isotp.Address(isotp.AddressingMode.Mixed_29bits, source_address=0x88, target_address=0x99, address_extension=0xDD)
         s.bind(tools.get_test_interface_config("channel"), addr)
         self.socket_ready.set()
-        s.send(b'c' * 100)
+        s.send(self.make_payload(100, 2))
         self.wait_reception_complete()
 
     def _test_receive_mixed_29bits(self):
@@ -305,21 +324,24 @@ class TestLayerAgainstSocket(ThreadableTest):
         addr = isotp.Address(isotp.AddressingMode.Mixed_29bits, source_address=0x99, target_address=0x88, address_extension=0xDD)
         self.stack.set_address(addr)
         frame = self.process_stack_receive()
-        self.assertEqual(frame, b'c' * 100)
+        self.assertEqual(frame, self.make_payload(100, 2))
 
     def test_transmit_mixed_29bits(self):
         s = self.make_socket()
         addr = isotp.Address(isotp.AddressingMode.Mixed_29bits, source_address=0x88, target_address=0x99, address_extension=0xEE)
         s.bind(tools.get_test_interface_config("channel"), addr)
+        time.sleep(0.2)
         self.socket_ready.set()
-
-        self.wait_transmission_complete(1)
+        self.wait_stack_ready()
         frame = s.recv()
-        self.assertEqual(frame, b'd' * 100)
+        self.assertEqual(frame, self.make_payload(100, 5))
+        self.reception_complete.set()
 
     def _test_transmit_mixed_29bits(self):
+        self.stack_ready.set()
         self.wait_socket_ready()
         addr = isotp.Address(isotp.AddressingMode.Mixed_29bits, source_address=0x99, target_address=0x88, address_extension=0xEE)
         self.stack.set_address(addr)
-        self.stack.send(b'd' * 100)
-        self.process_stack_send()
+        self.stack.send(self.make_payload(100, 5))
+        self.process_stack_send(2)
+        self.wait_reception_complete()

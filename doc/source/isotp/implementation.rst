@@ -12,9 +12,10 @@ In such case, the :class:`isotp.TransportLayer<isotp.TransportLayer>` will be th
 
 .. autoclass:: isotp.TransportLayer
 
-If python-can must be used as CAN layer, one can use the :class:`isotp.CanStack<isotp.CanStack>` which extends the TransportLayer object with predefined functions that calls python-can. 
+If python-can must be used as CAN layer, one can use the :class:`isotp.CanStack<isotp.CanStack>` and :class:`isotp.NotifierBasedCanStack<isotp.NotifierBasedCanStack>` which extends the TransportLayer object with predefined functions that calls python-can. 
 
 .. autoclass:: isotp.CanStack
+.. autoclass:: isotp.NotifierBasedCanStack
 
 The CAN messages going in and out from the transport layer are defined with :class:`isotp.CanMessage<isotp.CanMessage>`. 
 
@@ -309,7 +310,9 @@ Legacy methods (v1.x)
 ---------------------
 
 With isotp v2.x, the processing of the transport layer is done from an internal thread. For backward compatibility, the following methods are still accessible to the
-users, but **should not** be called from the user thread if ``start()`` has been called. It is safe to call them if no call to ``start()`` is done.
+users, but **should not** be called from the user thread if ``start()`` has been called. It is safe to call them if no call to ``start()`` is done. 
+
+Calls to non-thread-safe method (``reset()``, ``process()``) while the internal thread is running will cause an exception to raise.
 
 .. automethod:: isotp.TransportLayer.reset
 .. automethod:: isotp.TransportLayer.process
@@ -385,7 +388,9 @@ Still, reaching good timing with the pure python :class:`TransportLayer<isotp.Tr
 
 The fact #2 is useful for compatibility, allowing to couple the isotp layer with any kind of link layer. Unfortunately, it has the drawback of preventing cross-layer optimizations.
 For that reason, this module employs a 3 thread strategy and rely on the python ``Queue`` object for synchronization. The python ``Queue`` module employ OS primitives for synchronization, such
-as condition variables to pass control between threads. See the following figure
+as condition variables to pass control between threads, which are as performant as they can be. 
+
+See the following figure
 
 .. image:: assets/threads.png
     :width: 800px
@@ -397,7 +402,7 @@ as condition variables to pass control between threads. See the following figure
 - The worker thread does blocking reads to the relay queue and gets woken up right away by Python when a message arrives
 - When the user calls ``send()``, a ``None`` is injected in the relay queue, forcing the worker thread to wake up and process the user provided payload right away.
 
-Using the approach described above, a message can be read from the link-layer and processed after 2 context switches, which are achievable in about 20us on both Windows and Linux. This
+Using the approach described above, a message can be read from the link-layer and processed after 2 context switches, which are achievable in about 20us each on both Windows and Linux. This
 40us latency is far better than the latency caused by calls to ``time.sleep()`` required with v1.x. Considering that a CAN bus running at 500kbps has a message duration of about 230us,
 the latency is in the acceptable range.
 
@@ -413,5 +418,5 @@ In v1.x, the user had to handle timing and repeatedly call the ``process()`` met
 ``TransportLayerLogic``, therefore the old interface is still accessible under the same name. Inheritance is used instead of composition for that purpose.
 
 When calling ``start()`` and ``stop()``, which have been added in the 2.x extension, it is assumed that the user will uses the TransportLayer as documented by the v2.x documentation,
-otherwise race conditions could occur. Put simply, ``process()`` should never be called after ``start()`` has been called.
+otherwise race conditions could occur. Put simply, ``process()`` should never be called after ``start()`` has been called, otherwise, an exception will be raised.
 
