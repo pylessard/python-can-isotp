@@ -314,9 +314,12 @@ users, but **should not** be called from the user thread if ``start()`` has been
 .. automethod:: isotp.TransportLayer.reset
 .. automethod:: isotp.TransportLayer.process
 .. automethod:: isotp.TransportLayer.sleep_time
+.. automethod:: isotp.TransportLayer.set_sleep_timing
 
-The unthreaded transport layer object used in the isotp module v1.x is still accessible un the name :class:`isotp.TransportLayerLogic<isotp.TransportLayerLogic>`.  
-The :class:`isotp.TransportLayer<isotp.TransportLayer>` object is an extension of it that can spawn a thread and calls methods that are were to be called by the user.
+.. note:: The unthreaded transport layer object used in the isotp module v1.x is still accessible under the name :class:`isotp.TransportLayerLogic<isotp.TransportLayerLogic>`.  
+    The :class:`isotp.TransportLayer<isotp.TransportLayer>` object is an extension of it that can spawn a thread and calls methods that are were to be called by the user.
+
+    See :ref:`Backward Compatibility<backward_compatibility>`
 
 ---------
 

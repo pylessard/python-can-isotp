@@ -841,7 +841,7 @@ class TransportLayerLogic:
             frame_received=nb_frame_received
         )
 
-    def set_rxfn(self, rxfn: "TransportLayerLogic.RxFn"):
+    def _set_rxfn(self, rxfn: "TransportLayerLogic.RxFn"):
         """
         Allow post init change of rxfn. This is a trick to implement the threaded Transport Layer
         and keeping the ability to run the TransportLayerLogic without threads for backward compatibility
@@ -1121,6 +1121,9 @@ class TransportLayerLogic:
     def set_sleep_timing(self, idle: float, wait_fc: float) -> None:
         """
         Sets values in seconds that can be passed to ``time.sleep()`` when the stack is processed in a different thread.
+
+        :param idle:
+        :param wait_fc:
         """
         self.timings = {
             (self.RxState.IDLE, self.TxState.IDLE): idle,
@@ -1462,7 +1465,7 @@ class TransportLayer(TransportLayerLogic):
         if self.started:
             raise RuntimeError("Transport Layer is already started")
 
-        self.set_rxfn(self._read_relay_queue)
+        self._set_rxfn(self._read_relay_queue)
         self.main_thread = threading.Thread(target=self._main_thread_fn)
         self.relay_thread = threading.Thread(target=self._relay_thread_fn)
 
@@ -1510,7 +1513,7 @@ class TransportLayer(TransportLayerLogic):
         self.events.reset_rx.clear()
 
         self.reset()
-        self.set_rxfn(self.user_rxfn)   # Switch back to the given user rxfn. Backward compatibility with v1.x
+        self._set_rxfn(self.user_rxfn)   # Switch back to the given user rxfn. Backward compatibility with v1.x
         self.started = False
         self.logger.debug(f"{self.__class__.__name__} Stopped")
 
