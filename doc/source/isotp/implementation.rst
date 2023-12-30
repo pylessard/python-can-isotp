@@ -358,6 +358,7 @@ All errors inherit :class:`isotp.IsoTpError<isotp.IsoTpError>` which itself inhe
 .. autoclass:: isotp.MissingEscapeSequenceError
 .. autoclass:: isotp.InvalidCanFdFirstFrameRXDL
 .. autoclass:: isotp.OverflowError
+.. autoclass:: isotp.BadGeneratorError
 
 ----------
 

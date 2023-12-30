@@ -1043,7 +1043,7 @@ class TestTransportLayerLogicNonBlockingRxfn(TransportLayerBaseTest):
 
     # Possible since 2016 version of ISO-15765-2
     def test_send_4096_bytes_payload(self):
-        payload_size = 4096;
+        payload_size = 4096
         payload = self.make_payload(payload_size)
         self.tx_isotp_frame(payload)
         self.stack.process()
@@ -1356,6 +1356,89 @@ class TestTransportLayerLogicNonBlockingRxfn(TransportLayerBaseTest):
         time.sleep(1)
         self.stack.process()
         self.assertIsNone(self.get_tx_can_msg())        # No more messages
+
+    # === Generator ===
+    def test_generator_size_too_big_error_single_frame(self):
+        for payload_size in (4, 5, 6):
+            unittest_logging.logger.debug(f"payload_size={payload_size}")
+            payload = self.make_payload(payload_size)
+            generator = (x for x in payload)
+            self.tx_isotp_frame((generator, payload_size + 1))
+            self.stack.process()
+            self.assertIsNone(self.get_tx_can_msg())
+            self.assert_error_triggered(isotp.BadGeneratorError)
+
+    def test_generator_size_too_small_no_error_single_frame(self):
+        for payload_size in (6, 7):
+            unittest_logging.logger.debug(f"payload_size={payload_size}")
+            payload = self.make_payload(payload_size)
+            generator = (x for x in payload)
+            self.tx_isotp_frame((generator, payload_size - 1))
+            self.stack.process()
+            msg = self.get_tx_can_msg()
+            self.assertIsNotNone(msg)
+            self.assertEqual(msg.data, bytearray([payload_size - 1] + payload[:payload_size - 1]))
+            self.assert_no_error_triggered()
+
+    def test_generator_size_too_big_error_multiframe(self):
+        for payload_size in (19, 20, 21):
+            unittest_logging.logger.debug(f"payload_size={payload_size}")
+            payload = self.make_payload(payload_size)
+            generator = (x for x in payload)
+            self.tx_isotp_frame((generator, payload_size + 1))
+            self.stack.process()
+            msg = self.get_tx_can_msg()
+            self.assertEqual(msg.data, bytearray([0x10, payload_size + 1] + payload[:6]))
+            self.assertEqual(msg.dlc, len(msg.data))
+            self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=0)
+            seqnum = 1
+            n = 6
+            real_size_sent = n
+            self.stack.process()
+            while True:
+                msg = self.get_tx_can_msg()
+                self.assertIsNotNone(msg)
+                self.assertEqual(msg.data, bytearray([0x20 | seqnum] + payload[n:min(n + 7, payload_size)]))
+                self.assertEqual(msg.dlc, len(msg.data))
+                real_size_sent += len(msg.data) - 1
+                n += 7
+                seqnum = (seqnum + 1) & 0xF
+
+                if n >= payload_size:
+                    break
+
+            self.assertEqual(real_size_sent, payload_size)
+            self.assert_error_triggered(isotp.BadGeneratorError)
+
+    def test_generator_size_too_small_no_error_multiframe(self):
+        for payload_size in (19, 20, 21):
+            unittest_logging.logger.debug(f"payload_size={payload_size}")
+            payload = self.make_payload(payload_size + 1)
+            generator = (x for x in payload)
+            self.tx_isotp_frame((generator, payload_size))
+            self.stack.process()
+            msg = self.get_tx_can_msg()
+            self.assertEqual(msg.data, bytearray([0x10, payload_size] + payload[:6]))
+            self.assertEqual(msg.dlc, len(msg.data))
+            self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=0)
+            seqnum = 1
+            n = 6
+            real_size_sent = n
+            self.stack.process()
+            while True:
+                msg = self.get_tx_can_msg()
+                self.assertIsNotNone(msg)
+                self.assertEqual(msg.data, bytearray([0x20 | seqnum] + payload[n:min(n + 7, payload_size)]))
+                self.assertEqual(msg.dlc, len(msg.data))
+                real_size_sent += len(msg.data) - 1
+                n += 7
+                seqnum = (seqnum + 1) & 0xF
+
+                if n >= payload_size:
+                    break
+
+            self.assertEqual(real_size_sent, payload_size)
+            self.assert_no_error_triggered()
 
     # =============== Parameters ===========
 
