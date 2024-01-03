@@ -2,7 +2,7 @@ import socket as socket_module
 import os
 import isotp.address
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Union
 
 
 if TYPE_CHECKING:
@@ -79,7 +79,7 @@ class socket:
     LinkLayerProtocol = LinkLayerProtocol
 
     interface: Optional[str]
-    address: Optional[isotp.address.Address]
+    address: Optional[isotp.address.AbstractAddress]
     bound: bool
     closed: bool
     _socket: socket_module.socket
@@ -219,7 +219,7 @@ class socket:
     def get_fc_opts(self) -> "opts.FlowControlOpts":
         return opts.FlowControlOpts.read(self._socket)
 
-    def bind(self, interface: str, address: isotp.Address) -> None:
+    def bind(self, interface: str, address: Union[isotp.Address, isotp.AsymmetricAddress]) -> None:
         """
         Binds the socket to an address. 
 
@@ -233,31 +233,40 @@ class socket:
         if not isinstance(interface, str):
             raise ValueError("interface must be a string")
 
-        if not isinstance(address, isotp.Address):
-            raise ValueError("address and instance of isotp.Address")
+        if not isinstance(address, (isotp.Address, isotp.AsymmetricAddress)):
+            raise ValueError("address and instance of isotp.Address or isotp.AsymmetricAddress")
+
+        if isinstance(address, isotp.AsymmetricAddress):
+            if address.requires_rx_extension_byte() != address.requires_tx_extension_byte():
+                # See https://github.com/hartkopp/can-isotp/issues/62
+                raise ValueError("The IsoTP socket module does not support asymmetric addresses with inconsistent address_extension byte")
 
         self.interface = interface
         self.address = address
 
-        # IsoTP sockets doesn't provide an interface to modify the target address type. We asusme physical.
+        # IsoTP sockets doesn't provide an interface to modify the target address type. We assume physical.
         # If functional is required, it Ids can be manually crafted in Normal / extended mode
         rxid = self.address.get_rx_arbitration_id(isotp.TargetAddressType.Physical)
         txid = self.address.get_tx_arbitration_id(isotp.TargetAddressType.Physical)
 
-        if self.address.is_29bits == True:
+        if self.address.is_rx_29bits():
             rxid = (rxid & socket_module.CAN_EFF_MASK) | socket_module.CAN_EFF_FLAG
         else:
             rxid = rxid & socket_module.CAN_SFF_MASK
 
-        if self.address.is_29bits == True:
+        if self.address.is_tx_29bits():
             txid = (txid & socket_module.CAN_EFF_MASK) | socket_module.CAN_EFF_FLAG
         else:
             txid = txid & socket_module.CAN_SFF_MASK
 
-        if self.address.requires_extension_byte():
+        if self.address.requires_tx_extension_byte() or self.address.requires_rx_extension_byte():
             o = self.get_opts()
             assert o.optflag is not None
-            o.optflag |= self.flags.EXTEND_ADDR | self.flags.RX_EXT_ADDR
+            if self.address.requires_tx_extension_byte():
+                o.optflag |= self.flags.EXTEND_ADDR
+            if self.address.requires_rx_extension_byte():
+                o.optflag |= self.flags.RX_EXT_ADDR
+
             self.set_opts(optflag=o.optflag, ext_address=self.address.get_tx_extension_byte(), rx_ext_address=self.address.get_rx_extension_byte())
 
         self._socket.bind((interface, rxid, txid))

@@ -213,3 +213,101 @@ class TestTransportLayerStackAgainstStack(unittest.TestCase):
 
         self.layer1.stop()
         self.layer1.process()   # OK to call backwrd compatible process() when not running
+
+
+class TestTransportLayerStackAgainstStackAsymetricAddress(unittest.TestCase):
+    STACK_PARAMS = {
+        'stmin': 2,
+        'blocksize': 8,
+        'override_receiver_stmin': None,
+        'rx_flowcontrol_timeout': 1000,
+        'rx_consecutive_frame_timeout': 1000,
+        'wftmax': 0,
+        'tx_data_length': 8,
+        'tx_padding': None,
+        'rx_flowcontrol_timeout': 1000,
+        'rx_consecutive_frame_timeout': 1000,
+        'can_fd': False,
+        'max_frame_size': 65536,
+        'bitrate_switch': False,
+        'rate_limit_enable': False,
+        'listen_mode': False,
+        'blocking_send': False
+    }
+
+    def setUp(self):
+        self.error_triggered = {}
+        self.queue1to2 = SpliceableQueue()
+        self.queue2to1 = SpliceableQueue()
+
+        params1 = self.STACK_PARAMS.copy()
+        params1.update(dict(logger_name='layer1'))
+
+        params2 = self.STACK_PARAMS.copy()
+        params2.update(dict(logger_name='layer2'))
+
+        self.address1 = isotp.AsymmetricAddress(
+            tx_addr=isotp.Address(isotp.AddressingMode.Mixed_11bits, txid=0x123, address_extension=0xAA, tx_only=True),
+            rx_addr=isotp.Address(isotp.AddressingMode.Mixed_29bits, source_address=0x88, target_address=0x99, address_extension=0xBB, rx_only=True)
+        )
+        self.address2 = isotp.AsymmetricAddress(
+            tx_addr=isotp.Address(isotp.AddressingMode.Mixed_29bits, source_address=0x99, target_address=0x88, address_extension=0xBB, tx_only=True),
+            rx_addr=isotp.Address(isotp.AddressingMode.Mixed_11bits, rxid=0x123, address_extension=0xAA, rx_only=True)
+        )
+        self.layer1 = isotp.TransportLayer(
+            txfn=partial(self.send_queue, self.queue1to2),
+            rxfn=partial(self.read_queue_blocking, self.queue2to1),
+            address=self.address1,
+            error_handler=self.error_handler,
+            params=params1
+        )
+
+        self.layer2 = isotp.TransportLayer(
+            txfn=partial(self.send_queue, self.queue2to1),
+            rxfn=partial(self.read_queue_blocking, self.queue1to2),
+            address=self.address2,
+            error_handler=self.error_handler,
+            params=params2
+        )
+
+        unittest_logging.configure_transport_layer(self.layer1)
+        unittest_logging.configure_transport_layer(self.layer2)
+
+        self.layer1.start()
+        self.layer2.start()
+
+    def tearDown(self) -> None:
+        self.layer1.stop()
+        self.layer2.stop()
+
+    def error_handler(self, error):
+        if error.__class__ not in self.error_triggered:
+            self.error_triggered[error.__class__] = []
+        unittest_logging.logger.debug("Error reported:%s" % error)
+        self.error_triggered[error.__class__].append(error)
+
+    def assert_no_error_reported(self):
+        self.assertEqual(len(self.error_triggered), 0, "At least 1 error was reported")
+
+    def read_queue_blocking(self, q: queue.Queue, timeout: float):
+        try:
+            return q.get(block=True, timeout=timeout)
+        except queue.Empty:
+            return None
+
+    def send_queue(self, q: queue.Queue, val: isotp.CanMessage, timeout: float = 1):
+        q.put(val, block=False, timeout=timeout)
+
+    def test_layer1_2_layer2(self):
+        payload = bytearray([x & 0xFF for x in range(100)])
+        self.layer1.send(payload)
+        data = self.layer2.recv(block=True, timeout=3)
+        self.assertEqual(data, payload)
+        self.assert_no_error_reported()
+
+    def test_layer2_2_layer1(self):
+        payload = bytearray([x & 0xFF for x in range(100)])
+        self.layer2.send(payload)
+        data = self.layer1.recv(block=True, timeout=3)
+        self.assertEqual(data, payload)
+        self.assert_no_error_reported()

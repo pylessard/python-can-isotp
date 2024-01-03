@@ -559,7 +559,7 @@ class TransportLayerLogic:
     timings: Dict[Tuple[RxState, TxState], float]
     active_send_request: Optional[SendRequest]
     rx_buffer: bytearray
-    address: isotp.Address
+    address: isotp.address.AbstractAddress
     timer_rx_fc: Timer
     timer_rx_cf: Timer
     rate_limiter: RateLimiter
@@ -685,7 +685,7 @@ class TransportLayerLogic:
 
         if target_address_type == isotp.address.TargetAddressType.Functional:
             length_bytes = 1 if self.params.tx_data_length == 8 else 2
-            maxlen = self.params.tx_data_length - length_bytes - len(self.address.tx_payload_prefix)
+            maxlen = self.params.tx_data_length - length_bytes - len(self.address.get_tx_payload_prefix())
 
             if send_request.generator.total_length() > maxlen:
                 raise ValueError('Cannot send multi packet frame with Functional TargetAddressType')
@@ -844,7 +844,7 @@ class TransportLayerLogic:
         """Process the reception of a CAN message. Moves the reception state machine accordingly and optionally"""
         # Decoding of message into PDU
         try:
-            pdu = PDU(msg, start_of_data=self.address.rx_prefix_size)
+            pdu = PDU(msg, start_of_data=self.address.get_rx_prefix_size())
         except Exception as e:
             self._trigger_error(isotp.errors.InvalidCanDataError("Received invalid CAN frame. %s" % (str(e))))
             self._stop_receiving()
@@ -1015,20 +1015,20 @@ class TransportLayerLogic:
                         read_tx_queue = True  # Read another frame from tx_queue
                         self.active_send_request.complete(True)
                     else:
-                        size_on_first_byte = (self.active_send_request.generator.remaining_size() + len(self.address.tx_payload_prefix)) <= 7
+                        size_on_first_byte = (self.active_send_request.generator.remaining_size() + len(self.address.get_tx_payload_prefix())) <= 7
                         size_offset = 1 if size_on_first_byte else 2
 
                         try:
                             # Single frame
                             total_size = self.active_send_request.generator.total_length()
-                            if total_size <= self.params.tx_data_length - size_offset - len(self.address.tx_payload_prefix):
+                            if total_size <= self.params.tx_data_length - size_offset - len(self.address.get_tx_payload_prefix()):
                                 # Will raise if size is not what was requested
                                 payload = self.active_send_request.generator.consume(total_size, enforce_exact=True)
 
                                 if size_on_first_byte:
-                                    msg_data = self.address.tx_payload_prefix + bytearray([0x0 | len(payload)]) + payload
+                                    msg_data = self.address.get_tx_payload_prefix() + bytearray([0x0 | len(payload)]) + payload
                                 else:
-                                    msg_data = self.address.tx_payload_prefix + bytearray([0x0, len(payload)]) + payload
+                                    msg_data = self.address.get_tx_payload_prefix() + bytearray([0x0, len(payload)]) + payload
 
                                 arbitration_id = self.address.get_tx_arbitration_id(self.active_send_request.target_address_type)
                                 msg_temp = self._make_tx_msg(arbitration_id, msg_data)
@@ -1044,14 +1044,14 @@ class TransportLayerLogic:
                                 self.tx_frame_length = total_size
                                 encode_length_on_2_first_bytes = True if self.tx_frame_length <= 0xFFF else False
                                 if encode_length_on_2_first_bytes:
-                                    data_length = self.params.tx_data_length - 2 - len(self.address.tx_payload_prefix)
+                                    data_length = self.params.tx_data_length - 2 - len(self.address.get_tx_payload_prefix())
                                     payload = self.active_send_request.generator.consume(data_length, enforce_exact=True)
-                                    msg_data = self.address.tx_payload_prefix + \
+                                    msg_data = self.address.get_tx_payload_prefix() + \
                                         bytearray([0x10 | ((self.tx_frame_length >> 8) & 0xF), self.tx_frame_length & 0xFF]) + payload
                                 else:
-                                    data_length = self.params.tx_data_length - 6 - len(self.address.tx_payload_prefix)
+                                    data_length = self.params.tx_data_length - 6 - len(self.address.get_tx_payload_prefix())
                                     payload = self.active_send_request.generator.consume(data_length, enforce_exact=True)
-                                    msg_data = self.address.tx_payload_prefix + bytearray([0x10, 0x00, (self.tx_frame_length >> 24) & 0xFF, (self.tx_frame_length >> 16) & 0xFF, (
+                                    msg_data = self.address.get_tx_payload_prefix() + bytearray([0x10, 0x00, (self.tx_frame_length >> 24) & 0xFF, (self.tx_frame_length >> 16) & 0xFF, (
                                         self.tx_frame_length >> 8) & 0xFF, (self.tx_frame_length >> 0) & 0xFF]) + payload
 
                                 arbitration_id = self.address.get_tx_arbitration_id()
@@ -1092,13 +1092,13 @@ class TransportLayerLogic:
             assert self.remote_blocksize is not None
             assert self.active_send_request is not None
             if self.timer_tx_stmin.is_timed_out():
-                data_length = self.params.tx_data_length - 1 - len(self.address.tx_payload_prefix)
+                data_length = self.params.tx_data_length - 1 - len(self.address.get_tx_payload_prefix())
                 payload_length = min(data_length, self.active_send_request.generator.remaining_size())
                 if payload_length <= allowed_bytes:
                     # We may have less data than requested
                     payload = self.active_send_request.generator.consume(payload_length, enforce_exact=False)
                     if len(payload) > 0:   # Corner case. If generator size is a multiple of ll_data_length, we will get an empty payload on last frame.
-                        msg_data = self.address.tx_payload_prefix + bytearray([0x20 | self.tx_seqnum]) + payload
+                        msg_data = self.address.get_tx_payload_prefix() + bytearray([0x20 | self.tx_seqnum]) + payload
                         arbitration_id = self.address.get_tx_arbitration_id()
                         output_msg = self._make_tx_msg(arbitration_id, msg_data)
                         self.tx_seqnum = (self.tx_seqnum + 1) & 0xF
@@ -1127,28 +1127,38 @@ class TransportLayerLogic:
         """
         Sets values in seconds that can be passed to ``time.sleep()`` when the stack is processed in a different thread.
 
-        :param idle:
-        :param wait_fc:
+        :param idle: Time when rx state machine is idle
+        :type idle: float
+
+        :param wait_fc: Time when rx state machine is waiting for a flow control message
+        :type wait_fc: float
         """
         self.timings = {
             (self.RxState.IDLE, self.TxState.IDLE): idle,
             (self.RxState.IDLE, self.TxState.WAIT_FC): wait_fc,
         }
 
-    def set_address(self, address: isotp.address.Address):
+    def set_address(self, address: Union[isotp.address.Address, isotp.address.AsymmetricAddress]):
         """
-        Sets the layer :class:`Address<isotp.Address>`. Can be set after initialization if needed. May cause a timeout if called while a transmission is active.
+        Sets the layer address. Can be set after initialization if needed. May cause a timeout if called while a transmission is active.
+
+        :param address: Address to use
+        :type address: :class:`Address<isotp.Address>` or :class:`AsymmetricAddress<isotp.AsymmetricAddress>`
         """
 
-        if not isinstance(address, isotp.address.Address):
+        if not isinstance(address, (isotp.address.Address, isotp.address.AsymmetricAddress)):
             raise ValueError('address must be a valid Address instance')
 
-        self.address = address
+        if address.is_partial_address():
+            raise ValueError('Cannot use a partially defined address. Either use a fully defined isotp.Address or an isotp.AsymmetricAddress')
 
-        if self.address.txid is not None and (self.address.txid > 0x7F4 and self.address.txid < 0x7F6 or self.address.txid > 0x7FA and self.address.txid < 0x7FB):
+        self.address = address
+        txid = self.address.get_tx_arbitration_id(isotp.TargetAddressType.Physical)
+        rxid = self.address.get_rx_arbitration_id(isotp.TargetAddressType.Physical)
+        if (txid > 0x7F4 and txid < 0x7F6 or txid > 0x7FA and txid < 0x7FB):
             self.logger.warning('Used txid overlaps the range of ID reserved by ISO-15765 (0x7F4-0x7F6 and 0x7FA-0x7FB)')
 
-        if self.address.rxid is not None and (self.address.rxid > 0x7F4 and self.address.rxid < 0x7F6 or self.address.rxid > 0x7FA and self.address.rxid < 0x7FB):
+        if (rxid > 0x7F4 and rxid < 0x7F6 or rxid > 0x7FA and rxid < 0x7FB):
             self.logger.warning('Used rxid overlaps the range of ID reserved by ISO-15765 (0x7F4-0x7F6 and 0x7FA-0x7FB)')
 
     def _pad_message_data(self, msg_data: bytes) -> bytes:
@@ -1209,7 +1219,7 @@ class TransportLayerLogic:
             arbitration_id=arbitration_id,
             dlc=self._get_dlc(data, validate_tx=True),
             data=data,
-            extended_id=self.address.is_29bits,
+            extended_id=self.address.is_tx_29bits(),
             is_fd=self.params.can_fd,
             bitrate_switch=self.params.bitrate_switch
         )
@@ -1253,7 +1263,7 @@ class TransportLayerLogic:
             stmin = self.params.stmin
         data = PDU.craft_flow_control_data(flow_status, blocksize, stmin)
 
-        return self._make_tx_msg(self.address.get_tx_arbitration_id(), self.address.tx_payload_prefix + data)
+        return self._make_tx_msg(self.address.get_tx_arbitration_id(), self.address.get_tx_payload_prefix() + data)
 
     def stop_sending(self) -> None:
         """
