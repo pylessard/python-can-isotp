@@ -415,6 +415,25 @@ class TestAddressingMode(TransportLayerBaseTest):
         self.assertEqual(msg.data, bytearray([0x21, 0x0A, 0x0B]))
         self.assertTrue(msg.is_extended_id)
 
+    def test_asymetric_address_normal_11_29(self):
+        rxid = 0x123
+        txid = 0x789ABC
+        address = isotp.AsymetricAddress(
+            tx_addr=isotp.Address(isotp.AddressingMode.Normal_29bits, txid=txid, tx_only=True),
+            rx_addr=isotp.Address(isotp.AddressingMode.Normal_11bits, rxid=rxid, rx_only=True)
+        )
+        self.assertTrue(address.is_tx_29bits())
+        self.assertFalse(address.is_rx_29bits())
+
+        self.assertTrue(address.is_for_me(Message(arbitration_id=rxid)))
+        self.assertFalse(address.is_for_me(Message(arbitration_id=rxid, extended_id=True)))
+        self.assertFalse(address.is_for_me(Message(arbitration_id=rxid + 1)))
+
+        self.assertEqual(address.get_tx_arbitration_id(isotp.TargetAddressType.Physical), txid)
+        self.assertEqual(address.get_tx_arbitration_id(isotp.TargetAddressType.Functional), txid)
+        self.assertEqual(address.get_rx_arbitration_id(isotp.TargetAddressType.Physical), rxid)
+        self.assertEqual(address.get_rx_arbitration_id(isotp.TargetAddressType.Functional), rxid)
+
     def test_29bits_normal_fixed(self):
         ta = 0x55
         sa = 0xAA
@@ -1141,4 +1160,78 @@ class TestAddressingMode(TransportLayerBaseTest):
         self.assertIsNotNone(msg)
         self.assertEqual(msg.arbitration_id, txid_physical)
         self.assertEqual(msg.data, bytearray([ae, 0x21, 0x09, 0x0A, 0x0B]))
+        self.assertTrue(msg.is_extended_id)
+
+    def test_asymetric_address_normalfixed_29_Mixed_11_through_layer(self):
+        functional = isotp.TargetAddressType.Functional
+        physical = isotp.TargetAddressType.Physical
+        ta = 0x55
+        sa = 0xAA
+        rxid = 0x111
+        rx_address_extension = 0x88
+        txid_physical = 0x18DA55AA
+        txid_functional = 0x18DB55AA
+
+        address = isotp.AsymetricAddress(
+            tx_addr=isotp.Address(isotp.AddressingMode.NormalFixed_29bits, target_address=ta, source_address=sa, tx_only=True),
+            rx_addr=isotp.Address(isotp.AddressingMode.Mixed_11bits, rxid=rxid, address_extension=rx_address_extension, rx_only=True)
+        )
+
+        layer = isotp.TransportLayer(txfn=self.stack_txfn, rxfn=self.stack_rxfn, address=address, params={'stmin': 0, 'blocksize': 0})
+
+        # Receive Single frame - Physical
+        self.simulate_rx_msg(Message(arbitration_id=rxid, data=bytearray([rx_address_extension, 0x03, 0x01, 0x02, 0x03]), extended_id=False))
+        layer.process()
+        frame = layer.recv()
+        self.assertIsNotNone(frame)
+        self.assertEqual(frame, b'\x01\x02\x03')
+
+        # Receive multiframe - Physical
+        layer.reset()
+        self.simulate_rx_msg(Message(arbitration_id=rxid, data=bytearray(
+            [rx_address_extension, 0x10, 0x08, 0x01, 0x02, 0x03, 0x04, 0x05]), extended_id=False))
+        layer.process()
+        self.assert_sent_flow_control(stmin=0, blocksize=0)
+        self.simulate_rx_msg(Message(arbitration_id=rxid, data=bytearray([rx_address_extension, 0x21, 0x06, 0x07, 0x08]), extended_id=False))
+        layer.process()
+        frame = layer.recv()
+        self.assertIsNotNone(frame)
+        self.assertEqual(frame, b'\x01\x02\x03\x04\x05\x06\x07\x08')
+
+        # Transmit single frame - Physical
+        layer.reset()
+        layer.send(b'\x04\x05\x06', physical)
+        layer.process()
+        msg = self.get_tx_can_msg()
+        self.assertIsNotNone(msg)
+        self.assertEqual(msg.arbitration_id, txid_physical)
+        self.assertEqual(msg.data, bytearray([0x03, 0x04, 0x05, 0x06]))
+        self.assertTrue(msg.is_extended_id)
+
+        # Transmit single frame - Functional
+        layer.reset()
+        layer.send(b'\x04\x05\x06', functional)
+        layer.process()
+        msg = self.get_tx_can_msg()
+        self.assertIsNotNone(msg)
+        self.assertEqual(msg.arbitration_id, txid_functional)
+        self.assertEqual(msg.data, bytearray([0x03, 0x04, 0x05, 0x06]))
+        self.assertTrue(msg.is_extended_id)
+
+        # Transmit multiframe - Physical
+        layer.reset()
+        layer.send(b'\x04\x05\x06\x07\x08\x09\x0A\x0B', physical)
+        layer.process()
+        msg = self.get_tx_can_msg()
+        self.assertIsNotNone(msg)
+        self.assertEqual(msg.arbitration_id, txid_physical)
+        self.assertEqual(msg.data, bytearray([0x10, 0x08, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09]))
+        self.assertTrue(msg.is_extended_id)
+        flow_control_payload = bytearray([rx_address_extension]) + self.make_flow_control_data(flow_status=0, stmin=0, blocksize=0)
+        self.simulate_rx_msg(Message(arbitration_id=rxid, data=flow_control_payload, extended_id=False))
+        layer.process()
+        msg = self.get_tx_can_msg()
+        self.assertIsNotNone(msg)
+        self.assertEqual(msg.arbitration_id, txid_physical)
+        self.assertEqual(msg.data, bytearray([0x21, 0x0A, 0x0B]))
         self.assertTrue(msg.is_extended_id)
