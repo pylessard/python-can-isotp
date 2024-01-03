@@ -1670,6 +1670,20 @@ class TestTransportLayerLogicNonBlockingRxfn(TransportLayerBaseTest):
         params['logger_name'] = 'asd'
         self.create_layer(params)
 
+        for val in ['asd', 1.1, None]:
+            with self.assertRaises(ValueError):
+                params['wait_func'] = val
+                self.create_layer(params)
+
+        def wait_func_bad_signature():
+            pass
+
+        with self.assertRaises(ValueError):
+            params['wait_func'] = val
+            self.create_layer(params)
+
+        params['wait_func'] = time.sleep
+
 # Check the behavior of the transport layer. Sequenece of CAN frames, timings, etc.
 
 

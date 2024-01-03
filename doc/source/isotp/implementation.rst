@@ -252,6 +252,18 @@ The transport layer ``params`` parameter must be a dictionary with the following
 
    Sets the name of the logger from the ``logging`` module used to log info and debug information
 
+.. _param_wait_func:
+
+.. attribute:: wait_func
+   :annotation: (callable)
+
+   **default: "time.sleep"**
+
+   Defines a waiting function used to create the necessary delay between consecutive frames during a transmission, dictated by the receiver STMin. 
+   Expected signature is ``my_wait_func(delay:float) -> None``
+
+   Defaults value is the system ``sleep`` function, which can have a coarse granularity, depending on the scheduler policy. 
+
 -----
 
 .. _rate_limiter_section:
@@ -406,6 +418,9 @@ See the following figure
 Using the approach described above, a message can be read from the link-layer and processed after 2 context switches, which are achievable in about 20us each on both Windows and Linux. This
 40us latency is far better than the latency caused by calls to ``time.sleep()`` required with v1.x. Considering that a CAN bus running at 500kbps has a message duration of about 230us,
 the latency is in the acceptable range.
+
+Finally, the delay between consecutive frames is dictated by a user-definable function passed with the :ref:`wait_func<param_wait_func>` parameter. By default, the wait function is the system ``sleep`` function.
+On machines where the ``sleep`` function has a coarse granularity and a high resolution timer is available, it is possible to pass a busy-wait function to this parameter.
 
 --------
 
