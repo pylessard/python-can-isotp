@@ -238,6 +238,7 @@ class socket:
 
         if isinstance(address, isotp.AsymmetricAddress):
             if address.requires_rx_extension_byte() != address.requires_tx_extension_byte():
+                # See https://github.com/hartkopp/can-isotp/issues/62
                 raise ValueError("The IsoTP socket module does not support asymmetric addresses with inconsistent address_extension byte")
 
         self.interface = interface
