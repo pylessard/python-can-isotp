@@ -321,6 +321,7 @@ class TransportLayerLogic:
         listen_mode: bool
         blocking_send: bool
         logger_name: str
+        wait_func: Callable[[float], None]
 
         def __init__(self):
             self.stmin = 0
@@ -342,6 +343,7 @@ class TransportLayerLogic:
             self.listen_mode = False
             self.blocking_send = False
             self.logger_name = TransportLayer.LOGGER_NAME
+            self.wait_func = time.sleep
 
         def set(self, key: str, val: Any, validate: bool = True) -> None:
             param_alias: Dict[str, str] = {
@@ -463,6 +465,14 @@ class TransportLayerLogic:
 
             if not isinstance(self.logger_name, str):
                 raise ValueError('logger_name must be a string')
+
+            if not callable(self.wait_func):
+                raise ValueError('wait_func should be a callable')
+
+            try:
+                self.wait_func(0.001)
+            except Exception as e:
+                raise ValueError("Given wait_func raised an exception %s" % e)
 
     class RxState(enum.Enum):
         IDLE = 0
@@ -1557,7 +1567,7 @@ class TransportLayer(TransportLayerLogic):
                     delay = self.next_cf_delay()
                     assert delay is not None    # Confirmed by is_tx_transmitting_cf()
                     if delay > 0:
-                        time.sleep(delay)   # If we are transmitting CFs, no need to call rxfn, we can stream those CF with short sleep
+                        self.params.wait_func(delay)   # If we are transmitting CFs, no need to call rxfn, we can stream those CF with short sleep
                     if not self.events.stop_requested.is_set():
                         super().process(do_rx=False, do_tx=True)
                 else:
