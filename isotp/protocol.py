@@ -1138,19 +1138,19 @@ class TransportLayerLogic:
             (self.RxState.IDLE, self.TxState.WAIT_FC): wait_fc,
         }
 
-    def set_address(self, address: Union[isotp.address.Address, isotp.address.AsymetricAddress]):
+    def set_address(self, address: Union[isotp.address.Address, isotp.address.AsymmetricAddress]):
         """
         Sets the layer address. Can be set after initialization if needed. May cause a timeout if called while a transmission is active.
 
         :param address: Address to use
-        :type address: :class:`Address<isotp.Address>` or :class:`AsymetricAddress<isotp.AsymetricAddress>`
+        :type address: :class:`Address<isotp.Address>` or :class:`AsymmetricAddress<isotp.AsymmetricAddress>`
         """
 
-        if not isinstance(address, (isotp.address.Address, isotp.address.AsymetricAddress)):
+        if not isinstance(address, (isotp.address.Address, isotp.address.AsymmetricAddress)):
             raise ValueError('address must be a valid Address instance')
 
         if address.is_partial_address():
-            raise ValueError('Cannot use a partially defined address. Either use a fully defined isotp.Address or an isotp.AsymetricAddress')
+            raise ValueError('Cannot use a partially defined address. Either use a fully defined isotp.Address or an isotp.AsymmetricAddress')
 
         self.address = address
         txid = self.address.get_tx_arbitration_id(isotp.TargetAddressType.Physical)

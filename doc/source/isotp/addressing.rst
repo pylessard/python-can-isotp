@@ -158,3 +158,68 @@ Example :
    0x18CE55AA    [8]   99 10 0A 00 01 02 03    // First frame
    0x18CEAA55    [5]   99 30 00 08 00          // Flow control
    0x18CE55AA    [8]   99 21 04 05 06 07 08 09 // consecutive frame
+
+------
+
+
+Asymnetric addresses
+--------------------
+
+It is possible to send and receive with different address schemes. The :class:`AsymmetricAddress<isotp.address.AsymmetricAddress>` serves that purpose
+
+.. autoclass:: isotp.AsymmetricAddress
+
+When using an asymmetric, both ``tx_addr`` and ``rx_addr`` must be partial addresses, meaning that either ``tx_only=True`` or ``rx_only=True`` is set. 
+Address object instantiated with ``rx_only=True`` will not expect parameter meant for transmission and conversely, when instantiated with ``tx_only=True`` 
+parameters required for reception won't be needed.
+
+
+Example : 
+
+ - Transmission (``NormalFixed_29bits``):
+
+   - source_address : 0x55
+   - target_address : 0xAA
+
+ - Reception (``Mixed_11bits``)
+
+   - rxid : 0x123
+   - address_extension : 0x99
+
+.. code-block:: python
+    
+    import isotp
+    address = isotp.AsymmetricAddress(
+        tx_addr=isotp.Address(isotp.AddressingMode.NormalFixed_29bits, target_address=ta, source_address=sa, tx_only=True),
+        rx_addr=isotp.Address(isotp.AddressingMode.Mixed_11bits, rxid=0x123, address_extension=0x99, rx_only=True)   # txid is not required
+    )
+
+
+::
+
+   // Reception of a 10 bytes payload
+   0x123        [8]   99 10 0A 00 01 02 03 04   // First frame
+   0x18DAAA55   [4]   30 00 08 00               // Flow control
+   0x123        [7]   99 21 05 06 07 08 09      // Consecutive frame
+
+
+The following table indicates the required parameter to construct a :class:`Address<isotp.Address>` object for all possible scenario
+
+.. csv-table:: :class:`Address<isotp.Address>` required parameters
+   :header: "Addressing mode", "Full address", "Partial Tx (``tx_only=True``)", "Partial Rx (``rx_only=True``)"
+
+   "Normal_11bits",         "``rxid`` ``txid``",                                           "``txid``",                                                      "``rxid``"
+   "Normal_29bits",         "``rxid`` ``txid``",                                           "``txid``",                                                      "``rxid``"
+   "NormalFixed_29bits",    "``source_address`` ``target_address``",                       "``source_address`` ``target_address``",                         "``source_address`` ``target_address``"
+   "Extended_11bits",       "``txid`` ``target_address`` ``rxid`` ``source_address``",     "``txid`` ``target_address``",                                   "``rxid`` ``source_address``"
+   "Extended_29bits",       "``txid`` ``target_address`` ``rxid`` ``source_address``",     "``txid`` ``target_address``",                                   "``rxid`` ``source_address``"
+   "Mixed_11bits",          "``rxid`` ``txid`` ``address_extension``",                     "``txid`` ``address_extension``",                                "``rxid`` ``address_extension``"
+   "Mixed_29bits",          "``source_address`` ``target_address`` ``address_extension``", "``source_address`` ``target_address`` ``address_extension``",   "``source_address`` ``target_address`` ``address_extension``"
+
+
+
+
+
+
+
+

@@ -154,7 +154,7 @@ class TestAddressingMode(TransportLayerBaseTest):
         with self.assertRaises(Exception):
             isotp.Address(isotp.AddressingMode.Mixed_29bits, source_address=1, target_address=2, rx_only=True)
 
-    def test_create_address_asymetric(self):
+    def test_create_address_asymmetric(self):
         required_params_per_mode_and_dir = {
             isotp.AddressingMode.Normal_11bits: {'tx': ['txid'], 'rx': ['rxid']},
             isotp.AddressingMode.Normal_29bits: {'tx': ['txid'], 'rx': ['rxid']},
@@ -177,7 +177,7 @@ class TestAddressingMode(TransportLayerBaseTest):
                 unittest_logging.logger.debug(f"tx_mode={tx_mode}, rx_mode={rx_mode}")
                 txaddr = isotp.Address(tx_mode, tx_only=True, **tx_params)
                 rxaddr = isotp.Address(rx_mode, rx_only=True, **rx_params)
-                addr = isotp.AsymetricAddress(tx_addr=txaddr, rx_addr=rxaddr)
+                addr = isotp.AsymmetricAddress(tx_addr=txaddr, rx_addr=rxaddr)
 
                 self.assertTrue(txaddr.is_partial_address())
                 self.assertTrue(rxaddr.is_partial_address())
@@ -415,10 +415,10 @@ class TestAddressingMode(TransportLayerBaseTest):
         self.assertEqual(msg.data, bytearray([0x21, 0x0A, 0x0B]))
         self.assertTrue(msg.is_extended_id)
 
-    def test_asymetric_address_normal_11_29(self):
+    def test_asymmetric_address_normal_11_29(self):
         rxid = 0x123
         txid = 0x789ABC
-        address = isotp.AsymetricAddress(
+        address = isotp.AsymmetricAddress(
             tx_addr=isotp.Address(isotp.AddressingMode.Normal_29bits, txid=txid, tx_only=True),
             rx_addr=isotp.Address(isotp.AddressingMode.Normal_11bits, rxid=rxid, rx_only=True)
         )
@@ -1162,7 +1162,7 @@ class TestAddressingMode(TransportLayerBaseTest):
         self.assertEqual(msg.data, bytearray([ae, 0x21, 0x09, 0x0A, 0x0B]))
         self.assertTrue(msg.is_extended_id)
 
-    def test_asymetric_address_normalfixed_29_Mixed_11_through_layer(self):
+    def test_asymmetric_address_normalfixed_29_Mixed_11_through_layer(self):
         functional = isotp.TargetAddressType.Functional
         physical = isotp.TargetAddressType.Physical
         ta = 0x55
@@ -1172,7 +1172,7 @@ class TestAddressingMode(TransportLayerBaseTest):
         txid_physical = 0x18DA55AA
         txid_functional = 0x18DB55AA
 
-        address = isotp.AsymetricAddress(
+        address = isotp.AsymmetricAddress(
             tx_addr=isotp.Address(isotp.AddressingMode.NormalFixed_29bits, target_address=ta, source_address=sa, tx_only=True),
             rx_addr=isotp.Address(isotp.AddressingMode.Mixed_11bits, rxid=rxid, address_extension=rx_address_extension, rx_only=True)
         )

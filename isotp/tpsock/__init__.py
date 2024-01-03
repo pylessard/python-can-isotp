@@ -219,7 +219,7 @@ class socket:
     def get_fc_opts(self) -> "opts.FlowControlOpts":
         return opts.FlowControlOpts.read(self._socket)
 
-    def bind(self, interface: str, address: Union[isotp.Address, isotp.AsymetricAddress]) -> None:
+    def bind(self, interface: str, address: Union[isotp.Address, isotp.AsymmetricAddress]) -> None:
         """
         Binds the socket to an address. 
 
@@ -233,8 +233,8 @@ class socket:
         if not isinstance(interface, str):
             raise ValueError("interface must be a string")
 
-        if not isinstance(address, (isotp.Address, isotp.AsymetricAddress)):
-            raise ValueError("address and instance of isotp.Address or isotp.AsymetricAddress")
+        if not isinstance(address, (isotp.Address, isotp.AsymmetricAddress)):
+            raise ValueError("address and instance of isotp.Address or isotp.AsymmetricAddress")
 
         self.interface = interface
         self.address = address

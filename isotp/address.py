@@ -109,10 +109,10 @@ class Address(AbstractAddress):
     :param address_extension: Address extension (N_AE) used in ``Mixed_11bits``, ``Mixed_29bits`` addressing mode
     :type address_extension: int | None
 
-    :param rx_only: When using :class:`AsymetricAddress<isotp.address.AsymetricAddress>`, indicates that this address is the RX part, disabling validation of TX part 
+    :param rx_only: When using :class:`AsymmetricAddress<isotp.address.AsymmetricAddress>`, indicates that this address is the RX part, disabling validation of TX part 
     :type rx_only: bool
 
-    :param tx_only: When using :class:`AsymetricAddress<isotp.address.AsymetricAddress>`, indicates that this address is the TX part, disabling validation of RX part
+    :param tx_only: When using :class:`AsymmetricAddress<isotp.address.AsymmetricAddress>`, indicates that this address is the TX part, disabling validation of RX part
     :type tx_only: bool
 
     """
@@ -436,7 +436,17 @@ class Address(AbstractAddress):
         return '<IsoTP Address %s at 0x%08x>' % (self.get_content_str(), id(self))
 
 
-class AsymetricAddress(AbstractAddress):
+class AsymmetricAddress(AbstractAddress):
+    """ 
+    Address that uses independent addressing modes for transmission and reception.
+
+    :param tx_addr: The Address object used for transmission
+    :type tx_addr: :class:`Address<isotp.Address>` with ``tx_only=True``
+
+    :param rx_addr: The Address object used for reception
+    :type rx_addr: :class:`Address<isotp.Address>` with ``rx_only=True``
+
+    """
     tx_addr: Address
     rx_addr: Address
 
