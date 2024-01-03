@@ -447,7 +447,7 @@ class AsymetricAddress(AbstractAddress):
         if not isinstance(tx_addr, Address):
             raise ValueError("tx_addr must be an isotp.Address instance")
 
-        if not rx_addr.is_tx_only():
+        if not tx_addr.is_tx_only():
             raise ValueError("tx_addr must be configured with tx_only=True")
 
         if not rx_addr.is_rx_only():

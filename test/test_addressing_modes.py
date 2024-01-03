@@ -16,10 +16,189 @@ class TestAddressingMode(TransportLayerBaseTest):
         isotp.Address(isotp.AddressingMode.Normal_11bits, txid=1, rxid=2)
         isotp.Address(isotp.AddressingMode.Normal_29bits, txid=1, rxid=2)
         isotp.Address(isotp.AddressingMode.NormalFixed_29bits, source_address=1, target_address=2)
-        isotp.Address(isotp.AddressingMode.Extended_11bits, txid=1, rxid=2, target_address=3)
-        isotp.Address(isotp.AddressingMode.Extended_29bits, txid=1, rxid=2, target_address=3)
+        isotp.Address(isotp.AddressingMode.Extended_11bits, txid=1, rxid=2, target_address=3, source_address=5)
+        isotp.Address(isotp.AddressingMode.Extended_29bits, txid=1, rxid=2, target_address=3, source_address=5)
         isotp.Address(isotp.AddressingMode.Mixed_11bits, txid=1, rxid=2, address_extension=3)
         isotp.Address(isotp.AddressingMode.Mixed_29bits, source_address=1, target_address=2, address_extension=3)
+
+    def test_create_address_bad_params(self):
+        # Make sure that any missing param is catched
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Normal_11bits, txid=1)
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Normal_11bits, rxid=1)
+
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Normal_29bits, rxid=2)
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Normal_29bits, txid=1)
+
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.NormalFixed_29bits, target_address=2)
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.NormalFixed_29bits, source_address=1)
+
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Extended_11bits, rxid=2, target_address=3, source_address=5)
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Extended_11bits, txid=1, target_address=3, source_address=5)
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Extended_11bits, txid=1, rxid=2, source_address=5)
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Extended_11bits, txid=1, rxid=2, target_address=3)
+
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Extended_29bits, rxid=2, target_address=3, source_address=5)
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Extended_29bits, txid=1, target_address=3, source_address=5)
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Extended_29bits, txid=1, rxid=2, source_address=5)
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Extended_29bits, txid=1, rxid=2, target_address=3)
+
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Mixed_11bits, rxid=2, address_extension=3)
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Mixed_11bits, txid=1, address_extension=3)
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Mixed_11bits, txid=1, rxid=2)
+
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Mixed_29bits, target_address=2, address_extension=3)
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Mixed_29bits, source_address=1, address_extension=3)
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Mixed_29bits, source_address=1, target_address=2)
+
+    def test_create_partial_address(self):
+        # Valid partial addresses
+        isotp.Address(isotp.AddressingMode.Normal_11bits, txid=1, tx_only=True)
+        isotp.Address(isotp.AddressingMode.Normal_11bits, rxid=1, rx_only=True)
+        isotp.Address(isotp.AddressingMode.Normal_29bits, txid=1, tx_only=True)
+        isotp.Address(isotp.AddressingMode.Normal_29bits, rxid=2, rx_only=True)
+
+        isotp.Address(isotp.AddressingMode.NormalFixed_29bits, source_address=1, target_address=2, tx_only=True)
+        isotp.Address(isotp.AddressingMode.NormalFixed_29bits, source_address=1, target_address=2, rx_only=True)
+
+        isotp.Address(isotp.AddressingMode.Extended_11bits, txid=1, target_address=3, tx_only=True)
+        isotp.Address(isotp.AddressingMode.Extended_11bits, rxid=2, source_address=5, rx_only=True)
+
+        isotp.Address(isotp.AddressingMode.Extended_29bits, txid=1, target_address=3, tx_only=True)
+        isotp.Address(isotp.AddressingMode.Extended_29bits, rxid=2, source_address=5, rx_only=True)
+
+        isotp.Address(isotp.AddressingMode.Mixed_11bits, txid=1, address_extension=3, tx_only=True)
+        isotp.Address(isotp.AddressingMode.Mixed_11bits, rxid=1, address_extension=3, rx_only=True)
+
+        isotp.Address(isotp.AddressingMode.Mixed_29bits, source_address=1, target_address=2, address_extension=3, tx_only=True)
+        isotp.Address(isotp.AddressingMode.Mixed_29bits, source_address=1, target_address=2, address_extension=3, rx_only=True)
+
+    def test_create_partial_address_bad_params(self):
+        # Create partial addresses with missing parameters
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Normal_11bits, rxid=1, tx_only=True)
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Normal_11bits, txid=1, rx_only=True)
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Normal_29bits, rxid=1, tx_only=True)
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Normal_29bits, txid=2, rx_only=True)
+
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.NormalFixed_29bits, source_address=1, tx_only=True)
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.NormalFixed_29bits, target_address=2, tx_only=True)
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.NormalFixed_29bits, source_address=1, rx_only=True)
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.NormalFixed_29bits, target_address=2, rx_only=True)
+
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Extended_11bits, target_address=3, tx_only=True)
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Extended_11bits, txid=1, tx_only=True)
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Extended_11bits, source_address=5, rx_only=True)
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Extended_11bits, rxid=2, rx_only=True)
+
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Extended_29bits, target_address=3, tx_only=True)
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Extended_29bits, txid=1, tx_only=True)
+
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Extended_29bits, source_address=5, rx_only=True)
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Extended_29bits, rxid=2, rx_only=True)
+
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Mixed_11bits, address_extension=3, tx_only=True)
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Mixed_11bits, txid=1, tx_only=True)
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Mixed_11bits, address_extension=3, rx_only=True)
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Mixed_11bits, rxid=1, rx_only=True)
+
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Mixed_29bits, target_address=2, address_extension=3, tx_only=True)
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Mixed_29bits, source_address=1, address_extension=3, tx_only=True)
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Mixed_29bits, source_address=1, target_address=2, tx_only=True)
+
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Mixed_29bits, target_address=2, address_extension=3, rx_only=True)
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Mixed_29bits, source_address=1, address_extension=3, rx_only=True)
+        with self.assertRaises(Exception):
+            isotp.Address(isotp.AddressingMode.Mixed_29bits, source_address=1, target_address=2, rx_only=True)
+
+    def test_create_address_asymetric(self):
+        required_params_per_mode_and_dir = {
+            isotp.AddressingMode.Normal_11bits: {'tx': ['txid'], 'rx': ['rxid']},
+            isotp.AddressingMode.Normal_29bits: {'tx': ['txid'], 'rx': ['rxid']},
+            isotp.AddressingMode.NormalFixed_29bits: {'tx': ['source_address', 'target_address'], 'rx': ['source_address', 'target_address']},
+            isotp.AddressingMode.Extended_11bits: {'tx': ['txid', 'target_address'], 'rx': ['rxid', 'source_address']},
+            isotp.AddressingMode.Extended_29bits: {'tx': ['txid', 'target_address'], 'rx': ['rxid', 'source_address']},
+            isotp.AddressingMode.Mixed_11bits: {'tx': ['txid', 'address_extension'], 'rx': ['rxid', 'address_extension']},
+            isotp.AddressingMode.Mixed_29bits: {
+                'tx': ['source_address', 'target_address', 'address_extension'],
+                'rx': ['source_address', 'target_address', 'address_extension']
+            }
+        }
+
+        for tx_mode in required_params_per_mode_and_dir:
+            tx_params_list = required_params_per_mode_and_dir[tx_mode]['tx']
+            tx_params = dict(zip(tx_params_list, range(len(tx_params_list))))   # Make a dummy value
+            for rx_mode in required_params_per_mode_and_dir:
+                rx_params_list = required_params_per_mode_and_dir[rx_mode]['rx']
+                rx_params = dict(zip(rx_params_list, range(len(rx_params_list))))   # Make a dummy value
+                unittest_logging.logger.debug(f"tx_mode={tx_mode}, rx_mode={rx_mode}")
+                txaddr = isotp.Address(tx_mode, tx_only=True, **tx_params)
+                rxaddr = isotp.Address(rx_mode, rx_only=True, **rx_params)
+                addr = isotp.AsymetricAddress(tx_addr=txaddr, rx_addr=rxaddr)
+
+                self.assertTrue(txaddr.is_partial_address())
+                self.assertTrue(rxaddr.is_partial_address())
+                self.assertFalse(addr.is_partial_address())
+
+                # Let's make sure that the interface is not broken. All methods can be called without raising an exception
+                addr.get_rx_arbitration_id(isotp.TargetAddressType.Functional)
+                addr.get_rx_arbitration_id(isotp.TargetAddressType.Physical)
+                addr.get_tx_arbitration_id(isotp.TargetAddressType.Functional)
+                addr.get_tx_arbitration_id(isotp.TargetAddressType.Physical)
+
+                addr.requires_tx_extension_byte()
+                addr.requires_rx_extension_byte()
+                addr.get_tx_extension_byte()
+                addr.get_rx_extension_byte()
+                addr.is_tx_29bits()
+                addr.is_rx_29bits()
+                addr.is_for_me(isotp.CanMessage())
+                addr.get_rx_prefix_size()
+                addr.get_tx_payload_prefix()
+                addr.is_partial_address()
 
     def test_single_frame_only_function_tatype(self):
         tatype = isotp.TargetAddressType.Functional
@@ -42,13 +221,13 @@ class TestAddressingMode(TransportLayerBaseTest):
         with self.assertRaises(ValueError):
             layer.send(self.make_payload(8), tatype)
 
-        address = isotp.Address(isotp.AddressingMode.Extended_11bits, txid=1, rxid=2, target_address=3)
+        address = isotp.Address(isotp.AddressingMode.Extended_11bits, txid=1, rxid=2, target_address=3, source_address=4)
         layer = isotp.TransportLayer(txfn=self.stack_txfn, rxfn=self.stack_rxfn, address=address)
         layer.send(self.make_payload(6), tatype)
         with self.assertRaises(ValueError):
             layer.send(self.make_payload(7), tatype)
 
-        address = isotp.Address(isotp.AddressingMode.Extended_29bits, txid=1, rxid=2, target_address=3)
+        address = isotp.Address(isotp.AddressingMode.Extended_29bits, txid=1, rxid=2, target_address=3, source_address=4)
         layer = isotp.TransportLayer(txfn=self.stack_txfn, rxfn=self.stack_rxfn, address=address)
         layer.send(self.make_payload(6), tatype)
         with self.assertRaises(ValueError):
