@@ -7,7 +7,7 @@ handler = logging.StreamHandler()
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 logger.setLevel(level=logging.DEBUG)
-logger.disabled = True
+logger.disabled = False
 
 
 def configure_transport_layer(layer: isotp.TransportLayer):

@@ -236,10 +236,14 @@ class socket:
         if not isinstance(address, (isotp.Address, isotp.AsymmetricAddress)):
             raise ValueError("address and instance of isotp.Address or isotp.AsymmetricAddress")
 
+        if isinstance(address, isotp.AsymmetricAddress):
+            if address.requires_rx_extension_byte() != address.requires_tx_extension_byte():
+                raise ValueError("The IsoTP socket module does not support asymmetric addresses with inconsistent address_extension byte")
+
         self.interface = interface
         self.address = address
 
-        # IsoTP sockets doesn't provide an interface to modify the target address type. We asusme physical.
+        # IsoTP sockets doesn't provide an interface to modify the target address type. We assume physical.
         # If functional is required, it Ids can be manually crafted in Normal / extended mode
         rxid = self.address.get_rx_arbitration_id(isotp.TargetAddressType.Physical)
         txid = self.address.get_tx_arbitration_id(isotp.TargetAddressType.Physical)
@@ -254,17 +258,15 @@ class socket:
         else:
             txid = txid & socket_module.CAN_SFF_MASK
 
-        if self.address.requires_tx_extension_byte():
+        if self.address.requires_tx_extension_byte() or self.address.requires_rx_extension_byte():
             o = self.get_opts()
             assert o.optflag is not None
-            o.optflag |= self.flags.EXTEND_ADDR
-            self.set_opts(optflag=o.optflag, ext_address=self.address.get_tx_extension_byte())
+            if self.address.requires_tx_extension_byte():
+                o.optflag |= self.flags.EXTEND_ADDR
+            if self.address.requires_rx_extension_byte():
+                o.optflag |= self.flags.RX_EXT_ADDR
 
-        if self.address.requires_rx_extension_byte():
-            o = self.get_opts()
-            assert o.optflag is not None
-            o.optflag |= self.flags.RX_EXT_ADDR
-            self.set_opts(optflag=o.optflag, rx_ext_address=self.address.get_rx_extension_byte())
+            self.set_opts(optflag=o.optflag, ext_address=self.address.get_tx_extension_byte(), rx_ext_address=self.address.get_rx_extension_byte())
 
         self._socket.bind((interface, rxid, txid))
         self.bound = True

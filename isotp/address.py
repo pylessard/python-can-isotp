@@ -424,9 +424,11 @@ class Address(AbstractAddress):
 
     def get_content_str(self) -> str:
         val_dict = {}
-        keys = ['target_address', 'source_address', 'address_extension', 'txid', 'rxid']
+        keys = ['_target_address', '_source_address', '_address_extension', '_txid', '_rxid']
         for key in keys:
             val = getattr(self, key)
+            if key.startswith('_'):
+                key = key[1:]
             if val is not None:
                 val_dict[key] = val
         vals_str = ', '.join(['%s:0x%02x' % (k, val_dict[k]) for k in val_dict])

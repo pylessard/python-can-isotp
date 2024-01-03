@@ -162,7 +162,7 @@ Example :
 ------
 
 
-Asymnetric addresses
+Asymmetric addresses
 --------------------
 
 It is possible to send and receive with different address schemes. The :class:`AsymmetricAddress<isotp.address.AsymmetricAddress>` serves that purpose

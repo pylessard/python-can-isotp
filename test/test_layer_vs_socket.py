@@ -182,7 +182,7 @@ class TestLayerAgainstSocket(ThreadableTest):
         return self.do_test_tx_dl_receive_client(tx_data_length=64)
 
     def do_test_tx_dl_transmit_server(self, remote_tx_data_length=8):
-        s = self.make_socket(tx_data_length=remote_tx_data_length, can_fd=True)
+        s = self.make_socket(tx_data_length=remote_tx_data_length, can_fd=True, timeout=5)
         s.bind(tools.get_test_interface_config("channel"), isotp.Address(txid=self.stack_rxid, rxid=self.stack_txid))
         self.socket_ready.set()
         self.wait_stack_ready()  # Creating the stack may take some time as we delete the previous and create a new one
@@ -230,11 +230,10 @@ class TestLayerAgainstSocket(ThreadableTest):
         return self.do_test_tx_dl_transmit_client(tx_data_length=64)
 
     def test_transmit_long_stmin(self):
-        s = self.make_socket()
+        s = self.make_socket(timeout=5)
         s.set_fc_opts(stmin=100)
         s.bind(tools.get_test_interface_config("channel"), isotp.Address(txid=self.stack_rxid, rxid=self.stack_txid))
         self.socket_ready.set()
-        self.wait_transmission_complete(5)
         frame = s.recv()
         self.assertEqual(frame, self.make_payload(150))
         self.reception_complete.set()
@@ -288,7 +287,7 @@ class TestLayerAgainstSocket(ThreadableTest):
         self.assertEqual(frame, self.make_payload(100))
 
     def test_transmit_extended_29bits(self):
-        s = self.make_socket()
+        s = self.make_socket(timeout=3)
         addr = isotp.Address(isotp.AddressingMode.Extended_29bits, txid=self.stack_rxid,
                              rxid=self.stack_txid, source_address=0x88, target_address=0x99)
         s.bind(tools.get_test_interface_config("channel"), addr)
@@ -325,10 +324,9 @@ class TestLayerAgainstSocket(ThreadableTest):
         self.assertEqual(frame, self.make_payload(100, 2))
 
     def test_transmit_mixed_29bits(self):
-        s = self.make_socket()
+        s = self.make_socket(timeout=3)
         addr = isotp.Address(isotp.AddressingMode.Mixed_29bits, source_address=0x88, target_address=0x99, address_extension=0xEE)
         s.bind(tools.get_test_interface_config("channel"), addr)
-        time.sleep(0.2)
         self.socket_ready.set()
         self.wait_stack_ready()
         frame = s.recv()
@@ -339,6 +337,31 @@ class TestLayerAgainstSocket(ThreadableTest):
         self.stack_ready.set()
         self.wait_socket_ready()
         addr = isotp.Address(isotp.AddressingMode.Mixed_29bits, source_address=0x99, target_address=0x88, address_extension=0xEE)
+        self.stack.set_address(addr)
+        self.stack.send(self.make_payload(100, 5))
+        self.process_stack_send(2)
+        self.wait_reception_complete()
+
+    def test_transmit_asymmetric_address(self):
+        s = self.make_socket(timeout=3)
+        addr = isotp.AsymmetricAddress(
+            tx_addr=isotp.Address(isotp.AddressingMode.Mixed_11bits, txid=0x123, address_extension=0xAA, tx_only=True),
+            rx_addr=isotp.Address(isotp.AddressingMode.Mixed_29bits, source_address=0x88, target_address=0x99, address_extension=0xBB, rx_only=True)
+        )
+        s.bind(tools.get_test_interface_config("channel"), addr)
+        self.socket_ready.set()
+        self.wait_stack_ready()
+        frame = s.recv()
+        self.assertEqual(frame, self.make_payload(100, 5))
+        self.reception_complete.set()
+
+    def _test_transmit_asymmetric_address(self):
+        self.stack_ready.set()
+        self.wait_socket_ready()
+        addr = isotp.AsymmetricAddress(
+            tx_addr=isotp.Address(isotp.AddressingMode.Mixed_29bits, source_address=0x99, target_address=0x88, address_extension=0xBB, tx_only=True),
+            rx_addr=isotp.Address(isotp.AddressingMode.Mixed_11bits, rxid=0x123, address_extension=0xAA, rx_only=True)
+        )
         self.stack.set_address(addr)
         self.stack.send(self.make_payload(100, 5))
         self.process_stack_send(2)

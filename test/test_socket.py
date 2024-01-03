@@ -163,3 +163,13 @@ class TestSocket(unittest.TestCase):
         self.assertNotEqual(opts.optflag & isotp.socket.flags.RX_EXT_ADDR, 0)
         self.assertEqual(opts.ext_address, 0x99)
         self.assertEqual(opts.rx_ext_address, 0x99)
+
+    def test_asymmetric_address_no_addrext(self):
+        # This is not supported by the isotp socket module. flag to the user.
+        s = self.make_socket(timeout=3)
+        addr = isotp.AsymmetricAddress(
+            tx_addr=isotp.Address(isotp.AddressingMode.Normal_11bits, txid=0x123, tx_only=True),
+            rx_addr=isotp.Address(isotp.AddressingMode.Mixed_29bits, source_address=0x88, target_address=0x99, address_extension=0xBB, rx_only=True)
+        )
+        with self.assertRaises(ValueError):
+            s.bind(tools.get_test_interface_config("channel"), addr)
