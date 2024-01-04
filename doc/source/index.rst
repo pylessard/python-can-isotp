@@ -17,7 +17,7 @@ It also contains a wrapper for a simplified usage of the `Linux SocketCAN IsoTP 
 
 .. note:: You are looking at the isotp v2.x documentation. The legacy `v1.x documentation <https://can-isotp.readthedocs.io/en/v1.x>`_ is still online.
 
-V2.x changes
+v2.x changes
 ------------
 
 V2.x addressed several flaws that were present in v1.x. The main change is regarding the timing capabilities of the module. V2.x can achieve much better timing performance than
@@ -34,6 +34,16 @@ Here is the major API changes to v2.x that might make an application designed wi
         
     - The transport layer can perform blocking sends, allowing an UDS layer to better handle its timeouts (P2/P2* vs P6 timeouts)
     - Some methods dedicated to internal usage have been prefixed with an underscore (``_``) to indicates that they are internals
-    - The CanStack object uses a Notifier instead of performing ``bus.recv()`` solving the popular issue of a CanStack depleting the receive queue and starving other modules from their incoming messages
     - The ``isotp.socket.recv()`` method does not return ``None`` on timeout anymore. 
         The API now comply with the Python socket API and will raise the proper exception in case of timeout.
+    - The error handler is called from a different thread
+    - The :class:`TransportLayer<isotp.TransportLayer>` object is now an extension of the legacy v1.x TransportLayer, which has been renamed to ``TransportLayerLogic``. See :ref:`Backward Compatibility<backward_compatibility>` and :ref:`Legacy Methods<legacy_methods>`
+
+On top of that, some improvement makes v2.x preferable over v1.x
+
+    - The :class:`NotifierBasedCanStack<isotp.NotifierBasedCanStack>` object has been introduced and uses a notifier instead of calling ``bus.recv()``, solving the popular issue of a CanStack depleting the receive queue and starving other modules from their incoming messages
+    - :ref:`Asymmetric addressing<asymmetric_addresses>` is possible (different address for reception than transmission)
+    - Sending data with a generator is now possible, accommodating use cases with large payloads
+    - The module is fully type-hinted
+    - It is possible to use a busy-wait to achieve even more precise timings. See the :ref:`wait_func parameter<param_wait_func>`
+

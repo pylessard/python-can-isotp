@@ -43,7 +43,7 @@ Without this project
 
 .. code-block:: python
 
-   SOL_CAN_ISOTP = 106 # These constants exist in the module header, not in Python.
+   SOL_CAN_ISOTP = 106 # These constants exist in the linux source code, not in Python
    CAN_ISOTP_RECV_FC = 2
    # Many more exists.
 

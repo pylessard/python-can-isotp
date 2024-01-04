@@ -721,6 +721,13 @@ class TransportLayerLogic:
         """
         Dequeue an IsoTP frame from the reception queue if available.
 
+        :param block: Tells if the read should be blocking or not
+        :type block: bool
+
+        :param timeout: Timeout value used for blocking read only
+        :type timeout: float
+
+
         :return: The next available IsoTP frame
         :rtype: bytearray or None
         """
@@ -731,7 +738,7 @@ class TransportLayerLogic:
 
     def available(self) -> bool:
         """
-        Returns ``True`` if an IsoTP frame is awaiting in the reception ``queue``. ``False`` otherwise
+        Returns ``True`` if an IsoTP frame is awaiting in the reception queue. ``False`` otherwise
         """
         return not self.rx_queue.empty()
 
@@ -1482,7 +1489,7 @@ class TransportLayer(TransportLayerLogic):
             return None
 
     def start(self) -> None:
-        """Start the IsoTP layer. Starts internal threads that handle the IsoTP communication."""
+        """Starts the IsoTP layer. Starts internal threads that handle the IsoTP communication."""
         self.logger.debug(f"Starting {self.__class__.__name__}")
         if self.started:
             raise RuntimeError("Transport Layer is already started")
@@ -1610,16 +1617,16 @@ class TransportLayer(TransportLayerLogic):
 
     # Protect against usage of non thread-safe methods while threads are running. We don't hide those method for backward compatibility
     @is_documented_by(TransportLayerLogic.process)
-    def process(self, *args, **kwargs):
+    def process(self, rx_timeout: float = 0.0, do_rx: bool = True, do_tx: bool = True) -> TransportLayerLogic.ProcessStats:
         if self.started:
             raise RuntimeError("Cannot call process() after a start(). See documentation and notes about backward compatibility.")
-        super().process(*args, **kwargs)
+        return super().process(rx_timeout=rx_timeout, do_rx=do_rx, do_tx=do_tx)
 
     @is_documented_by(TransportLayerLogic.reset)
-    def reset(self, *args, **kwargs):
+    def reset(self):
         if self.started:
             raise RuntimeError("Cannot call reset() after a start(). See documentation and notes about backward compatibility.")
-        super().reset(*args, **kwargs)
+        super().reset()
 
 
 class BusOwner:
@@ -1656,7 +1663,7 @@ def _python_can_to_isotp_message(msg: Optional["can.Message"]) -> Optional[CanMe
 
 class CanStack(TransportLayer, BusOwner):
     """
-    The IsoTP transport layer preconfigured to use `python-can <https://python-can.readthedocs.io>`__ as CAN layer. python-can must be installed in order to use this class.
+    The IsoTP transport layer pre configured to use `python-can <https://python-can.readthedocs.io>`__ as CAN layer. python-can must be installed in order to use this class.
     All parameters except the ``bus`` parameter will be given to the :class:`TransportLayer<isotp.TransportLayer>` constructor
 
     This class directly calls ``bus.recv``, consuming the message from the receive queue, potentially starving other application. Consider using the :class:`NotifierBasedCanStack<isotp.NotifierBasedCanStack>`
@@ -1696,7 +1703,7 @@ class CanStack(TransportLayer, BusOwner):
 
 class NotifierBasedCanStack(TransportLayer, BusOwner):
     """
-    The IsoTP transport layer preconfigured to use `python-can <https://python-can.readthedocs.io>`__ as CAN layer and reading through a ``can.Notifier``. python-can must be installed in order to use this class.
+    The IsoTP transport layer pre configured to use `python-can <https://python-can.readthedocs.io>`__ as CAN layer and reading through a ``can.Notifier``. python-can must be installed in order to use this class.
     All parameters except the ``bus`` and the ``notifier`` parameter will be given to the :class:`TransportLayer<isotp.TransportLayer>` constructor
 
     This class reads by registering a listener to the given notifier and sends by calling ``bus.recv``.
