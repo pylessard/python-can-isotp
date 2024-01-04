@@ -161,6 +161,7 @@ Example :
 
 ------
 
+.. _asymmetric_addresses:
 
 Asymmetric addresses
 --------------------
@@ -170,7 +171,7 @@ It is possible to send and receive with different address schemes. The :class:`A
 .. autoclass:: isotp.AsymmetricAddress
 
 When using an asymmetric, both ``tx_addr`` and ``rx_addr`` must be partial addresses, meaning that either ``tx_only=True`` or ``rx_only=True`` is set. 
-Address object instantiated with ``rx_only=True`` will not expect parameter meant for transmission and conversely, when instantiated with ``tx_only=True`` 
+Address objects instantiated with ``rx_only=True`` will not expect the parameters meant for transmission and conversely, when instantiated with ``tx_only=True`` 
 parameters required for reception won't be needed.
 
 
@@ -203,7 +204,7 @@ Example :
    0x123        [7]   99 21 05 06 07 08 09      // Consecutive frame
 
 
-The following table indicates the required parameter to construct a :class:`Address<isotp.Address>` object for all possible scenario
+The following table indicates the required parameters to construct a :class:`Address<isotp.Address>` object for all possible scenarios
 
 .. csv-table:: :class:`Address<isotp.Address>` required parameters
    :header: "Addressing mode", "Full address", "Partial Tx (``tx_only=True``)", "Partial Rx (``rx_only=True``)"

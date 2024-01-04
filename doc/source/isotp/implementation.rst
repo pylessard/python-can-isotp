@@ -1,5 +1,5 @@
-Implementation
-==============
+Pure Python Implementation
+==========================
 
 This sections explains the python implementation of the IsoTP protocol.
 
@@ -14,8 +14,10 @@ In such case, the :class:`isotp.TransportLayer<isotp.TransportLayer>` will be th
 
 If python-can must be used as CAN layer, one can use the :class:`isotp.CanStack<isotp.CanStack>` and :class:`isotp.NotifierBasedCanStack<isotp.NotifierBasedCanStack>` which extends the TransportLayer object with predefined functions that calls python-can. 
 
-.. autoclass:: isotp.CanStack
 .. autoclass:: isotp.NotifierBasedCanStack
+.. autoclass:: isotp.CanStack
+
+.. note:: The :class:`CanStack<isotp.CanStack>` exists mainly for backward compatibility with v1.x. It is suggested to use the :class:`NotifierBasedCanStack<isotp.NotifierBasedCanStack>` to avoid starvation issues and achieve better performances.
 
 The CAN messages going in and out from the transport layer are defined with :class:`isotp.CanMessage<isotp.CanMessage>`. 
 
@@ -95,6 +97,7 @@ The transport layer ``params`` parameter must be a dictionary with the following
 .. _param_rx_flowcontrol_timeout:
 
 .. attribute:: rx_flowcontrol_timeout
+   :annotation: (int)
    
    **default: 1000**
 
@@ -317,6 +320,8 @@ The :class:`isotp.TransportLayer<isotp.TransportLayer>` object has the following
 .. warning:: ``set_address`` is not thread safe and should be called before ``start()`` is called.
 
 -----
+
+.. _legacy_methods:
 
 Legacy methods (v1.x)
 ---------------------
