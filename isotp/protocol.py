@@ -300,8 +300,31 @@ class RateLimiter:
 class TransportLayerLogic:
     LOGGER_NAME = 'isotp'
 
-    @dataclass(slots=True, init=False)
+    @dataclass(init=False)
     class Params:
+        __slots__ = (
+            'stmin',
+            'blocksize',
+            'override_receiver_stmin',
+            'rx_flowcontrol_timeout',
+            'rx_consecutive_frame_timeout',
+            'tx_padding',
+            'wftmax',
+            'tx_data_length',
+            'tx_data_min_length',
+            'max_frame_size',
+            'can_fd',
+            'bitrate_switch',
+            'default_target_address_type',
+            'rate_limit_max_bitrate',
+            'rate_limit_window_size',
+            'rate_limit_enable',
+            'listen_mode',
+            'blocking_send',
+            'logger_name',
+            'wait_func'
+        )
+
         stmin: int
         blocksize: int
         override_receiver_stmin: Optional[float]
@@ -518,9 +541,12 @@ class TransportLayerLogic:
             self.success = success
             self.complete_event.set()
 
-    @dataclass(slots=True, frozen=True)
+    @dataclass(frozen=True)
     class ProcessStats:
         """Some statistics produced by every ``process`` called indicating how much has been accomplish during that iteration."""
+
+        __slots__ = ('received', 'received_processed', 'sent', 'frame_received')
+
         received: int
         received_processed: int
         sent: int
@@ -529,15 +555,19 @@ class TransportLayerLogic:
         def __repr__(self):
             return f'<{self.__class__.__name__} received:{self.received} (processed: {self.received_processed}, sent: {self.sent})>'
 
-    @dataclass(slots=True, frozen=True)
+    @dataclass(frozen=True)
     class ProcessRxReport:
         immediate_tx_required: bool
         frame_received: bool
 
-    @dataclass(slots=True, frozen=True)
+        __slots__ = ('immediate_tx_required', 'frame_received')
+
+    @dataclass(frozen=True)
     class ProcessTxReport:
         msg: Optional[CanMessage]
         immediate_rx_required: bool
+
+        __slots__ = 'msg', 'immediate_rx_required'
 
     RxFn = Callable[[float], Optional[CanMessage]]
     TxFn = Callable[[CanMessage], None]
