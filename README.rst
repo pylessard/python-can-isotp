@@ -10,7 +10,7 @@ This package contains a Python implementation of the protocol that works in the 
 Documentation
 -------------
 
-The documentation is available here :   https://can-isotp.readthedocs.io/en/v1.x/
+The documentation is available here :   https://can-isotp.readthedocs.io
 
 Requirements
 ------------
