@@ -1318,7 +1318,7 @@ class TransportLayerLogic:
         """
         self._stop_sending(success=False)
 
-    def _stop_sending(self, success) -> None:
+    def _stop_sending(self, success: bool) -> None:
         if self.active_send_request is not None:
             self.active_send_request.complete(success)
             self.active_send_request = None
@@ -1632,7 +1632,7 @@ class TransportLayer(TransportLayerLogic):
                     while self.events.reset_tx.is_set():
                         time.sleep(0.05)
         else:
-            self._stop_sending()
+            self._stop_sending(success=False)
 
     @is_documented_by(TransportLayerLogic.stop_receiving)
     def stop_receiving(self):
