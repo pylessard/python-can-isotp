@@ -36,6 +36,7 @@ Here is the major API changes to v2.x that might make an application designed wi
     - Some methods dedicated to internal usage have been prefixed with an underscore (``_``) to indicates that they are internals
     - The ``isotp.socket.recv()`` method does not return ``None`` on timeout anymore. 
         The API now comply with the Python socket API and will raise the proper exception in case of timeout.
+    - ``isotp.socket.bind`` now requires an ``isotp.Address`` object and is no more backward compatible with old interface
     - The error handler is called from a different thread
     - The :class:`TransportLayer<isotp.TransportLayer>` object is now an extension of the legacy v1.x TransportLayer, which has been renamed to ``TransportLayerLogic``. See :ref:`Backward Compatibility<backward_compatibility>` and :ref:`Legacy Methods<legacy_methods>`
 
