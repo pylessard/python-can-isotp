@@ -20,20 +20,20 @@ class Timer:
     def start(self, timeout=None) -> None:
         if timeout is not None:
             self.set_timeout(timeout)
-        self.start_time = time.monotonic_ns()
+        self.start_time = time.perf_counter_ns()
 
     def stop(self) -> None:
         self.start_time = None
 
     def elapsed(self) -> float:
         if self.start_time is not None:
-            return float(time.monotonic_ns() - self.start_time) / 1.0e9
+            return float(time.perf_counter_ns() - self.start_time) / 1.0e9
         else:
             return 0
 
     def elapsed_ns(self) -> int:
         if self.start_time is not None:
-            return time.monotonic_ns() - self.start_time
+            return time.perf_counter_ns() - self.start_time
         else:
             return 0
 

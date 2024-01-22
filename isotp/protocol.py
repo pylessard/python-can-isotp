@@ -259,7 +259,7 @@ class RateLimiter:
             self.reset()
             return
 
-        t = time.monotonic()
+        t = time.perf_counter()
 
         while len(self.burst_time) > 0:
             t2 = self.burst_time[0]
@@ -283,7 +283,7 @@ class RateLimiter:
     def inform_byte_sent(self, datalen: int) -> None:
         if self.enabled:
             bytelen = datalen * 8
-            t = time.monotonic()
+            t = time.perf_counter()
             self.bit_total += bytelen
             if len(self.burst_time) == 0:
                 self.burst_time.append(t)
@@ -689,7 +689,7 @@ class TransportLayerLogic:
     def send(self,
              data: Union[bytes, bytearray, SendGenerator],
              target_address_type: Optional[Union[isotp.address.TargetAddressType, int]] = None,
-             send_timeout: float = 0):
+             send_timeout: Optional[float] = None):
         """
         Enqueue an IsoTP frame to be sent over CAN network.
         When performing a blocking send, this method returns only when the transmission is complete or raise an exception when a failure or a timeout occurs.
@@ -704,7 +704,7 @@ class TransportLayerLogic:
         :type target_address_type: int
 
         :param send_timeout: Timeout value for blocking send. Unused if :ref:`blocking_send<param_blocking_send>` is ``False``
-        :type send_timeout: float
+        :type send_timeout: float or None
 
         :raises ValueError: Given data is not a bytearray, a tuple (generator,size) or the size is too big
         :raises RuntimeError: Transmit queue is full
@@ -1583,9 +1583,9 @@ class TransportLayer(TransportLayerLogic):
         self.events.relay_thread_ready.set()
         while not self.events.stop_requested.is_set():
             rx_timeout = 0.0 if self.is_tx_throttled() else self.default_read_timeout
-            t1 = time.monotonic()
+            t1 = time.perf_counter()
             data = self.user_rxfn(rx_timeout)
-            diff = time.monotonic() - t1
+            diff = time.perf_counter() - t1
             if data is not None:
                 self.rx_relay_queue.put(data)
             else:   # No data received. Sleep if user is not blocking
