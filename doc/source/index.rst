@@ -47,4 +47,5 @@ On top of that, some improvement makes v2.x preferable over v1.x
     - Sending data with a generator is now possible, accommodating use cases with large payloads
     - The module is fully type-hinted
     - It is possible to use a busy-wait to achieve even more precise timings. See the :ref:`wait_func parameter<param_wait_func>`
+    - Performances on Windows are greatly improved by the usage of ``time.perf_counter`` instead of ``time.monotonic``. See `issue #113 <https://github.com/pylessard/python-can-isotp/issues/113>`_
 
