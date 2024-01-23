@@ -1,7 +1,30 @@
+__all__ = [
+    'IsoTpError',
+    'BlockingSendFailure',
+    'BadGeneratorError',
+    'BlockingSendTimeout',
+    'FlowControlTimeoutError',
+    'ConsecutiveFrameTimeoutError',
+    'InvalidCanDataError',
+    'UnexpectedFlowControlError',
+    'UnexpectedConsecutiveFrameError',
+    'ReceptionInterruptedWithSingleFrameError',
+    'ReceptionInterruptedWithFirstFrameError',
+    'WrongSequenceNumberError',
+    'UnsupportedWaitFrameError',
+    'MaximumWaitFrameReachedError',
+    'FrameTooLongError',
+    'ChangingInvalidRXDLError',
+    'MissingEscapeSequenceError',
+    'InvalidCanFdFirstFrameRXDL',
+    'OverflowError'
+]
+
+from typing import Any
 
 
 class IsoTpError(Exception):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         Exception.__init__(self, *args, **kwargs)
 
 

@@ -10,14 +10,14 @@ class Timer:
     start_time: Optional[int]
     timeout: int
 
-    def __init__(self, timeout: float):
+    def __init__(self, timeout: float) -> None:
         self.set_timeout(timeout)
         self.start_time = None
 
     def set_timeout(self, timeout: float) -> None:
         self.timeout = int(timeout * 1e9)
 
-    def start(self, timeout=None) -> None:
+    def start(self, timeout: Optional[float] = None) -> None:
         if timeout is not None:
             self.set_timeout(timeout)
         self.start_time = time.perf_counter_ns()

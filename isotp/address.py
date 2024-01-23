@@ -17,7 +17,7 @@ class AddressingMode(Enum):
     Mixed_29bits = 6
 
     @classmethod
-    def get_name(cls, num):
+    def get_name(cls, num: Union[int, "AddressingMode"]) -> str:
         return cls(num).name
 
 
@@ -74,6 +74,10 @@ class AbstractAddress(abc.ABC):
 
     @abc.abstractmethod
     def is_partial_address(self) -> bool:
+        raise NotImplementedError("Abstract method")
+
+    @abc.abstractmethod
+    def get_content_str(self) -> str:
         raise NotImplementedError("Abstract method")
 
 
@@ -203,7 +207,7 @@ class Address(AbstractAddress):
             else:
                 raise RuntimeError('This exception should never be raised.')
 
-        def not_implemented_func_with_partial(*args, **kwargs):
+        def not_implemented_func_with_partial(*args: Any, **kwargs: Any) -> None:
             raise NotImplementedError("Not possible with partial address")
 
         # Remove unavailable functions to be strict
@@ -222,7 +226,7 @@ class Address(AbstractAddress):
             setattr(self, 'is_tx_29bits', not_implemented_func_with_partial)
             setattr(self, 'get_tx_payload_prefix', not_implemented_func_with_partial)
 
-    def validate(self):
+    def validate(self) -> None:
         if self._rx_only and self._tx_only:
             raise ValueError("Address cannot be tx only and rx only")
 
@@ -434,7 +438,7 @@ class Address(AbstractAddress):
         vals_str = ', '.join(['%s:0x%02x' % (k, val_dict[k]) for k in val_dict])
         return '[%s - %s]' % (AddressingMode.get_name(self._addressing_mode), vals_str)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return '<IsoTP Address %s at 0x%08x>' % (self.get_content_str(), id(self))
 
 
@@ -504,5 +508,8 @@ class AsymmetricAddress(AbstractAddress):
     def is_partial_address(self) -> bool:
         return False
 
+    def get_content_str(self) -> str:
+        return f"RxAddr: {self.rx_addr.__repr__()} - TxAddr: {self.tx_addr.__repr__()}"
+
     def __repr__(self) -> str:
-        return f'<{self.__class__.__name__} - RxAddr: {self.rx_addr.__repr__()} - TxAddr: {self.tx_addr.__repr__()}>'
+        return f'<{self.__class__.__name__} - {self.get_content_str()}>'

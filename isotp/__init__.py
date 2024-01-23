@@ -1,5 +1,38 @@
 _major_version_ = 2
 
+__all__ = [
+    'CanMessage',
+    'AddressingMode',
+    'TargetAddressType',
+    'Address',
+    'AsymmetricAddress',
+    'TransportLayerLogic',
+    'TransportLayer',
+    'CanStack',
+    'NotifierBasedCanStack',
+    'socket',
+
+    'IsoTpError',
+    'BlockingSendFailure',
+    'BadGeneratorError',
+    'BlockingSendTimeout',
+    'FlowControlTimeoutError',
+    'ConsecutiveFrameTimeoutError',
+    'InvalidCanDataError',
+    'UnexpectedFlowControlError',
+    'UnexpectedConsecutiveFrameError',
+    'ReceptionInterruptedWithSingleFrameError',
+    'ReceptionInterruptedWithFirstFrameError',
+    'WrongSequenceNumberError',
+    'UnsupportedWaitFrameError',
+    'MaximumWaitFrameReachedError',
+    'FrameTooLongError',
+    'ChangingInvalidRXDLError',
+    'MissingEscapeSequenceError',
+    'InvalidCanFdFirstFrameRXDL',
+    'OverflowError'
+]
+
 from isotp.errors import *
 from isotp.can_message import CanMessage
 from isotp.address import AddressingMode, TargetAddressType, Address, AsymmetricAddress
