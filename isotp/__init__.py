@@ -10,7 +10,27 @@ __all__ = [
     'TransportLayer',
     'CanStack',
     'NotifierBasedCanStack',
-    'socket'
+    'socket',
+
+    'IsoTpError',
+    'BlockingSendFailure',
+    'BadGeneratorError',
+    'BlockingSendTimeout',
+    'FlowControlTimeoutError',
+    'ConsecutiveFrameTimeoutError',
+    'InvalidCanDataError',
+    'UnexpectedFlowControlError',
+    'UnexpectedConsecutiveFrameError',
+    'ReceptionInterruptedWithSingleFrameError',
+    'ReceptionInterruptedWithFirstFrameError',
+    'WrongSequenceNumberError',
+    'UnsupportedWaitFrameError',
+    'MaximumWaitFrameReachedError',
+    'FrameTooLongError',
+    'ChangingInvalidRXDLError',
+    'MissingEscapeSequenceError',
+    'InvalidCanFdFirstFrameRXDL',
+    'OverflowError'
 ]
 
 from isotp.errors import *
