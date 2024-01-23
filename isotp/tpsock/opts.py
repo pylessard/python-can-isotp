@@ -35,7 +35,7 @@ class GeneralOpts:
     rxpad: Optional[int]
     rx_ext_address: Optional[int]
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.optflag = None
         self.frame_txtime = None
         self.ext_address = None
@@ -114,7 +114,7 @@ class GeneralOpts:
         s.setsockopt(SOL_CAN_ISOTP, CAN_ISOTP_OPTS, opt)
         return o
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         optflag_str = '[undefined]' if self.optflag is None else '0x%08x' % (self.optflag)
         frame_txtime_str = '[undefined]' if self.frame_txtime is None else '0x%08x' % (self.frame_txtime)
         ext_address_str = '[undefined]' if self.ext_address is None else '0x%02x' % (self.ext_address)
@@ -132,7 +132,7 @@ class FlowControlOpts:
     bs: Optional[int]
     wftmax: Optional[int]
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.stmin = None
         self.bs = None
         self.wftmax = None
@@ -174,7 +174,7 @@ class FlowControlOpts:
         s.setsockopt(SOL_CAN_ISOTP, CAN_ISOTP_RECV_FC, opt)
         return o
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         bs_str = '[undefined]' if self.bs is None else '0x%02x' % (self.bs)
         stmin_str = '[undefined]' if self.stmin is None else '0x%02x' % (self.stmin)
         wftmax_str = '[undefined]' if self.wftmax is None else '0x%02x' % (self.wftmax)
@@ -188,7 +188,7 @@ class LinkLayerOpts:
     tx_dl: Optional[int]
     tx_flags: Optional[int]
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.mtu = None
         self.tx_dl = None
         self.tx_flags = None
@@ -230,7 +230,7 @@ class LinkLayerOpts:
         s.setsockopt(SOL_CAN_ISOTP, CAN_ISOTP_LL_OPTS, opt)
         return o
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         mtu_str = '[undefined]' if self.mtu is None else '0x%02x' % (self.mtu)
         tx_dl_str = '[undefined]' if self.tx_dl is None else '0x%02x' % (self.tx_dl)
         tx_flags_str = '[undefined]' if self.tx_flags is None else '0x%02x' % (self.tx_flags)

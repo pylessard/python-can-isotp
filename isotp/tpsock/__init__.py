@@ -84,7 +84,7 @@ class socket:
     closed: bool
     _socket: socket_module.socket
 
-    def __init__(self, timeout=None):
+    def __init__(self, timeout: Optional[float] = None) -> None:
         check_support()
         from . import opts  # import only if required.
         self.interface = None
@@ -287,13 +287,13 @@ class socket:
         self.closed = True
         self.address = None
 
-    def __delete__(self):
+    def __delete__(self) -> None:
         if isinstance(self._socket, socket_module.socket):
             self._socket.close()
-            self._socket = None
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         if self.bound:
+            assert self.address is not None
             return "<ISO-TP Socket: %s, %s>" % (self.interface, self.address.get_content_str())
         else:
             status = "Closed" if self.closed else "Unbound"

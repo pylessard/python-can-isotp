@@ -36,8 +36,8 @@ except ImportError:
     _can_available = False
 
 
-def is_documented_by(original):
-    def wrapper(target):
+def is_documented_by(original: Callable[[Any], Any]) -> Callable[[Any], Any]:
+    def wrapper(target: Callable[[Any], Any]) -> Callable[[Any], Any]:
         target.__doc__ = original.__doc__
         return target
     return wrapper
@@ -75,7 +75,7 @@ class PDU:
     escape_sequence: bool
     can_dl: int
 
-    def __init__(self, msg: CanMessage, start_of_data: int = 0):
+    def __init__(self, msg: CanMessage, start_of_data: int = 0) -> None:
 
         self.data = bytes()
         self.length = None
@@ -172,7 +172,7 @@ class PDU:
     def craft_flow_control_data(cls, flow_status: int, blocksize: int, stmin: int) -> bytes:
         return bytes([(0x30 | (flow_status) & 0xF), blocksize & 0xFF, stmin & 0xFF])
 
-    def name(self):
+    def name(self) -> str:
         if self.type is None:
             return "[None]"
 
@@ -200,7 +200,7 @@ class RateLimiter:
     bit_total: int
     window_bit_max: float
 
-    def __init__(self, mean_bitrate=None, window_size_sec=0.1):
+    def __init__(self, mean_bitrate: float = 10000000, window_size_sec: float = 0.1) -> None:
         self.enabled = False
         self.mean_bitrate = mean_bitrate
         self.window_size_sec = window_size_sec
@@ -346,7 +346,7 @@ class TransportLayerLogic:
         logger_name: str
         wait_func: Callable[[float], None]
 
-        def __init__(self):
+        def __init__(self) -> None:
             self.stmin = 0
             self.blocksize = 8
             self.override_receiver_stmin = None
@@ -552,7 +552,7 @@ class TransportLayerLogic:
         sent: int
         frame_received: int
 
-        def __repr__(self):
+        def __repr__(self) -> str:
             return f'<{self.__class__.__name__} received:{self.received} (processed: {self.received_processed}, sent: {self.sent})>'
 
     @dataclass(frozen=True)
@@ -689,7 +689,8 @@ class TransportLayerLogic:
     def send(self,
              data: Union[bytes, bytearray, SendGenerator],
              target_address_type: Optional[Union[isotp.address.TargetAddressType, int]] = None,
-             send_timeout: Optional[float] = None):
+             send_timeout: Optional[float] = None
+             ) -> None:
         """
         Enqueue an IsoTP frame to be sent over CAN network.
         When performing a blocking send, this method returns only when the transmission is complete or raise an exception when a failure or a timeout occurs.
@@ -874,7 +875,7 @@ class TransportLayerLogic:
             frame_received=nb_frame_received
         )
 
-    def _set_rxfn(self, rxfn: "TransportLayerLogic.RxFn"):
+    def _set_rxfn(self, rxfn: "TransportLayerLogic.RxFn") -> None:
         """
         Allow post init change of rxfn. This is a trick to implement the threaded Transport Layer
         and keeping the ability to run the TransportLayerLogic without threads for backward compatibility
@@ -1185,7 +1186,7 @@ class TransportLayerLogic:
             (self.RxState.IDLE, self.TxState.WAIT_FC): wait_fc,
         }
 
-    def set_address(self, address: Union[isotp.address.Address, isotp.address.AsymmetricAddress]):
+    def set_address(self, address: Union[isotp.address.Address, isotp.address.AsymmetricAddress]) -> None:
         """
         Sets the layer address. Can be set after initialization if needed. May cause a timeout if called while a transmission is active.
 
@@ -1249,10 +1250,10 @@ class TransportLayerLogic:
         self.timer_rx_cf = Timer(timeout=float(self.params.rx_consecutive_frame_timeout) / 1000)
         self.timer_rx_cf.start()
 
-    def _append_rx_data(self, data) -> None:
+    def _append_rx_data(self, data: Union[bytes, bytearray]) -> None:
         self.rx_buffer.extend(data)
 
-    def _request_tx_flowcontrol(self, status=PDU.FlowStatus.ContinueToSend) -> None:
+    def _request_tx_flowcontrol(self, status: int = PDU.FlowStatus.ContinueToSend) -> None:
         self.pending_flow_control_tx = True
         self.pending_flowcontrol_status = status
 
@@ -1302,7 +1303,7 @@ class TransportLayerLogic:
         if size <= 64: return 64
         raise ValueError("Impossible data size for CAN FD : %d " % (size))
 
-    def _make_flow_control(self, flow_status: int = PDU.FlowStatus.ContinueToSend, blocksize: Optional[int] = None, stmin: Optional[int] = None):
+    def _make_flow_control(self, flow_status: int = PDU.FlowStatus.ContinueToSend, blocksize: Optional[int] = None, stmin: Optional[int] = None) -> CanMessage:
         if blocksize is None:
             blocksize = self.params.blocksize
 
@@ -1347,11 +1348,11 @@ class TransportLayerLogic:
         self._stop_sending_flow_control()
         self.timer_rx_cf.stop()
 
-    def clear_rx_queue(self):
+    def clear_rx_queue(self) -> None:
         while not self.rx_queue.empty():
             self.rx_queue.get_nowait()
 
-    def clear_tx_queue(self):
+    def clear_tx_queue(self) -> None:
         while not self.tx_queue.empty():
             self.tx_queue.get_nowait()
 
@@ -1476,7 +1477,7 @@ class TransportLayer(TransportLayerLogic):
         reset_tx: threading.Event
         reset_rx: threading.Event
 
-        def __init__(self):
+        def __init__(self) -> None:
             self.main_thread_ready = threading.Event()
             self.relay_thread_ready = threading.Event()
             self.stop_requested = threading.Event()
@@ -1497,7 +1498,7 @@ class TransportLayer(TransportLayerLogic):
                  address: isotp.Address,
                  error_handler: Optional[TransportLayerLogic.ErrorHandler] = None,
                  params: Optional[Dict[str, Any]] = None,
-                 read_timeout=0.05):
+                 read_timeout: float = 0.05) -> None:
 
         self.rx_relay_queue = queue.Queue()
         self.started = False
@@ -1624,7 +1625,7 @@ class TransportLayer(TransportLayerLogic):
             self.logger.debug("Main thread is exiting")
 
     @is_documented_by(TransportLayerLogic.stop_sending)
-    def stop_sending(self):
+    def stop_sending(self) -> None:
         if self.started:
             if not self.events.stop_requested.is_set():
                 if self.main_thread is not None and self.main_thread.is_alive():
@@ -1635,7 +1636,7 @@ class TransportLayer(TransportLayerLogic):
             self._stop_sending(success=False)
 
     @is_documented_by(TransportLayerLogic.stop_receiving)
-    def stop_receiving(self):
+    def stop_receiving(self) -> None:
         if self.started:
             if not self.events.stop_requested.is_set():
                 if self.main_thread is not None and self.main_thread.is_alive():
@@ -1653,7 +1654,7 @@ class TransportLayer(TransportLayerLogic):
         return super().process(rx_timeout=rx_timeout, do_rx=do_rx, do_tx=do_tx)
 
     @is_documented_by(TransportLayerLogic.reset)
-    def reset(self):
+    def reset(self) -> None:
         if self.started:
             raise RuntimeError("Cannot call reset() after a start(). See documentation and notes about backward compatibility.")
         super().reset()
@@ -1714,7 +1715,7 @@ class CanStack(TransportLayer, BusOwner):
         msg = self.bus.recv(timeout)
         return _python_can_to_isotp_message(msg)
 
-    def __init__(self, bus: "can.BusABC", *args, **kwargs):
+    def __init__(self, bus: "can.BusABC", *args: Any, **kwargs: Any):
         if not _can_available:
             raise RuntimeError(f"python-can is not installed in this environment and is required for the {self.__class__.__name__} object.")
 
@@ -1755,14 +1756,14 @@ class NotifierBasedCanStack(TransportLayer, BusOwner):
     notifier: "can.Notifier"
     bus: "can.BusABC"
 
-    def _rx_canbus(self, timeout: float):
+    def _rx_canbus(self, timeout: float) -> Optional[CanMessage]:
         if self.buffered_reader is None:
             return None
 
         msg = self.buffered_reader.get_message(timeout=timeout)
         return _python_can_to_isotp_message(msg)
 
-    def __init__(self, bus: "can.BusABC", notifier: "can.Notifier", *args, **kwargs):
+    def __init__(self, bus: "can.BusABC", notifier: "can.Notifier", *args: Any, **kwargs: Any) -> None:
         if not _can_available:
             raise RuntimeError(f"python-can is not installed in this environment and is required for the {self.__class__.__name__} object.")
 
@@ -1781,14 +1782,15 @@ class NotifierBasedCanStack(TransportLayer, BusOwner):
         ))
         super().__init__(*args, **kwargs)
 
-    def start(self):
+    def start(self) -> None:
         self.buffered_reader = can.BufferedReader()
         self.notifier.add_listener(self.buffered_reader)
         super().start()
 
-    def stop(self):
+    def stop(self) -> None:
         try:
-            self.notifier.remove_listener(self.buffered_reader)
+            if self.buffered_reader is not None:
+                self.notifier.remove_listener(self.buffered_reader)
         except Exception:
             pass
         self.buffered_reader = None
