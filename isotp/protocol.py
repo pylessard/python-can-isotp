@@ -1476,13 +1476,17 @@ class TransportLayer(TransportLayerLogic):
         stop_requested: threading.Event
         reset_tx: threading.Event
         reset_rx: threading.Event
+        reset_tx_complete: threading.Event
+        reset_rx_complete: threading.Event
 
         def __init__(self) -> None:
             self.main_thread_ready = threading.Event()
             self.relay_thread_ready = threading.Event()
             self.stop_requested = threading.Event()
             self.reset_tx = threading.Event()
+            self.reset_tx_complete = threading.Event()
             self.reset_rx = threading.Event()
+            self.reset_rx_complete = threading.Event()
 
     started: bool
     main_thread: Optional[threading.Thread]
@@ -1534,6 +1538,8 @@ class TransportLayer(TransportLayerLogic):
         self.events.stop_requested.clear()
         self.events.reset_tx.clear()
         self.events.reset_rx.clear()
+        self.events.reset_tx_complete.clear()
+        self.events.reset_rx_complete.clear()
 
         self.main_thread.start()
         self.relay_thread.start()
@@ -1569,6 +1575,8 @@ class TransportLayer(TransportLayerLogic):
         self.events.stop_requested.clear()
         self.events.reset_tx.clear()
         self.events.reset_rx.clear()
+        self.events.reset_tx_complete.clear()
+        self.events.reset_rx_complete.clear()
 
         super().reset()
         while not self.rx_relay_queue.empty():
@@ -1615,10 +1623,12 @@ class TransportLayer(TransportLayerLogic):
                 if self.events.reset_tx.is_set():
                     self._stop_sending(success=False)
                     self.events.reset_tx.clear()
+                    self.events.reset_tx_complete.set()
 
                 if self.events.reset_rx.is_set():
                     self._stop_receiving()
                     self.events.reset_rx.clear()
+                    self.events.reset_rx_complete.set()
 
         finally:
             super().reset()
@@ -1630,8 +1640,7 @@ class TransportLayer(TransportLayerLogic):
             if not self.events.stop_requested.is_set():
                 if self.main_thread is not None and self.main_thread.is_alive():
                     self.events.reset_tx.set()
-                    while self.events.reset_tx.is_set():
-                        time.sleep(0.05)
+                    self.events.reset_tx_complete.wait()
         else:
             self._stop_sending(success=False)
 
@@ -1641,8 +1650,8 @@ class TransportLayer(TransportLayerLogic):
             if not self.events.stop_requested.is_set():
                 if self.main_thread is not None and self.main_thread.is_alive():
                     self.events.reset_rx.set()
-                    while self.events.reset_rx.is_set():
-                        time.sleep(0.05)
+                    self.rx_relay_queue.put(None)   # Wakeup from blocking read
+                    self.events.reset_rx_complete.wait()
         else:
             self._stop_receiving()
 
