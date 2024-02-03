@@ -1563,11 +1563,15 @@ class TransportLayer(TransportLayerLogic):
         self.rx_relay_queue.put(None)
 
         if self.main_thread is not None:
-            self.main_thread.join()
+            self.main_thread.join(2.0)
+            if self.main_thread.is_alive():
+                self.logger.error("Failed to stop the main thread")
             self.main_thread = None
 
         if self.relay_thread is not None:
-            self.relay_thread.join()
+            self.relay_thread.join(timeout=2.0)
+            if self.relay_thread.is_alive():
+                self.logger.warning("Failed to stop the reading thread. Does your rxfn callback block without respecting the timeout parameter?")
             self.relay_thread = None
 
         self.events.main_thread_ready.clear()
@@ -1640,7 +1644,9 @@ class TransportLayer(TransportLayerLogic):
             if not self.events.stop_requested.is_set():
                 if self.main_thread is not None and self.main_thread.is_alive():
                     self.events.reset_tx.set()
-                    self.events.reset_tx_complete.wait()
+                    self.events.reset_tx_complete.wait(2.0)
+                    if not self.events.reset_tx_complete.is_set():
+                        self.logger.error("Main thread failed to stop sending when requested.")
         else:
             self._stop_sending(success=False)
 
@@ -1651,7 +1657,9 @@ class TransportLayer(TransportLayerLogic):
                 if self.main_thread is not None and self.main_thread.is_alive():
                     self.events.reset_rx.set()
                     self.rx_relay_queue.put(None)   # Wakeup from blocking read
-                    self.events.reset_rx_complete.wait()
+                    self.events.reset_rx_complete.wait(2.0)
+                    if not self.events.reset_rx_complete.is_set():
+                        self.logger.error("Main thread failed to stop receiving when requested.")
         else:
             self._stop_receiving()
 
