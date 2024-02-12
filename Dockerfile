@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y \
     zlib1g-dev \
     libsqlite3-dev \
     libssl-dev \
+    iproute2 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /tmp/
