@@ -528,7 +528,8 @@ class TransportLayerLogic:
                 gen, size = data
                 self.generator = FiniteByteGenerator(gen, size)
             elif isinstance(data, Iterable):
-                self.generator = FiniteByteGenerator((x for x in cast(Union[bytes, bytearray], data)), len(data))
+                data = cast(Union[bytes, bytearray], data) # type:ignore
+                self.generator = FiniteByteGenerator((x for x in data), len(data))   
             else:
                 raise ValueError("data must be an iterable element (bytes or bytearray) or a tuple of generator,size")
 
