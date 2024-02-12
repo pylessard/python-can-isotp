@@ -6,7 +6,7 @@ pipeline {
         stage ('Docker') {
             agent {
                 dockerfile {
-                    args '-e HOME=/tmp -e BUILD_CONTEXT=ci'
+                    args '-e HOME=/tmp -e BUILD_CONTEXT=ci -v /dev/vcan0:/dev/vcan0 -v /dev/vcan1:/dev/vcan1 -v /dev/vcan2:/dev/vcan2 -v /dev/vcan3:/dev/vcan3 -v /dev/vcan4:/dev/vcan4 '
                     additionalBuildArgs '--target build-tests'
                     reuseNode true
                 }
