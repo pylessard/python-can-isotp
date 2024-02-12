@@ -1684,15 +1684,13 @@ class BusOwner:
 
 
 def python_can_tx_canbus_3plus(owner: BusOwner, msg: CanMessage) -> None:
-    # type:ignore
     owner.bus.send(can.Message(arbitration_id=msg.arbitration_id, data=msg.data,
                                is_extended_id=msg.is_extended_id, is_fd=msg.is_fd, bitrate_switch=msg.bitrate_switch))
 
 
 def python_can_tx_canbus_3minus(owner: BusOwner, msg: CanMessage) -> None:
-    # type:ignore
-    owner.bus.send(can.Message(arbitration_id=msg.arbitration_id, data=msg.data,
-                               extended_id=msg.is_extended_id, is_fd=msg.is_fd, bitrate_switch=msg.bitrate_switch))
+    owner.bus.send(can.Message(arbitration_id=msg.arbitration_id, data=msg.data,                                    # type:ignore
+                               extended_id=msg.is_extended_id, is_fd=msg.is_fd, bitrate_switch=msg.bitrate_switch))  # type:ignore
 
 
 def _make_python_can_tx_func(owner: BusOwner) -> Callable[[CanMessage], None]:
