@@ -27,7 +27,7 @@ import functools
 from collections.abc import Iterable
 
 
-from typing import Optional, Any, List, Callable, Dict, Tuple, Union, Generator
+from typing import Optional, Any, List, Callable, Dict, Tuple, Union, Generator, cast
 
 try:
     import can
@@ -528,7 +528,7 @@ class TransportLayerLogic:
                 gen, size = data
                 self.generator = FiniteByteGenerator(gen, size)
             elif isinstance(data, Iterable):
-                self.generator = FiniteByteGenerator((x for x in data), len(data))
+                self.generator = FiniteByteGenerator((x for x in cast(Union[bytes, bytearray], data)), len(data))
             else:
                 raise ValueError("data must be an iterable element (bytes or bytearray) or a tuple of generator,size")
 
