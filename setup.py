@@ -11,6 +11,10 @@ setup(
     name='can-isotp',
     packages=find_packages(where='.', exclude=['test', 'test.*'], include=['isotp', "isotp.*"]),
     version='2.0.4',
+    extras_require={
+        'test': ['mypy', 'coverage'],
+        'dev': ['mypy', 'ipdb', 'autopep8', 'coverage']
+    },
     description='Module enabling the IsoTP protocol defined by ISO-15765',
     long_description=long_description,
     author='Pier-Yves Lessard',

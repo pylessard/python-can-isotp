@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# udsoncan documentation build configuration file, created by
+# isotp documentation build configuration file, created by
 # sphinx-quickstart on Thu Apr 26 19:43:51 2018.
 #
 # This file is execfile()d with the current directory set to its
