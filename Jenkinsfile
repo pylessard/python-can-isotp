@@ -6,7 +6,7 @@ pipeline {
         stage ('Docker') {
             agent {
                 dockerfile {
-                    args '-e HOME=/tmp -e BUILD_CONTEXT=ci --cap-add=NET_ADMIN'
+                    args '-e HOME=/tmp -e BUILD_CONTEXT=ci --cap-add=NET_ADMIN -u 0:0'
                     additionalBuildArgs '--target build-tests'
                     reuseNode true
                 }
