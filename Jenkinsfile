@@ -6,6 +6,7 @@ pipeline {
         stage ('Docker') {
             agent {
                 dockerfile {
+                    // Required to be root to create vcan interfaces
                     args '-e HOME=/tmp -e BUILD_CONTEXT=ci --cap-add=NET_ADMIN -u 0:0'
                     additionalBuildArgs '--target build-tests'
                     reuseNode true
@@ -15,8 +16,6 @@ pipeline {
                 stage('Setup vcan'){
                     steps {
                         sh '''
-                        id
-                        /sbin/capsh --decode=$(grep CapBnd /proc/1/status|cut -f2)
                         ip link add dev vcan0 type vcan || true
                         ip link set up vcan0
                         ip link add dev vcan1 type vcan || true
