@@ -15,7 +15,7 @@ pipeline {
                 stage('Setup vcan'){
                     steps {
                         sh '''
-                        whoami
+                        id
                         /sbin/capsh --decode=$(grep CapBnd /proc/1/status|cut -f2)
                         ip link add dev vcan0 type vcan || true
                         ip link set up vcan0
