@@ -1,8 +1,11 @@
+import os
+
+
 class Vars:
     SOCKET_IMPOSSIBLE_REASON = ''
     interface_config = {
         "interface": "socketcan",
-        "channel": "vcan0",
+        "channel": os.environ.get('UNITTEST_VCAN', 'vcan0'),
         "fd": False,
         "bitrate": 500000,
         "databitrate": 4000000
