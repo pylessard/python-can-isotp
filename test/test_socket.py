@@ -59,25 +59,31 @@ class TestSocket(unittest.TestCase):
 
     def test_receive_transmit_fc_opts(self):
         (txid, rxid) = tools.get_next_can_id_pair()
+        blocksize=5
         payload = b'a' * 200
         ncf = math.ceil(max(len(payload) - 6, 0) / 7)
-        expected_time = ncf * 0.1
+        nfc = math.floor(ncf/blocksize)+1
+        print(nfc)
+        expected_time = (ncf-nfc) * 0.1
         s1 = self.make_socket()
         s2 = self.make_socket(timeout=2 * expected_time)
         addr1 = isotp.Address(isotp.AddressingMode.Normal_11bits, txid=txid, rxid=rxid)
         addr2 = isotp.Address(isotp.AddressingMode.Normal_11bits, txid=rxid, rxid=txid)
 
-        s2.set_fc_opts(stmin=100, bs=5)
+        s2.set_fc_opts(stmin=100, bs=blocksize)
 
         s1.bind(interface=tools.get_test_interface_config("channel"), address=addr1)
         s2.bind(interface=tools.get_test_interface_config("channel"), address=addr2)
         s1.send(payload)
-        t1 = time.monotonic()
+        t1 = time.perf_counter()
         payload2 = s2.recv()
-        diff = time.monotonic() - t1
+        diff = time.perf_counter() - t1
         self.assertEqual(payload, payload2)
         self.assertGreater(diff, expected_time * 0.8)
         self.assertLess(diff, expected_time * 1.2)
+
+        print(diff)
+        print(expected_time)
 
     def test_addressing_normal_11bits(self):
         addr = isotp.Address(isotp.AddressingMode.Normal_11bits, txid=0x123, rxid=0x456)
