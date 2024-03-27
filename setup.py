@@ -10,6 +10,9 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 setup(
     name='can-isotp',
     packages=find_packages(where='.', exclude=['test', 'test.*'], include=['isotp', "isotp.*"]),
+    package_data={
+        'isotp' : ['py.typed']
+    },
     version='2.0.4',
     extras_require={
         'test': ['mypy', 'coverage', 'python-can'],
