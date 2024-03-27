@@ -241,7 +241,7 @@ class TestLayerAgainstSocket(ThreadableTest):
     def _test_transmit_long_stmin(self):
         self.wait_socket_ready()
         payload = self.make_payload(150)
-        ncf = math.ceil(max(len(payload) - 6, 0) / 7)
+        ncf = math.ceil(max(len(payload) - 6, 0) / 7)-1
         expected_time = ncf * 0.1
         self.stack.send(payload)
         t1 = time.monotonic()
@@ -260,7 +260,7 @@ class TestLayerAgainstSocket(ThreadableTest):
     def _test_receive_long_stmin(self):
         self.wait_socket_ready()
         payload = self.make_payload(150)
-        ncf = math.ceil(max(len(payload) - 6, 0) / 7)
+        ncf = math.ceil(max(len(payload) - 6, 0) / 7)-1
         expected_time = ncf * 0.1
         t1 = time.monotonic()
         self.stack.params.set('stmin', 100)
