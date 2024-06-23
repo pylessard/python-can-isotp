@@ -709,11 +709,14 @@ class TransportLayerLogic:
         :type send_timeout: float or None
 
         :raises ValueError: Given data is not a bytearray, a tuple (generator,size) or the size is too big
-        :raises RuntimeError: Transmit queue is full
+        :raises RuntimeError: Transmit queue is full or tried to transmit while the stack is configured in :ref:`listen mode<param_listen_mode>`
         :raises BlockingSendTimeout: When :ref:`blocking_send<param_blocking_send>` is set to ``True`` and the send operation does not complete in the given timeout.
         :raises BlockingSendFailure: When :ref:`blocking_send<param_blocking_send>` is set to ``True`` and the transmission failed for any reason (e.g. unexpected frame or bad timings), including a timeout. Note that 
             :class:`BlockingSendTimeout<BlockingSendTimeout>` inherits :class:`BlockingSendFailure<BlockingSendFailure>`.
         """
+
+        if self.params.listen_mode:
+            raise RuntimeError("Cannot transmit when listen_mode=True")
 
         if target_address_type is None:
             target_address_type = self.params.default_target_address_type
@@ -1007,13 +1010,13 @@ class TransportLayerLogic:
                 return self.ProcessTxReport(msg=None, immediate_rx_required=False)
 
             if self.tx_state == self.TxState.IDLE:
-                self._trigger_error(isotp.errors.UnexpectedFlowControlError('Received a FlowControl message while transmission was Idle. Ignoring'))
+                self._trigger_error(isotp.errors.UnexpectedFlowControlError('Received a FlowControl message while transmission was Idle. Ignoring'), inhibit_in_listen_mode=True)
             else:
                 if flow_control_frame.flow_status == PDU.FlowStatus.Wait:
-                    if self.params.wftmax == 0:
+                    if self.params.wftmax == 0 and not self.params.listen_mode:
                         self._trigger_error(isotp.errors.UnsupportedWaitFrameError(
                             'Received a FlowControl requesting to wait, but wftmax is set to 0'))
-                    elif self.wft_counter >= self.params.wftmax:
+                    elif self.wft_counter >= self.params.wftmax and not self.params.listen_mode:
                         self._trigger_error(isotp.errors.MaximumWaitFrameReachedError(
                             'Received %d wait frame which is the maximum set in params.wftmax' % (self.wft_counter)))
                         self._stop_sending(success=False)
@@ -1388,10 +1391,11 @@ class TransportLayerLogic:
 
         return started
 
-    def _trigger_error(self, error: isotp.errors.IsoTpError) -> None:
+    def _trigger_error(self, error: isotp.errors.IsoTpError, inhibit_in_listen_mode:bool=False) -> None:
         if self.error_handler is not None:
             if hasattr(self.error_handler, '__call__') and isinstance(error, isotp.errors.IsoTpError):
-                self.error_handler(error)
+                if not (inhibit_in_listen_mode and self.params.listen_mode):
+                    self.error_handler(error)
             else:
                 self.logger.warning('Given error handler is not a callable object.')
 
