@@ -104,7 +104,7 @@ class TestTransportLayerStackAgainstStack(unittest.TestCase):
         self.error_triggered[error.__class__].append(error)
 
     def assert_no_error_reported(self):
-        self.assertEqual(len(self.error_triggered), 0, "At least 1 error was reported")
+        self.assertEqual(len(self.error_triggered), 0, "Errors were reported and shouldn't have")
 
     def read_queue_blocking(self, q: queue.Queue, timeout: float):
         try:
@@ -171,7 +171,11 @@ class TestTransportLayerStackAgainstStack(unittest.TestCase):
         self.layer1.send(bytes([1] * 100), send_timeout=5)
         self.assert_no_error_reported()
 
-    def test_listen_mode(self):
+    def test_listen_mode_receiver(self):
+        # listen mode enabled. Address is the receiver address
+        self.layer2.params.blocksize=5
+        self.layer2.params.stmin=10
+        self.layer2.load_params()
         layer3_rx_queue = queue.Queue()
         layer3_tx_queue = queue.Queue()
 
@@ -205,6 +209,64 @@ class TestTransportLayerStackAgainstStack(unittest.TestCase):
             self.assertTrue(layer3_tx_queue.empty())    # layer3 cannot send
         finally:
             layer3.stop()
+
+    def test_listen_mode_transmitter(self):
+        # listen mode enabled. Address is the transmitter address
+        # Expect no errors
+        self.layer2.params.blocksize=5
+        self.layer2.params.stmin=10
+        self.layer2.load_params()
+        layer3_rx_queue = queue.Queue()
+        layer3_tx_queue = queue.Queue()
+
+        self.queue1to2.add_tx_splice(layer3_rx_queue)
+        self.queue2to1.add_tx_splice(layer3_rx_queue)
+
+        params3 = self.STACK_PARAMS.copy()
+        params3.update(dict(logger_name='layer3', listen_mode=True))
+
+        # Layer 3 should receive the same thing as layer 2 even though it receives all messages
+        layer3 = isotp.TransportLayer(
+            txfn=partial(self.send_queue, layer3_tx_queue),
+            rxfn=partial(self.read_queue_blocking, layer3_rx_queue),
+            address=self.address1,
+            error_handler=self.error_handler,
+            params=params3
+        )
+
+        unittest_logging.configure_transport_layer(layer3)
+        layer3.start()
+        try:
+            payload = bytes([x % 255 for x in range(100)])
+            self.layer1.send(payload)
+            payload2 = self.layer2.recv(block=True, timeout=5)
+            self.assertEqual(payload, payload2)
+
+            self.assertFalse(layer3.available())    # Address does not match receiver address
+            
+            self.assert_no_error_reported()
+            self.assertTrue(layer3_tx_queue.empty())    # layer3 cannot send
+        finally:
+            layer3.stop()
+
+    def test_listen_mode_cannot_transmit(self):
+        params3 = self.STACK_PARAMS.copy()
+        params3.update(dict(logger_name='layer3', listen_mode=True))
+
+        layer3_tx_queue = queue.Queue()
+        layer3_rx_queue = queue.Queue()
+        # Layer 3 should receive the same thing as layer 2 even though it receives all messages
+        layer3 = isotp.TransportLayer(
+            txfn=partial(self.send_queue, layer3_tx_queue),
+            rxfn=partial(self.read_queue_blocking, layer3_rx_queue),
+            address=self.address1,
+            error_handler=self.error_handler,
+            params=params3
+        )
+
+        with self.assertRaises(Exception):
+            layer3.send(bytes([1,2,3,4,5]))
+
 
     def test_no_call_to_process_after_start(self):
         # Make sure we maintain backward compatibility without introducing weird race conditions into old application
@@ -287,7 +349,7 @@ class TestTransportLayerStackAgainstStackAsymetricAddress(unittest.TestCase):
         self.error_triggered[error.__class__].append(error)
 
     def assert_no_error_reported(self):
-        self.assertEqual(len(self.error_triggered), 0, "At least 1 error was reported")
+        self.assertEqual(len(self.error_triggered), 0, "Errors were reported and shouldn't have")
 
     def read_queue_blocking(self, q: queue.Queue, timeout: float):
         try:
