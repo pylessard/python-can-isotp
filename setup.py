@@ -1,8 +1,11 @@
 from setuptools import setup, find_packages
 from codecs import open
 from os import path
+import sys
 
 here = path.abspath(path.dirname(__file__))
+sys.path.insert(0, here)
+import isotp
 
 with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
     long_description = f.read()
@@ -13,7 +16,7 @@ setup(
     package_data={
         'isotp' : ['py.typed']
     },
-    version='2.0.4',
+    version=isotp.__version__,
     extras_require={
         'test': ['mypy', 'coverage', 'python-can'],
         'dev': ['mypy', 'ipdb', 'autopep8', 'coverage', 'python-can']
@@ -24,7 +27,7 @@ setup(
     author_email='py.lessard@gmail.com',
     license='MIT',
     url='https://github.com/pylessard/python-can-isotp',
-    download_url='https://github.com/pylessard/python-can-isotp/archive/v2.0.4.tar.gz',
+    download_url=f'https://github.com/pylessard/python-can-isotp/archive/v{isotp.__version__}.tar.gz',
     keywords=['isotp', 'can', 'iso-15765', '15765', 'iso15765'],
     python_requires='>=3.7',
     classifiers=[
