@@ -982,7 +982,8 @@ class TransportLayerLogic:
             immediate_tx_msg_required = True
 
         return self.ProcessRxReport(immediate_tx_required=immediate_tx_msg_required, frame_received=frame_complete)
-
+    
+    
     def _process_tx(self) -> ProcessTxReport:
         """Process the transmit state machine"""
         output_msg = None 	 # Value outputted.  If None, no subsequent call to _process_tx will be done.
@@ -1076,7 +1077,7 @@ class TransportLayerLogic:
                             if total_size <= self.params.tx_data_length - size_offset - len(self.address.get_tx_payload_prefix()):
                                 # Will raise if size is not what was requested
                                 payload = self.active_send_request.generator.consume(total_size, enforce_exact=True)
-
+                                
                                 if size_on_first_byte:
                                     msg_data = self.address.get_tx_payload_prefix() + bytearray([0x0 | len(payload)]) + payload
                                 else:
@@ -1090,7 +1091,8 @@ class TransportLayerLogic:
                                     self.tx_state = self.TxState.TRANSMIT_SF_STANDBY
                                 else:
                                     output_msg = msg_temp
-
+                                    self._stop_sending(success=True)
+                                
                             # Multi frame - First Frame
                             else:
                                 self.tx_frame_length = total_size
@@ -1125,7 +1127,6 @@ class TransportLayerLogic:
             # This states serves if the rate limiter prevent from starting a new transmission.
             # We need to pop the isotp frame to know if the rate limiter must kick, but since the data is already popped,
             # we can't stay in IDLE state. So we come here until the rate limiter gives us permission to proceed.
-
             if self.tx_standby_msg is not None:
                 if len(self.tx_standby_msg.data) <= allowed_bytes:
                     output_msg = self.tx_standby_msg
@@ -1151,7 +1152,7 @@ class TransportLayerLogic:
                     payload = self.active_send_request.generator.consume(payload_length, enforce_exact=False)
                     if len(payload) > 0:   # Corner case. If generator size is a multiple of ll_data_length, we will get an empty payload on last frame.
                         msg_data = self.address.get_tx_payload_prefix() + bytearray([0x20 | self.tx_seqnum]) + payload
-                        arbitration_id = self.address.get_tx_arbitration_id()
+                        arbitration_id = self.address.get_tx_arbitration_id() 
                         output_msg = self._make_tx_msg(arbitration_id, msg_data)
                         self.tx_seqnum = (self.tx_seqnum + 1) & 0xF
                         self.timer_tx_stmin.start()
