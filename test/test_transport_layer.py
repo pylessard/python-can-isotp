@@ -164,11 +164,18 @@ class TestTransportLayerStackAgainstStack(unittest.TestCase):
             # Transmission will fail because no flow control
             self.layer1.send(bytes([1] * 10), send_timeout=10)
 
-    def test_blocking_send(self):
+    def test_blocking_send_multiframe(self):
         self.layer1.params.blocking_send = True
         self.layer1.load_params()
         # layer2 has a thread to handle reception
         self.layer1.send(bytes([1] * 100), send_timeout=5)
+        self.assert_no_error_reported()
+
+    def test_blocking_send_single_frame(self):
+        self.layer1.params.blocking_send = True
+        self.layer1.load_params()
+        # layer2 has a thread to handle reception
+        self.layer1.send(bytes([1] * 4), send_timeout=5)
         self.assert_no_error_reported()
 
     def test_listen_mode_receiver(self):
