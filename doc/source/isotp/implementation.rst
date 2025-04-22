@@ -142,7 +142,8 @@ The transport layer ``params`` parameter must be a dictionary with the following
 
    **default: 4095**
 
-   The maximum frame length that the stack will accept to receive. ISO-15765-2:2016 allows frames as long as 2^32-1 (4294967295 bytes). When a FirstFrame is sent with a length longer than ``max_frame_size``, the message will be ignored, a FlowControl message with FlowStatus=2 (Overflow) will be sent and a :class:`FrameTooLongError<isotp.FrameTooLongError>` will be triggered.
+   The maximum frame length that the stack will accept to receive. This value can be increased up to the maximum specified by ISO-15765-2:2016, e.g. 2^32-1 (4294967295 bytes). 
+   When a FirstFrame is sent with a length longer than ``max_frame_size``, the message will be ignored, a FlowControl message with FlowStatus=2 (Overflow) will be sent and a :class:`FrameTooLongError<isotp.FrameTooLongError>` will be triggered.
 
    This parameter mainly is a protection to avoid crashes due to lack of memory (caused by an external device).
 
