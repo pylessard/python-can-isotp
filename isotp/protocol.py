@@ -1820,7 +1820,7 @@ class NotifierBasedCanStack(TransportLayer, BusOwner):
         self.buffered_reader = None
         super().stop()
 
-    def _on_message_received(self, msg: can.Message) -> None:
+    def _on_message_received(self, msg: "can.Message") -> None:
         if msg.is_error_frame or msg.is_remote_frame:
             return
         if self.buffered_reader is not None:
