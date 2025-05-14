@@ -1808,14 +1808,20 @@ class NotifierBasedCanStack(TransportLayer, BusOwner):
 
     def start(self) -> None:
         self.buffered_reader = can.BufferedReader()
-        self.notifier.add_listener(self.buffered_reader)
+        self.notifier.add_listener(self._on_message_received)
         super().start()
 
     def stop(self) -> None:
         try:
             if self.buffered_reader is not None:
-                self.notifier.remove_listener(self.buffered_reader)
+                self.notifier.remove_listener(self._on_message_received)
         except Exception:
             pass
         self.buffered_reader = None
         super().stop()
+
+    def _on_message_received(self, msg: "can.Message") -> None:
+        if msg.is_error_frame or msg.is_remote_frame:
+            return
+        if self.buffered_reader is not None:
+            self.buffered_reader.on_message_received(msg)

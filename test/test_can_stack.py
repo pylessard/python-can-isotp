@@ -131,6 +131,18 @@ class TestCanStackNotifier(unittest.TestCase):
         self.assertEqual(data, payload)
         self.assert_no_error_reported()
 
+    def test_1000_error_frames(self):
+        error_frame = can.Message(arbitration_id=0x8, is_extended_id=False, is_error_frame=True,
+                                  data=[0x0, 0x19, 0x81, 0x0])
+        for i in range(1000):
+            self.bus.send(error_frame)
+
+        payload = bytearray([x & 0xFF for x in range(5)])
+        self.layer1.send(payload)
+        data = self.layer2.recv(block=True, timeout=3)
+        self.assertEqual(data, payload)
+        self.assert_no_error_reported()
+
 
 if __name__ == '__main__':
     unittest.main()
