@@ -39,6 +39,6 @@ from isotp.address import AddressingMode, TargetAddressType, Address, Asymmetric
 from isotp.protocol import TransportLayerLogic, TransportLayer, CanStack, NotifierBasedCanStack
 from isotp.tpsock import socket
 
-__version__ = '2.0.6'
+__version__ = '2.0.7'
 __license__ = 'MIT'
 __author__ = 'Pier-Yves Lessard'
