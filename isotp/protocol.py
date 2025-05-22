@@ -9,6 +9,7 @@ __all__ = [
 
 from isotp.can_message import CanMessage
 from isotp.tools import Timer, FiniteByteGenerator
+from isotp.sleep_ns import precise_sleep
 import isotp.address
 import isotp.errors
 
@@ -366,7 +367,7 @@ class TransportLayerLogic:
             self.listen_mode = False
             self.blocking_send = False
             self.logger_name = TransportLayer.LOGGER_NAME
-            self.wait_func = time.sleep
+            self.wait_func = precise_sleep
 
         def set(self, key: str, val: Any, validate: bool = True) -> None:
             param_alias: Dict[str, str] = {
@@ -1611,7 +1612,7 @@ class TransportLayer(TransportLayerLogic):
             else:   # No data received. Sleep if user is not blocking
                 if not self.events.stop_requested.is_set():
                     if not self.blocking_rxfn or diff < rx_timeout * 0.5:
-                        time.sleep(max(0, min(self.sleep_time(), rx_timeout - diff)))
+                        self.params.wait_func(max(0, min(self.sleep_time(), rx_timeout - diff)))
 
     def _main_thread_fn(self) -> None:
         """Internal function executed by the main thread. """
