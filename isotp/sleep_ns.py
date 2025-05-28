@@ -1,21 +1,10 @@
-import time
-import ctypes
 import sys
+import time
 import ctypes
 import ctypes.util
-import time
 
-def precise_sleep(duration_sec):
-    """
-    Cross-platform high-precision sleep function
-    :param duration_sec: Sleep time in seconds (can be float)
-    """
-    if sys.platform == 'win32':
-        _precise_sleep_windows(duration_sec)
-    else:
-        _precise_sleep_linux(duration_sec)
 
-def _precise_sleep_windows(duration_sec):
+def _precise_sleep_windows(duration_sec: float) -> None:
     """High-precision sleep implementation for Windows"""
     kernel32 = ctypes.windll.kernel32
     
@@ -38,7 +27,7 @@ def _precise_sleep_windows(duration_sec):
     # Close the handle
     kernel32.CloseHandle(timer)
 
-def _precise_sleep_linux(duration_sec):
+def _precise_sleep_linux(duration_sec: float)-> None:
     """High-precision sleep implementation for Linux"""
     try:
         # Try to use clock_nanosleep (most precise)
@@ -65,3 +54,14 @@ def _precise_sleep_linux(duration_sec):
         # If clock_nanosleep fails, fallback to select
         if duration_sec > 0:
             time.sleep(duration_sec)
+
+
+def precise_sleep(duration_sec: float)-> None:
+    """
+    Cross-platform high-precision sleep function
+    :param duration_sec: Sleep time in seconds (can be float)
+    """
+    if sys.platform == 'win32':
+        _precise_sleep_windows(duration_sec)
+    else:
+        _precise_sleep_linux(duration_sec)
