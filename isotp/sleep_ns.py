@@ -6,7 +6,7 @@ import ctypes.util
 
 def _precise_sleep_windows(duration_sec: float) -> None:
     """High-precision sleep implementation for Windows"""
-    kernel32 = ctypes.windll.kernel32
+    kernel32 = ctypes.windll.kernel32   # type: ignore[attr-defined]
     
     # Create a waitable timer
     timer = kernel32.CreateWaitableTimerExW(
