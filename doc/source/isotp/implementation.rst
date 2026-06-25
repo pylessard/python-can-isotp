@@ -102,7 +102,7 @@ The transport layer ``params`` parameter must be a dictionary with the following
    **default: 1000**
 
    The number of milliseconds to wait for a flow control frame before stopping reception and triggering a :class:`FlowControlTimeoutError<isotp.FlowControlTimeoutError>`.
-   Defined as **N_BS** bs ISO-15765-2
+   Defined as **N_BS** by ISO-15765-2
 
 .. _param_rx_consecutive_frame_timeout:
 
@@ -390,7 +390,7 @@ Some exception can be raised in special cases. These are never sent to the error
 .. autoclass:: isotp.BlockingSendFailure
 .. autoclass:: isotp.BlockingSendTimeout
 
-.. note:: ``BlockingSendTimeout`` inherits ``BlockingSendTimeout``. Catching a ``BlockingSendFailure`` will also catch timeouts
+.. note:: ``BlockingSendTimeout`` inherits ``BlockingSendFailure``. Catching a ``BlockingSendFailure`` will also catch timeouts
 
 --------
 

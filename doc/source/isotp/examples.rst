@@ -44,7 +44,7 @@ Non-blocking transmission with python-can
 
 .. code-block:: python
    
-    # In this example, we transmit a payload sing a non-blocking send()
+    # In this example, we transmit a payload using a non-blocking send()
     import isotp
     import logging
     import time
