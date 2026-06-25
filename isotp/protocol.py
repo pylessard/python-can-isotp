@@ -1708,7 +1708,7 @@ def _python_can_to_isotp_message(msg: Optional["can.Message"]) -> Optional[CanMe
     if msg.is_error_frame or msg.is_remote_frame:
         return None
 
-    return CanMessage(arbitration_id=msg.arbitration_id, data=msg.data, extended_id=msg.is_extended_id, is_fd=msg.is_fd, bitrate_switch=msg.bitrate_switch)
+    return CanMessage(arbitration_id=msg.arbitration_id, data=bytes(msg.data), extended_id=msg.is_extended_id, is_fd=msg.is_fd, bitrate_switch=msg.bitrate_switch)
 
 
 class CanStack(TransportLayer, BusOwner):
