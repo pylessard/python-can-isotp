@@ -407,7 +407,7 @@ class TransportLayerLogic:
                 raise ValueError('blocksize must be an integer')
 
             if self.blocksize < 0 or self.blocksize > 0xFF:
-                raise ValueError('blocksize must be and integer between 0x00 and 0xFF')
+                raise ValueError('blocksize must be an integer between 0x00 and 0xFF')
 
             if self.override_receiver_stmin is not None:
                 if not isinstance(self.override_receiver_stmin, (int, float)) or isinstance(self.override_receiver_stmin, bool):
@@ -421,7 +421,7 @@ class TransportLayerLogic:
                 raise ValueError('wftmax must be an integer')
 
             if self.wftmax < 0:
-                raise ValueError('wftmax must be and integer equal or greater than 0')
+                raise ValueError('wftmax must be an integer equal or greater than 0')
 
             if not isinstance(self.tx_data_length, int):
                 raise ValueError('tx_data_length must be an integer')
@@ -512,7 +512,7 @@ class TransportLayerLogic:
 
     @dataclass
     class SendRequest:
-        """An object representing a call to `TransportLayer.send() by the user. Wraps the given parameter and associate with a completion event and a success flag`"""
+        """An object representing a call to `TransportLayer.send()` by the user. Wraps the given parameters and associates with a completion event and a success flag."""
         generator: FiniteByteGenerator
         target_address_type: isotp.address.TargetAddressType
         complete_event: threading.Event
@@ -638,7 +638,7 @@ class TransportLayerLogic:
             self.blocking_rxfn = True
             self.logger.debug("Given rxfn is considered blocking")
 
-        self.txfn = txfn 	# Function to call to receive a CAN message
+        self.txfn = txfn 	# Function to call to send a CAN message
 
         self.set_address(address)
 
@@ -658,7 +658,7 @@ class TransportLayerLogic:
         self.rx_frame_length = 0				# Length of IsoTP frame being received at the moment
         self.tx_frame_length = 0				# Length of the data that we are sending
         self.last_flow_control_frame = None		# When a FlowControl is received. Put here
-        self.tx_block_counter = 0				# Keeps track of how many block we've sent. USed to determine when to wait for a flow control message
+        self.tx_block_counter = 0				# Keeps track of how many blocks we've sent. Used to determine when to wait for a flow control message
         self.tx_seqnum = 0						# Keeps track of the actual sequence number while sending
         self.wft_counter = 0 					# Keeps track of how many wait frame we've received
 
@@ -893,7 +893,7 @@ class TransportLayerLogic:
             self._stop_receiving()
 
     def _process_rx(self, msg: CanMessage) -> ProcessRxReport:
-        """Process the reception of a CAN message. Moves the reception state machine accordingly and optionally"""
+        """Process the reception of a CAN message. Moves the reception state machine accordingly."""
         # Decoding of message into PDU
         try:
             pdu = PDU(msg, start_of_data=self.address.get_rx_prefix_size())
@@ -1341,7 +1341,7 @@ class TransportLayerLogic:
     def stop_receiving(self) -> None:
         """
         Request the TransportLayer object to stop receiving, clear the reception buffer and put back its receive state machine to idle state. 
-        If a reception is ongoing, the following messages will be discared and considered like garbage
+        If a reception is ongoing, the following messages will be discarded and considered like garbage
         """
         self._stop_receiving()
 
@@ -1429,7 +1429,7 @@ class TransportLayerLogic:
             return 0.001
 
     def is_tx_throttled(self) -> bool:
-        """Tells if the transmission is actively being slowed down by the rate limited"""
+        """Tells if the transmission is actively being slowed down by the rate limiter"""
         return self.tx_state in [self.TxState.TRANSMIT_SF_STANDBY, self.TxState.TRANSMIT_FF_STANDBY]
 
     def is_rx_active(self) -> bool:
@@ -1472,7 +1472,7 @@ class TransportLayer(TransportLayerLogic):
     :type params: dict
 
     :param read_timeout: Default blocking read timeout passed down to the ``rxfn``. Affects only the reading thread time granularity which can affect timing performance.
-        A value between 20ms-500ms should generally be good. MEaningless if the provided ``rxfn`` ignores its timeout parameter
+        A value between 20ms-500ms should generally be good. Meaningless if the provided ``rxfn`` ignores its timeout parameter
     :type read_timeout: float
 
     """
@@ -1597,7 +1597,7 @@ class TransportLayer(TransportLayerLogic):
         self.logger.debug(f"{self.__class__.__name__} Stopped")
 
     def _relay_thread_fn(self) -> None:
-        """Internal function executed by the relay thread. Reads the user rxfn and put any results in a queue."""
+        """Internal function executed by the relay thread. Reads the user rxfn and puts any results in a queue."""
         self.logger.debug("Relay thread has started")
         assert self.user_rxfn is not None
         self.events.relay_thread_ready.set()

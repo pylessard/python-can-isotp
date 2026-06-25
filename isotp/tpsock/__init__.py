@@ -165,7 +165,7 @@ class socket:
         :param txpad: The byte to use to pad the transmitted CAN messages. If not None, flags.TX_PADDING will be set
         :type txpad: int
 
-        :param rxpad: The byte to use to pad the transmitted CAN messages. If not None, flags.RX_PADDING will be set
+        :param rxpad: The byte to use to pad the received CAN messages. If not None, flags.RX_PADDING will be set
         :type rxpad: int
 
         :param rx_ext_address: The extended address to use in reception. If not None, flags.RX_EXT_ADDR will be set
@@ -234,7 +234,7 @@ class socket:
             raise ValueError("interface must be a string")
 
         if not isinstance(address, (isotp.Address, isotp.AsymmetricAddress)):
-            raise ValueError("address and instance of isotp.Address or isotp.AsymmetricAddress")
+            raise ValueError("address must be an instance of isotp.Address or isotp.AsymmetricAddress")
 
         if isinstance(address, isotp.AsymmetricAddress):
             if address.requires_rx_extension_byte() != address.requires_tx_extension_byte():

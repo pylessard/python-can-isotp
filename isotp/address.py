@@ -325,7 +325,7 @@ class Address(AbstractAddress):
         return self._tx_payload_prefix
 
     def is_for_me(self, msg: CanMessage) -> bool:
-        raise NotImplementedError("is_for_me should be overriden in constructor")
+        raise NotImplementedError("is_for_me should be overridden in constructor")
 
     def get_tx_arbitration_id(self, address_type: TargetAddressType = TargetAddressType.Physical) -> int:
         if address_type == TargetAddressType.Physical:

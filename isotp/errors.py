@@ -45,7 +45,7 @@ class BlockingSendTimeout(BlockingSendFailure):
 
 class FlowControlTimeoutError(IsoTpError):
     """
-    Happens when the senders fails to sends a Flow Control message in time. 
+    Happens when the sender fails to send a Flow Control message in time.
     Refer to TransportLayer parameter :ref:`rx_flowcontrol_timeout<param_rx_flowcontrol_timeout>`
     """
     pass
@@ -53,7 +53,7 @@ class FlowControlTimeoutError(IsoTpError):
 
 class ConsecutiveFrameTimeoutError(IsoTpError):
     """
-    Happens when the senders fails to sends a Consecutive Frame message in time. 
+    Happens when the sender fails to send a Consecutive Frame message in time.
     Refer to TransportLayer parameter :ref:`rx_consecutive_frame_timeout<param_rx_consecutive_frame_timeout>`
     """
     pass
@@ -138,7 +138,7 @@ class MissingEscapeSequenceError(IsoTpError):
 
 class InvalidCanFdFirstFrameRXDL(IsoTpError):
     """
-    Happens when a FirstFrame is received with missing data; In other words when CAN_DL is smaller than the deduced RX_DL. The sender did not optimized the capacity usage of the CAN message.
+    Happens when a FirstFrame is received with missing data; In other words when CAN_DL is smaller than the deduced RX_DL. The sender did not optimize the capacity usage of the CAN message.
     """
     pass
 
