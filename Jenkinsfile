@@ -115,7 +115,8 @@ pipeline {
             }
             post {
                 always {
-                    sh 'rm -rf "${WORKSPACE}"/* || { echo "rm failed with $?"; ls -la "${WORKSPACE}"; }'
+                    // Poor man deleteDir. It doesn't work well with root exec and we need it for vcan.
+                    sh 'rm -rf "${WORKSPACE}"/* || { echo "rm failed with $?"; ls -la "${WORKSPACE}"; exit 1; }'
                 }
             }
         }
