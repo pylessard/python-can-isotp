@@ -5,6 +5,8 @@ COVERAGE_SUFFIX="${COVERAGE_SUFFIX:-dev}"
 HTML_COVDIR="htmlcov_${COVERAGE_SUFFIX}"
 COV_DATAFILE=".coverage_${COVERAGE_SUFFIX}"
 
+PROJECT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )"/.. >/dev/null 2>&1 && pwd -P )"
+
 if ! [[ -z "${BUILD_CONTEXT+x}" ]]; then
     if [[ "$BUILD_CONTEXT" == "ci" ]]; then
         if ! [[ -z "${NODE_NAME+x}" ]]; then

@@ -6,6 +6,8 @@ PY_MODULE_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." >/dev/null 2>&1 && p
 
 VENV_DIR="${VENV_DIR:-venv}"
 VENV_ROOT="${VENV_DIR:-$PROJECT_ROOT/$VENV_DIR}"
+export PIP_CACHE_DIR=$VENV_ROOT/pip_cache   # Avoid concurrent cache access issue on CI
+echo "PIP_CACHE_DIR=${PIP_CACHE_DIR}"
 
 log() { echo -e "\x1B[92m[OK]\x1B[39m $@"; }
 
