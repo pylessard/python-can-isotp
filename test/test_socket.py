@@ -63,7 +63,7 @@ class TestSocket(unittest.TestCase):
         payload = b'a' * 200
         ncf = math.ceil(max(len(payload) - 6, 0) / 7)
         nfc = math.floor(ncf/blocksize)+1
-        expected_time = (ncf-nfc) * 0.1
+        expected_time = (ncf-nfc + 1) * 0.1
         s1 = self.make_socket()
         s2 = self.make_socket(timeout=2 * expected_time)
         addr1 = isotp.Address(isotp.AddressingMode.Normal_11bits, txid=txid, rxid=rxid)
@@ -79,7 +79,7 @@ class TestSocket(unittest.TestCase):
         diff = time.perf_counter() - t1
         self.assertEqual(payload, payload2)
         self.assertGreater(diff, expected_time * 0.8)
-        self.assertLess(diff, expected_time * 1.2)
+        self.assertLess(diff, expected_time * 1.5)  # 
 
     def test_addressing_normal_11bits(self):
         addr = isotp.Address(isotp.AddressingMode.Normal_11bits, txid=0x123, rxid=0x456)

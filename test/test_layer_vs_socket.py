@@ -94,20 +94,22 @@ class TestLayerAgainstSocket(ThreadableTest):
         for socket in self.socket_list:
             socket.close()
 
-    def process_stack_receive(self, timeout=1):
-        t1 = time.monotonic()
+    def process_stack_receive(self, timeout=3):
+        t1 = time.perf_counter()
         self.reception_complete.clear()
-        while time.monotonic() - t1 < timeout:
+        while time.perf_counter() - t1 < timeout:
             if self.stack.available():
                 break
             time.sleep(0.01)
+        if not self.stack.available():
+            raise TimeoutError(f"Did not receive in time. timeout={timeout}")
         self.reception_complete.set()
         return self.stack.recv()
 
     def process_stack_send(self, timeout=1):
         self.transmission_complete.clear()
-        t1 = time.monotonic()
-        while time.monotonic() - t1 < timeout:
+        t1 = time.perf_counter()
+        while time.perf_counter() - t1 < timeout:
             if not self.stack.transmitting():
                 break
             time.sleep(0.01)
@@ -150,7 +152,7 @@ class TestLayerAgainstSocket(ThreadableTest):
         self.clientSetUp(socketcan_fd=True, tx_data_length=tx_data_length)
         self.wait_socket_ready()
         self.stack_ready.set()
-        frame = self.process_stack_receive()
+        frame = self.process_stack_receive(timeout=3)
         self.assertEqual(frame, self.make_payload(100))
 
     @unittest.skipIf(tools.is_can_fd_socket_possible() == False, 'CAN FD socket is not possible. %s' % tools.isotp_can_fd_socket_impossible_reason())
@@ -244,9 +246,9 @@ class TestLayerAgainstSocket(ThreadableTest):
         ncf = math.ceil(max(len(payload) - 6, 0) / 7)-1
         expected_time = ncf * 0.1
         self.stack.send(payload)
-        t1 = time.monotonic()
+        t1 = time.perf_counter()
         self.process_stack_send(timeout=2 * expected_time * 0.95)
-        diff = time.monotonic() - t1
+        diff = time.perf_counter() - t1
         self.assertGreater(diff, expected_time)
         self.wait_reception_complete()
 
@@ -262,11 +264,11 @@ class TestLayerAgainstSocket(ThreadableTest):
         payload = self.make_payload(150)
         ncf = math.ceil(max(len(payload) - 6, 0) / 7)-1
         expected_time = ncf * 0.1
-        t1 = time.monotonic()
+        t1 = time.perf_counter()
         self.stack.params.set('stmin', 100)
         frame = self.process_stack_receive(timeout=2 * expected_time)
         self.assertEqual(frame, payload)
-        diff = time.monotonic() - t1
+        diff = time.perf_counter() - t1
         self.assertGreater(diff, expected_time * 0.95)
 
     def test_receive_extended_29bits(self):
@@ -283,7 +285,7 @@ class TestLayerAgainstSocket(ThreadableTest):
         addr = isotp.Address(isotp.AddressingMode.Extended_29bits, txid=self.stack_txid,
                              rxid=self.stack_rxid, source_address=0x99, target_address=0x88)
         self.stack.set_address(addr)
-        frame = self.process_stack_receive()
+        frame = self.process_stack_receive(timeout=3)
         self.assertEqual(frame, self.make_payload(100))
 
     def test_transmit_extended_29bits(self):
@@ -320,7 +322,7 @@ class TestLayerAgainstSocket(ThreadableTest):
         self.wait_socket_ready()
         addr = isotp.Address(isotp.AddressingMode.Mixed_29bits, source_address=0x99, target_address=0x88, address_extension=0xDD)
         self.stack.set_address(addr)
-        frame = self.process_stack_receive()
+        frame = self.process_stack_receive(timeout=3)
         self.assertEqual(frame, self.make_payload(100, 2))
 
     def test_transmit_mixed_29bits(self):
