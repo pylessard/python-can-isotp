@@ -17,78 +17,74 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /tmp/
 
-## ============================================
-#ARG PYTHON_VERSION="3.11.1"
-#ARG PYTHON_SRC="https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tgz"
-#
-#RUN wget $PYTHON_SRC \
-#    && tar -xvzf "Python-${PYTHON_VERSION}.tgz" \
-#    && cd "Python-${PYTHON_VERSION}" \
-#    && ./configure \
-#    && make -j 4 \
-#    && make install \
-#    && cd .. \
-#    && rm "Python-${PYTHON_VERSION}.tgz" \
-#    && rm -rf "Python-${PYTHON_VERSION}"
-#
-#
-## ============================================
-#ARG PYTHON_VERSION="3.10.9"
-#ARG PYTHON_SRC="https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tgz"
-#
-#RUN wget $PYTHON_SRC \
-#    && tar -xvzf "Python-${PYTHON_VERSION}.tgz" \
-#    && cd "Python-${PYTHON_VERSION}" \
-#    && ./configure \
-#    && make -j 4 \
-#    && make install \
-#    && cd .. \
-#    && rm "Python-${PYTHON_VERSION}.tgz" \
-#    && rm -rf "Python-${PYTHON_VERSION}"
-#
-## ============================================
-#ARG PYTHON_VERSION="3.9.16"
-#ARG PYTHON_SRC="https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tgz"
-#
-#RUN wget $PYTHON_SRC \
-#    && tar -xvzf "Python-${PYTHON_VERSION}.tgz" \
-#    && cd "Python-${PYTHON_VERSION}" \
-#    && ./configure \
-#    && make -j 4 \
-#    && make install \
-#    && cd .. \
-#    && rm "Python-${PYTHON_VERSION}.tgz" \
-#    && rm -rf "Python-${PYTHON_VERSION}"
-#
-## ============================================
-#ARG PYTHON_VERSION="3.8.16"
-#ARG PYTHON_SRC="https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tgz"
-#
-#RUN wget $PYTHON_SRC \
-#    && tar -xvzf "Python-${PYTHON_VERSION}.tgz" \
-#    && cd "Python-${PYTHON_VERSION}" \
-#    && ./configure \
-#    && make -j 4 \
-#    && make install \
-#    && cd .. \
-#    && rm "Python-${PYTHON_VERSION}.tgz" \
-#    && rm -rf "Python-${PYTHON_VERSION}"
-#
-## ============================================
-#
-#ARG PYTHON_VERSION="3.7.17"
-#ARG PYTHON_SRC="https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tgz"
-#
-#RUN wget $PYTHON_SRC \
-#    && tar -xvzf "Python-${PYTHON_VERSION}.tgz" \
-#    && cd "Python-${PYTHON_VERSION}" \
-#    && ./configure \
-#    && make -j 4 \
-#    && make install \
-#    && cd .. \
-#    && rm "Python-${PYTHON_VERSION}.tgz" \
-#    && rm -rf "Python-${PYTHON_VERSION}"
-#
+# ============================================
+ARG PYTHON_VERSION="3.11.1"
+ARG PYTHON_SRC="https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tgz"
 
-RUN ip link add dev vcan0 type vcan &&  \
-    ip link set up vcan0
+RUN wget $PYTHON_SRC \
+    && tar -xvzf "Python-${PYTHON_VERSION}.tgz" \
+    && cd "Python-${PYTHON_VERSION}" \
+    && ./configure \
+    && make -j 4 \
+    && make install \
+    && cd .. \
+    && rm "Python-${PYTHON_VERSION}.tgz" \
+    && rm -rf "Python-${PYTHON_VERSION}"
+
+
+# ============================================
+ARG PYTHON_VERSION="3.10.9"
+ARG PYTHON_SRC="https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tgz"
+
+RUN wget $PYTHON_SRC \
+    && tar -xvzf "Python-${PYTHON_VERSION}.tgz" \
+    && cd "Python-${PYTHON_VERSION}" \
+    && ./configure \
+    && make -j 4 \
+    && make install \
+    && cd .. \
+    && rm "Python-${PYTHON_VERSION}.tgz" \
+    && rm -rf "Python-${PYTHON_VERSION}"
+
+# ============================================
+ARG PYTHON_VERSION="3.9.16"
+ARG PYTHON_SRC="https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tgz"
+
+RUN wget $PYTHON_SRC \
+    && tar -xvzf "Python-${PYTHON_VERSION}.tgz" \
+    && cd "Python-${PYTHON_VERSION}" \
+    && ./configure \
+    && make -j 4 \
+    && make install \
+    && cd .. \
+    && rm "Python-${PYTHON_VERSION}.tgz" \
+    && rm -rf "Python-${PYTHON_VERSION}"
+
+# ============================================
+ARG PYTHON_VERSION="3.8.16"
+ARG PYTHON_SRC="https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tgz"
+
+RUN wget $PYTHON_SRC \
+    && tar -xvzf "Python-${PYTHON_VERSION}.tgz" \
+    && cd "Python-${PYTHON_VERSION}" \
+    && ./configure \
+    && make -j 4 \
+    && make install \
+    && cd .. \
+    && rm "Python-${PYTHON_VERSION}.tgz" \
+    && rm -rf "Python-${PYTHON_VERSION}"
+
+# ============================================
+
+ARG PYTHON_VERSION="3.7.17"
+ARG PYTHON_SRC="https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tgz"
+
+RUN wget $PYTHON_SRC \
+    && tar -xvzf "Python-${PYTHON_VERSION}.tgz" \
+    && cd "Python-${PYTHON_VERSION}" \
+    && ./configure \
+    && make -j 4 \
+    && make install \
+    && cd .. \
+    && rm "Python-${PYTHON_VERSION}.tgz" \
+    && rm -rf "Python-${PYTHON_VERSION}"
