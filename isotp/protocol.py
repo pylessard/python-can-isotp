@@ -1208,10 +1208,10 @@ class TransportLayerLogic:
         self.address = address
         txid = self.address.get_tx_arbitration_id(isotp.TargetAddressType.Physical)
         rxid = self.address.get_rx_arbitration_id(isotp.TargetAddressType.Physical)
-        if (txid > 0x7F4 and txid < 0x7F6 or txid > 0x7FA and txid < 0x7FB):
+        if (txid >= 0x7F4 and txid <= 0x7F6 or txid >= 0x7FA and txid <= 0x7FB):
             self.logger.warning('Used txid overlaps the range of ID reserved by ISO-15765 (0x7F4-0x7F6 and 0x7FA-0x7FB)')
 
-        if (rxid > 0x7F4 and rxid < 0x7F6 or rxid > 0x7FA and rxid < 0x7FB):
+        if (rxid >= 0x7F4 and rxid <= 0x7F6 or rxid >= 0x7FA and rxid <= 0x7FB):
             self.logger.warning('Used rxid overlaps the range of ID reserved by ISO-15765 (0x7F4-0x7F6 and 0x7FA-0x7FB)')
 
     def _pad_message_data(self, msg_data: bytes) -> bytes:
