@@ -16,6 +16,7 @@ pipeline {
                 stage('Setup vcan'){
                     steps {
                         sh '''
+                        whoami
                         ip link add dev vcan0 type vcan || true
                         ip link set up vcan0
                         ip link add dev vcan1 type vcan || true
@@ -112,11 +113,14 @@ pipeline {
                     }
                 }
             }
+            post {
+                always {
+                    // Poor man deleteDir. It doesn't work well with root exec and we need it for vcan.
+                    sh 'rm -rf "${WORKSPACE}"/* || { echo "rm failed with $?"; ls -la "${WORKSPACE}"; exit 1; }'
+                }
+            }
         }
+        
     }
-    post {
-        always {
-            deleteDir()
-        }
-    }
+    
 }
