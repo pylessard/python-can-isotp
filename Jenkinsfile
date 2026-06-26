@@ -116,12 +116,14 @@ pipeline {
     }
     post {
         always {
+            script {
             try {
                 deleteDir()
             } catch (Exception e) {
                 echo "deleteDir() failed: ${e.getMessage()}"
                 echo "Stack: ${e.getStackTrace().join('\n')}"
                 throw e;
+            }
             }
         }
     }
