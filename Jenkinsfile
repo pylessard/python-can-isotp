@@ -115,7 +115,7 @@ pipeline {
             }
             post {
                 always {
-                    sh '''whoami'''
+                    deleteDir()
                 }
             }
         }
