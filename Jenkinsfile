@@ -113,8 +113,10 @@ pipeline {
                     }
                 }
             }
-            always {
-                sh '''pwd'''
+            post {
+                always {
+                    sh '''pwd'''
+                }
             }
         }
         
