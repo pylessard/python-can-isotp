@@ -115,7 +115,7 @@ pipeline {
             }
             post {
                 always {
-                    sh '''pwd'''
+                    sh 'rm -rf "${WORKSPACE}"/* || { echo "rm failed with $?"; ls -la "${WORKSPACE}"; }'
                 }
             }
         }
