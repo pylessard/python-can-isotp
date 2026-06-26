@@ -112,19 +112,20 @@ pipeline {
                     }
                 }
             }
-        }
-        post {
-            always {
-                script {
-                    try {
-                        deleteDir()
-                    } catch (Exception e) {
-                        echo "deleteDir() failed: ${e.getMessage()}"
-                        throw e;
+            post {
+                always {
+                    script {
+                        try {
+                            deleteDir()
+                        } catch (Exception e) {
+                            echo "deleteDir() failed: ${e.getMessage()}"
+                            throw e;
+                        }
                     }
                 }
             }
         }
+        
     }
     
 }
