@@ -113,10 +113,8 @@ pipeline {
                     }
                 }
             }
-            post {
-                always {
-                    cleanWs(deleteDirs: true, cleanWhenNotBuilt: true, disableDeferredWipeout: true)
-                }
+            always {
+                sh '''pwd'''
             }
         }
         
