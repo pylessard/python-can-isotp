@@ -419,7 +419,7 @@ class TestPDUDecoding(unittest.TestCase):
         self.assertEqual(pdu.stmin, 0)
         self.assertEqual(pdu.stmin_sec, 0)
 
-        for i in range(0, 0x7F):     # Millisecs
+        for i in range(0, 0x80):     # Millisecs
             pdu = self.make_pdu([0x30, 0x00, i])
             self.assertEqual(pdu.type, isotp.protocol.PDU.Type.FLOW_CONTROL)
             self.assertEqual(pdu.flow_status, isotp.protocol.PDU.FlowStatus.ContinueToSend)
@@ -427,7 +427,7 @@ class TestPDUDecoding(unittest.TestCase):
             self.assertEqual(pdu.stmin, i)
             self.assertEqual(pdu.stmin_sec, i / 1000)
 
-        for i in range(0xF1, 0xF9):  # Microsecs
+        for i in range(0xF1, 0xFA):  # Microsecs
             pdu = self.make_pdu([0x30, 0x00, i])
             self.assertEqual(pdu.type, isotp.protocol.PDU.Type.FLOW_CONTROL)
             self.assertEqual(pdu.flow_status, isotp.protocol.PDU.FlowStatus.ContinueToSend)
@@ -435,13 +435,14 @@ class TestPDUDecoding(unittest.TestCase):
             self.assertEqual(pdu.stmin, i)
             self.assertEqual(pdu.stmin_sec, (i - 0xF0) / 10000)
 
-        for i in range(0x80, 0xF1):     # Reserved StMin
-            with self.assertRaises(ValueError):
-                pdu = self.make_pdu([0x30, 0x00, i])
-
-        for i in range(0xFA, 0x100):    # Reserved StMin
-            with self.assertRaises(ValueError):
-                pdu = self.make_pdu([0x30, 0x00, i])
+        for lower, upper in ((0x80, 0xF1), (0xFA, 0x100)):  # Reserved StMin
+            for i in range(lower, upper):
+                pdu = self.make_pdu([0x30, 0xA5, i])
+                self.assertEqual(pdu.type, isotp.protocol.PDU.Type.FLOW_CONTROL)
+                self.assertEqual(pdu.flow_status, isotp.protocol.PDU.FlowStatus.ContinueToSend)
+                self.assertEqual(pdu.blocksize, 0xA5)
+                self.assertEqual(pdu.stmin, 0x7F)
+                self.assertEqual(pdu.stmin_sec, 0x7F / 1000)
 
 
 class TestRateLimiter(unittest.TestCase):

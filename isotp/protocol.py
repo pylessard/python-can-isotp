@@ -161,9 +161,10 @@ class PDU:
                 self.stmin_sec = (stmin_temp - 0xF0) / 10000
 
             if self.stmin_sec is None:
-                raise ValueError('Invalid StMin received in Flow Control')
-            else:
-                self.stmin = stmin_temp
+                # ISO-15765-2 requires reserved values to be treated as 0x7F.
+                stmin_temp = 0x7F
+                self.stmin_sec = stmin_temp / 1000
+            self.stmin = stmin_temp
 
         else:
             raise ValueError("Unsupported PDU type: %s" % self.type)
