@@ -34,7 +34,7 @@ class BlockingSendFailure(IsoTpError):
 
 
 class BadGeneratorError(IsoTpError):
-    """Happens when the user tries to send data using a generator and provides a size that does not match the amount of data in the generator"""
+    """Happens when a send generator yields invalid bytes or does not provide the declared amount of data."""
     pass
 
 

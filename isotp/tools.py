@@ -86,7 +86,10 @@ class FiniteByteGenerator:
         return self.remaining_size() <= 0 or self._depleted
 
     def consume(self, size: int, enforce_exact: bool = True) -> bytearray:
-        data = bytearray(itertools.islice(self._gen, size))
+        try:
+            data = bytearray(itertools.islice(self._gen, size))
+        except (TypeError, ValueError) as exc:
+            raise BadGeneratorError(f"Could not read bytes from generator: {exc}") from exc
         self._consumed += len(data)
         if self._consumed > self._size:
             raise BadGeneratorError("Consumed more data than specified size")

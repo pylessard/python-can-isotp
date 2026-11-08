@@ -1358,6 +1358,30 @@ class TestTransportLayerLogicNonBlockingRxfn(TransportLayerBaseTest):
         self.assertIsNone(self.get_tx_can_msg())        # No more messages
 
     # === Generator ===
+    def test_generator_invalid_byte_stops_only_its_send_request(self):
+        for size, invalid_index in ((1, 0), (8, 0), (8, 6)):
+            with self.subTest(size=size, invalid_index=invalid_index):
+                payload = [0] * size
+                payload[invalid_index] = 256
+                self.tx_isotp_frame(((value for value in payload), size))
+                self.stack.process()
+
+                if invalid_index:
+                    first_frame = self.get_tx_can_msg()
+                    self.assertIsNotNone(first_frame)
+                    self.assertEqual(first_frame.data, bytearray([0x10, size] + [0] * 6))
+                    self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=0)
+                    self.stack.process()
+
+                self.assertIsNone(self.get_tx_can_msg())
+                self.assert_error_triggered(isotp.BadGeneratorError)
+                self.clear_errors()
+
+                self.tx_isotp_frame(bytearray([0x42]))
+                self.stack.process()
+                self.assertEqual(self.get_tx_can_msg().data, bytearray([0x01, 0x42]))
+                self.assert_no_error_triggered()
+
     def test_generator_size_too_big_error_single_frame(self):
         for payload_size in (4, 5, 6):
             unittest_logging.logger.debug(f"payload_size={payload_size}")

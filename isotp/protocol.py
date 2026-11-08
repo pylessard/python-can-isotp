@@ -1150,7 +1150,12 @@ class TransportLayerLogic:
                 payload_length = min(data_length, self.active_send_request.generator.remaining_size())
                 if payload_length <= allowed_bytes:
                     # We may have less data than requested
-                    payload = self.active_send_request.generator.consume(payload_length, enforce_exact=False)
+                    try:
+                        payload = self.active_send_request.generator.consume(payload_length, enforce_exact=False)
+                    except isotp.errors.BadGeneratorError as e:
+                        self._trigger_error(e)
+                        self._stop_sending(success=False)
+                        return self.ProcessTxReport(msg=None, immediate_rx_required=False)
                     if len(payload) > 0:   # Corner case. If generator size is a multiple of ll_data_length, we will get an empty payload on last frame.
                         msg_data = self.address.get_tx_payload_prefix() + bytearray([0x20 | self.tx_seqnum]) + payload
                         arbitration_id = self.address.get_tx_arbitration_id() 
