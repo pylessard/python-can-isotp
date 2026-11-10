@@ -1358,6 +1358,56 @@ class TestTransportLayerLogicNonBlockingRxfn(TransportLayerBaseTest):
         self.assertIsNone(self.get_tx_can_msg())        # No more messages
 
     # === Generator ===
+    def test_generator_invalid_byte_raises_without_reporting_protocol_error(self):
+        for size, invalid_index in ((1, 0), (8, 0), (8, 6)):
+            with self.subTest(size=size, invalid_index=invalid_index):
+                payload = [0] * size
+                payload[invalid_index] = 256
+                self.tx_isotp_frame(((value for value in payload), size))
+
+                if invalid_index:
+                    self.stack.process()
+                    first_frame = self.get_tx_can_msg()
+                    self.assertIsNotNone(first_frame)
+                    self.assertEqual(first_frame.data, bytearray([0x10, size] + [0] * 6))
+                    self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=0)
+
+                with self.assertRaises(ValueError):
+                    self.stack.process()
+
+                self.assertIsNone(self.get_tx_can_msg())
+                self.assert_no_error_triggered()
+
+                self.tx_isotp_frame(bytearray([0x42]))
+                self.stack.process()
+                self.assertEqual(self.get_tx_can_msg().data, bytearray([0x01, 0x42]))
+                self.assert_no_error_triggered()
+
+    def test_generator_exception_resets_transmit_state_and_preserves_queued_send(self):
+        for error in (RuntimeError("generator failed"), ValueError("generator failed")):
+            with self.subTest(error=type(error).__name__):
+                self.stack.reset()
+
+                def payload(error=error):
+                    yield from range(6)
+                    raise error
+
+                self.tx_isotp_frame((payload(), 8))
+                self.tx_isotp_frame(bytearray([0x42]))
+                self.stack.process()
+                self.assertEqual(self.get_tx_can_msg().data, bytearray([0x10, 8, 0, 1, 2, 3, 4, 5]))
+                self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=0)
+
+                with self.assertRaises(type(error)) as raised:
+                    self.stack.process()
+                self.assertIs(raised.exception, error)
+                self.assertIsNone(self.get_tx_can_msg())
+                self.assert_no_error_triggered()
+
+                self.stack.process()
+                self.assertEqual(self.get_tx_can_msg().data, bytearray([0x01, 0x42]))
+                self.assert_no_error_triggered()
+
     def test_generator_size_too_big_error_single_frame(self):
         for payload_size in (4, 5, 6):
             unittest_logging.logger.debug(f"payload_size={payload_size}")

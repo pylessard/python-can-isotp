@@ -854,7 +854,11 @@ class TransportLayerLogic:
                 msg = None
                 while msg is not None or first_loop:
                     first_loop = False
-                    tx_result = self._process_tx()
+                    try:
+                        tx_result = self._process_tx()
+                    except Exception:
+                        self._stop_sending(success=False)
+                        raise
                     msg = tx_result.msg
                     if msg is not None:
                         msg_sent += 1
