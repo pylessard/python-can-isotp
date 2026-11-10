@@ -1,7 +1,7 @@
 __all__ = ['Timer', 'FiniteByteGenerator']
 import time
 from typing import Optional, Generator
-from isotp.errors import BadGeneratorError
+from isotp.errors import BadGeneratorError, InvalidGeneratorDataError
 import itertools
 import types
 
@@ -89,7 +89,7 @@ class FiniteByteGenerator:
         try:
             data = bytearray(itertools.islice(self._gen, size))
         except (TypeError, ValueError) as exc:
-            raise BadGeneratorError(f"Could not read bytes from generator: {exc}") from exc
+            raise InvalidGeneratorDataError(f"Invalid data from send generator: {exc}") from exc
         self._consumed += len(data)
         if self._consumed > self._size:
             raise BadGeneratorError("Consumed more data than specified size")

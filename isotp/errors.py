@@ -2,6 +2,7 @@ __all__ = [
     'IsoTpError',
     'BlockingSendFailure',
     'BadGeneratorError',
+    'InvalidGeneratorDataError',
     'BlockingSendTimeout',
     'FlowControlTimeoutError',
     'ConsecutiveFrameTimeoutError',
@@ -34,7 +35,12 @@ class BlockingSendFailure(IsoTpError):
 
 
 class BadGeneratorError(IsoTpError):
-    """Happens when a send generator yields invalid bytes or does not provide the declared amount of data."""
+    """Happens when the user tries to send data using a generator and provides a size that does not match the amount of data in the generator"""
+    pass
+
+
+class InvalidGeneratorDataError(ValueError):
+    """A send generator did not provide values that could be converted to bytes."""
     pass
 
 

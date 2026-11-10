@@ -15,6 +15,7 @@ __all__ = [
     'IsoTpError',
     'BlockingSendFailure',
     'BadGeneratorError',
+    'InvalidGeneratorDataError',
     'BlockingSendTimeout',
     'FlowControlTimeoutError',
     'ConsecutiveFrameTimeoutError',

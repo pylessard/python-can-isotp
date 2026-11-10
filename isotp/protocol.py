@@ -798,6 +798,8 @@ class TransportLayerLogic:
         :param do_tx: Process transmission when ``True``
         :type do_tx: bool
 
+        :raises InvalidGeneratorDataError: A send generator yielded a value that cannot be converted to a byte.
+
         :return: Statistics about what have been accomplished during the call
         :rtype: :class:`ProcessStats<isotp.ProcessStats>`
 
@@ -854,7 +856,11 @@ class TransportLayerLogic:
                 msg = None
                 while msg is not None or first_loop:
                     first_loop = False
-                    tx_result = self._process_tx()
+                    try:
+                        tx_result = self._process_tx()
+                    except isotp.errors.InvalidGeneratorDataError:
+                        self._stop_sending(success=False)
+                        raise
                     msg = tx_result.msg
                     if msg is not None:
                         msg_sent += 1
@@ -1150,12 +1156,7 @@ class TransportLayerLogic:
                 payload_length = min(data_length, self.active_send_request.generator.remaining_size())
                 if payload_length <= allowed_bytes:
                     # We may have less data than requested
-                    try:
-                        payload = self.active_send_request.generator.consume(payload_length, enforce_exact=False)
-                    except isotp.errors.BadGeneratorError as e:
-                        self._trigger_error(e)
-                        self._stop_sending(success=False)
-                        return self.ProcessTxReport(msg=None, immediate_rx_required=False)
+                    payload = self.active_send_request.generator.consume(payload_length, enforce_exact=False)
                     if len(payload) > 0:   # Corner case. If generator size is a multiple of ll_data_length, we will get an empty payload on last frame.
                         msg_data = self.address.get_tx_payload_prefix() + bytearray([0x20 | self.tx_seqnum]) + payload
                         arbitration_id = self.address.get_tx_arbitration_id() 

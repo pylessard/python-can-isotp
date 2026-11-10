@@ -1358,24 +1358,25 @@ class TestTransportLayerLogicNonBlockingRxfn(TransportLayerBaseTest):
         self.assertIsNone(self.get_tx_can_msg())        # No more messages
 
     # === Generator ===
-    def test_generator_invalid_byte_stops_only_its_send_request(self):
+    def test_generator_invalid_byte_raises_without_reporting_protocol_error(self):
         for size, invalid_index in ((1, 0), (8, 0), (8, 6)):
             with self.subTest(size=size, invalid_index=invalid_index):
                 payload = [0] * size
                 payload[invalid_index] = 256
                 self.tx_isotp_frame(((value for value in payload), size))
-                self.stack.process()
 
                 if invalid_index:
+                    self.stack.process()
                     first_frame = self.get_tx_can_msg()
                     self.assertIsNotNone(first_frame)
                     self.assertEqual(first_frame.data, bytearray([0x10, size] + [0] * 6))
                     self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=0)
+
+                with self.assertRaisesRegex(isotp.InvalidGeneratorDataError, "send generator"):
                     self.stack.process()
 
                 self.assertIsNone(self.get_tx_can_msg())
-                self.assert_error_triggered(isotp.BadGeneratorError)
-                self.clear_errors()
+                self.assert_no_error_triggered()
 
                 self.tx_isotp_frame(bytearray([0x42]))
                 self.stack.process()
