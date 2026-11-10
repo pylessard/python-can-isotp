@@ -389,7 +389,6 @@ Some exception can be raised in special cases. These are never sent to the error
 
 .. autoclass:: isotp.BlockingSendFailure
 .. autoclass:: isotp.BlockingSendTimeout
-.. autoclass:: isotp.InvalidGeneratorDataError
 
 .. note:: ``BlockingSendTimeout`` inherits ``BlockingSendFailure``. Catching a ``BlockingSendFailure`` will also catch timeouts
 

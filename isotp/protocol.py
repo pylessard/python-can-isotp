@@ -798,8 +798,6 @@ class TransportLayerLogic:
         :param do_tx: Process transmission when ``True``
         :type do_tx: bool
 
-        :raises InvalidGeneratorDataError: A send generator yielded a value that cannot be converted to a byte.
-
         :return: Statistics about what have been accomplished during the call
         :rtype: :class:`ProcessStats<isotp.ProcessStats>`
 
@@ -858,7 +856,7 @@ class TransportLayerLogic:
                     first_loop = False
                     try:
                         tx_result = self._process_tx()
-                    except isotp.errors.InvalidGeneratorDataError:
+                    except Exception:
                         self._stop_sending(success=False)
                         raise
                     msg = tx_result.msg

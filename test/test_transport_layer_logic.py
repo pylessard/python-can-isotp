@@ -1372,13 +1372,38 @@ class TestTransportLayerLogicNonBlockingRxfn(TransportLayerBaseTest):
                     self.assertEqual(first_frame.data, bytearray([0x10, size] + [0] * 6))
                     self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=0)
 
-                with self.assertRaisesRegex(isotp.InvalidGeneratorDataError, "send generator"):
+                with self.assertRaises(ValueError):
                     self.stack.process()
 
                 self.assertIsNone(self.get_tx_can_msg())
                 self.assert_no_error_triggered()
 
                 self.tx_isotp_frame(bytearray([0x42]))
+                self.stack.process()
+                self.assertEqual(self.get_tx_can_msg().data, bytearray([0x01, 0x42]))
+                self.assert_no_error_triggered()
+
+    def test_generator_exception_resets_transmit_state_and_preserves_queued_send(self):
+        for error in (RuntimeError("generator failed"), ValueError("generator failed")):
+            with self.subTest(error=type(error).__name__):
+                self.stack.reset()
+
+                def payload(error=error):
+                    yield from range(6)
+                    raise error
+
+                self.tx_isotp_frame((payload(), 8))
+                self.tx_isotp_frame(bytearray([0x42]))
+                self.stack.process()
+                self.assertEqual(self.get_tx_can_msg().data, bytearray([0x10, 8, 0, 1, 2, 3, 4, 5]))
+                self.simulate_rx_flowcontrol(flow_status=0, stmin=0, blocksize=0)
+
+                with self.assertRaises(type(error)) as raised:
+                    self.stack.process()
+                self.assertIs(raised.exception, error)
+                self.assertIsNone(self.get_tx_can_msg())
+                self.assert_no_error_triggered()
+
                 self.stack.process()
                 self.assertEqual(self.get_tx_can_msg().data, bytearray([0x01, 0x42]))
                 self.assert_no_error_triggered()
